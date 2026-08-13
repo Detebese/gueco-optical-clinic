@@ -1,0 +1,176 @@
+<?php
+define('BASE_URL', '../');
+require_once __DIR__ . '/../config/functions.php';
+requireRole('saleslady');
+
+$pageTitle  = 'Inventory';
+$breadcrumb = ['Saleslady', 'Inventory'];
+$db = getDB();
+$msg = ''; $msgType = 'success';
+
+// Stock-in / out
+if ($_SERVER['REQUEST_METHOD'] === 'POST') {
+    $action = $_POST['action'] ?? '';
+    if ($action === 'stock_in' || $action === 'stock_out') {
+        $id     = (int)$_POST['id'];
+        $qty    = (int)$_POST['qty'];
+        $reason = sanitize(trim($_POST['reason'] ?? ''));
+        if ($qty <= 0) { $msg = 'Quantity must be greater than 0.'; $msgType = 'danger'; }
+        else {
+            $prod = $db->prepare("SELECT stock_quantity FROM products WHERE id=?"); $prod->execute([$id]); $prev = $prod->fetch()['stock_quantity'];
+            $new = $action === 'stock_in' ? $prev + $qty : max(0, $prev - $qty);
+            $db->prepare("UPDATE products SET stock_quantity=? WHERE id=?")->execute([$new, $id]);
+            $db->prepare("INSERT INTO inventory_logs (product_id,type,quantity,previous_stock,new_stock,reason,user_id) VALUES (?,?,?,?,?,?,?)")
+               ->execute([$id,$action,$qty,$prev,$new,$reason,$_SESSION['user_id']]);
+            $msg = "Stock " . ($action==='stock_in'?'added':'deducted') . ". New stock: $new";
+        }
+    }
+}
+
+$search = sanitize($_GET['search'] ?? '');
+$catFilter = (int)($_GET['cat'] ?? 0);
+$stockFilter = $_GET['stock'] ?? '';
+$where = ['p.status = "active"']; $params = [];
+if ($search) { $where[] = 'p.name LIKE ?'; $params[] = "%$search%"; }
+if ($catFilter) { $where[] = 'p.category_id=?'; $params[] = $catFilter; }
+if ($stockFilter === 'low') $where[] = 'p.stock_quantity <= p.low_stock_alert';
+if ($stockFilter === 'out') $where[] = 'p.stock_quantity = 0';
+$whereStr = implode(' AND ', $where);
+
+$products = $db->prepare("
+    SELECT p.*, c.name as cat_name
+    FROM products p JOIN categories c ON c.id=p.category_id
+    WHERE $whereStr ORDER BY c.name, p.name
+");
+$products->execute($params); $products = $products->fetchAll();
+
+$categories = $db->query("SELECT * FROM categories WHERE status='active' ORDER BY name")->fetchAll();
+
+// Recent inventory logs
+$logs = $db->query("
+    SELECT il.*, p.name as product_name, u.full_name as user_name
+    FROM inventory_logs il JOIN products p ON p.id=il.product_id JOIN users u ON u.id=il.user_id
+    ORDER BY il.created_at DESC LIMIT 15
+")->fetchAll();
+
+include __DIR__ . '/../includes/header.php';
+?>
+
+<?php if ($msg): ?>
+<div class="alert alert-<?= $msgType ?>" data-auto-dismiss="4000"><i class="fas fa-<?= $msgType==='success'?'check-circle':'exclamation-circle' ?>"></i> <?= $msg ?></div>
+<?php endif; ?>
+
+<div class="row" style="margin-bottom:16px;">
+  <div class="col-8">
+    <div class="section-header">
+      <h5><i class="fas fa-warehouse me-2" style="color:var(--clr-primary)"></i>Stock Management (<?= count($products) ?>)</h5>
+      <div style="display:flex;gap:8px;">
+        <a href="?stock=low" class="btn btn-warning btn-sm"><i class="fas fa-exclamation-triangle"></i> Low Stock</a>
+        <a href="?stock=out" class="btn btn-danger btn-sm"><i class="fas fa-times-circle"></i> Out of Stock</a>
+      </div>
+    </div>
+    <!-- Filters -->
+    <div style="margin-bottom:14px;display:flex;gap:8px;flex-wrap:wrap;">
+      <form method="GET" style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;">
+        <input type="text" name="search" class="form-control" placeholder="Search product..." value="<?= htmlspecialchars($search) ?>" style="width:200px;">
+        <select name="cat" class="form-select" style="width:160px;">
+          <option value="">All Categories</option>
+          <?php foreach ($categories as $c): ?><option value="<?= $c['id'] ?>" <?= $catFilter==$c['id']?'selected':'' ?>><?= sanitize($c['name']) ?></option><?php endforeach; ?>
+        </select>
+        <button type="submit" class="btn btn-outline-primary"><i class="fas fa-search"></i></button>
+        <a href="inventory.php" class="btn btn-secondary"><i class="fas fa-undo"></i></a>
+      </form>
+    </div>
+
+    <div class="table-wrapper">
+      <div class="table-responsive">
+        <table class="table">
+          <thead><tr><th>Product</th><th>Category</th><th>Price</th><th>Stock</th><th>Alert At</th><th>Actions</th></tr></thead>
+          <tbody>
+            <?php if (empty($products)): ?>
+            <tr><td colspan="6"><div class="empty-state"><div class="empty-icon"><i class="fas fa-boxes"></i></div><h6>No products found</h6></div></td></tr>
+            <?php else: ?>
+            <?php foreach ($products as $p): ?>
+            <?php $isLow = $p['stock_quantity'] <= $p['low_stock_alert']; $isOut = $p['stock_quantity'] == 0; ?>
+            <tr>
+              <td><div style="font-weight:600;font-size:.88rem"><?= sanitize($p['name']) ?></div></td>
+              <td><span class="badge bg-secondary"><?= sanitize($p['cat_name']) ?></span></td>
+              <td style="font-weight:700;color:var(--clr-success)"><?= formatCurrency($p['price']) ?></td>
+              <td>
+                <span style="font-weight:800;font-size:.95rem;color:<?= $isOut?'var(--clr-danger)':($isLow?'var(--clr-warning)':'var(--text-primary)') ?>">
+                  <?= $p['stock_quantity'] ?>
+                </span>
+                <?php if ($isOut): ?><span class="badge bg-danger ms-1" style="font-size:.62rem">OUT</span>
+                <?php elseif ($isLow): ?><span class="badge bg-warning ms-1" style="font-size:.62rem">LOW</span><?php endif; ?>
+              </td>
+              <td style="font-size:.8rem;color:var(--text-muted)"><?= $p['low_stock_alert'] ?></td>
+              <td>
+                <button class="btn btn-sm btn-success btn-icon" title="Stock In" onclick="openStockModal(<?= $p['id'] ?>, '<?= addslashes($p['name']) ?>', 'stock_in')"><i class="fas fa-plus"></i></button>
+                <button class="btn btn-sm btn-warning btn-icon" title="Stock Out" onclick="openStockModal(<?= $p['id'] ?>, '<?= addslashes($p['name']) ?>', 'stock_out')"><i class="fas fa-minus"></i></button>
+              </td>
+            </tr>
+            <?php endforeach; ?>
+            <?php endif; ?>
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+
+  <!-- Recent Logs -->
+  <div class="col-4">
+    <div class="card">
+      <div class="card-header"><h6><i class="fas fa-history me-2" style="color:var(--clr-info)"></i>Recent Activity</h6></div>
+      <div style="overflow-y:auto;max-height:520px;">
+        <?php if (empty($logs)): ?>
+        <div class="empty-state" style="padding:30px"><div class="empty-icon"><i class="fas fa-history"></i></div><h6>No logs yet</h6></div>
+        <?php else: ?>
+        <?php foreach ($logs as $log): ?>
+        <div style="padding:10px 16px;border-bottom:1px solid var(--border-light);">
+          <div style="display:flex;align-items:center;gap:8px;margin-bottom:4px;">
+            <div style="width:24px;height:24px;border-radius:50%;background:<?= $log['type']==='stock_in'?'rgba(5,150,105,.15)':'rgba(220,38,38,.15)' ?>;display:flex;align-items:center;justify-content:center;flex-shrink:0;">
+              <i class="fas fa-<?= $log['type']==='stock_in'?'arrow-up':'arrow-down' ?>" style="font-size:.55rem;color:<?= $log['type']==='stock_in'?'var(--clr-success)':'var(--clr-danger)' ?>"></i>
+            </div>
+            <div style="font-weight:600;font-size:.8rem;flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap"><?= sanitize($log['product_name']) ?></div>
+            <span style="font-weight:700;font-size:.8rem;color:<?= $log['type']==='stock_in'?'var(--clr-success)':'var(--clr-danger)' ?>">
+              <?= $log['type']==='stock_in'?'+':'-' ?><?= $log['quantity'] ?>
+            </span>
+          </div>
+          <div style="font-size:.7rem;color:var(--text-muted);padding-left:32px">
+            <?= $log['previous_stock'] ?> → <?= $log['new_stock'] ?> &middot; <?= sanitize($log['reason']??'—') ?> &middot; <?= formatDateTime($log['created_at']) ?>
+          </div>
+        </div>
+        <?php endforeach; ?>
+        <?php endif; ?>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Stock Modal -->
+<div class="modal-overlay" id="stockModal">
+  <div class="modal-box" style="max-width:380px;">
+    <div class="modal-header"><h5 id="stockTitle">Stock In</h5><button class="modal-close" onclick="closeModal('stockModal')"><i class="fas fa-times"></i></button></div>
+    <form method="POST">
+      <div class="modal-body">
+        <input type="hidden" name="id" id="sId"><input type="hidden" name="action" id="sAction">
+        <p style="font-size:.85rem;color:var(--text-muted);margin-bottom:12px;">Product: <strong id="sProdName"></strong></p>
+        <div class="form-group"><label class="form-label">Quantity *</label><input type="number" name="qty" class="form-control" min="1" required></div>
+        <div class="form-group"><label class="form-label">Reason / Note</label><input type="text" name="reason" class="form-control" placeholder="e.g. Supplier delivery, Return..."></div>
+      </div>
+      <div class="modal-footer"><button type="button" class="btn btn-secondary" onclick="closeModal('stockModal')">Cancel</button><button type="submit" id="sBtn" class="btn btn-success">Confirm</button></div>
+    </form>
+  </div>
+</div>
+<script>
+function openStockModal(id, name, action) {
+  document.getElementById('sId').value = id;
+  document.getElementById('sAction').value = action;
+  document.getElementById('sProdName').textContent = name;
+  const isIn = action === 'stock_in';
+  document.getElementById('stockTitle').innerHTML = `<i class="fas fa-${isIn?'plus':'minus'} me-2" style="color:var(--clr-${isIn?'success':'warning'})"></i>${isIn?'Stock In':'Stock Out'}`;
+  document.getElementById('sBtn').className = `btn btn-${isIn?'success':'warning'}`;
+  openModal('stockModal');
+}
+</script>
+<?php include __DIR__ . '/../includes/footer.php'; ?>

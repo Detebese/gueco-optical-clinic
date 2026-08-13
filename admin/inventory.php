@@ -1,0 +1,263 @@
+<?php
+define('BASE_URL', '../');
+require_once __DIR__ . '/../config/functions.php';
+requireRole('admin');
+
+$pageTitle  = 'Inventory Management';
+$breadcrumb = ['Admin', 'Inventory'];
+$db = getDB();
+$msg = ''; $msgType = 'success';
+
+// Add/Edit product
+if ($_SERVER['REQUEST_METHOD'] === 'POST') {
+    $action = $_POST['action'] ?? '';
+
+    if ($action === 'add' || $action === 'edit') {
+        $name     = sanitize(trim($_POST['name'] ?? ''));
+        $catId    = (int)($_POST['category_id'] ?? 0);
+        $suppId   = (int)($_POST['supplier_id'] ?? 0) ?: null;
+        $price    = (float)($_POST['price'] ?? 0);
+        $stock    = (int)($_POST['stock_quantity'] ?? 0);
+        $alert    = (int)($_POST['low_stock_alert'] ?? 5);
+        $desc     = sanitize(trim($_POST['description'] ?? ''));
+        $stat     = $_POST['status'] ?? 'active';
+
+        if (!$name || !$catId || $price < 0) { $msg = 'Name, category, and a valid price are required.'; $msgType = 'danger'; }
+        elseif ($action === 'add') {
+            $db->prepare("INSERT INTO products (name,category_id,supplier_id,price,stock_quantity,low_stock_alert,description,status) VALUES (?,?,?,?,?,?,?,?)")
+               ->execute([$name,$catId,$suppId,$price,$stock,$alert,$desc,$stat]);
+            // Log inventory
+            $newId = $db->lastInsertId();
+            if ($stock > 0) {
+                $db->prepare("INSERT INTO inventory_logs (product_id,type,quantity,previous_stock,new_stock,reason,user_id) VALUES (?,?,?,?,?,?,?)")
+                   ->execute([$newId,'stock_in',$stock,0,$stock,'Initial stock',$_SESSION['user_id']]);
+            }
+            $msg = "Product \"$name\" added.";
+        } else {
+            $id = (int)$_POST['id'];
+            $db->prepare("UPDATE products SET name=?,category_id=?,supplier_id=?,price=?,low_stock_alert=?,description=?,status=? WHERE id=?")
+               ->execute([$name,$catId,$suppId,$price,$alert,$desc,$stat,$id]);
+            $msg = "Product updated.";
+        }
+    } elseif ($action === 'stock_in' || $action === 'stock_out') {
+        $id  = (int)$_POST['id'];
+        $qty = (int)$_POST['qty'];
+        $reason = sanitize(trim($_POST['reason'] ?? ''));
+        if ($qty <= 0) { $msg = 'Quantity must be greater than 0.'; $msgType = 'danger'; }
+        else {
+            $prod = $db->prepare("SELECT stock_quantity FROM products WHERE id=?"); $prod->execute([$id]); $prod = $prod->fetch();
+            $prevStock = $prod['stock_quantity'];
+            $newStock = $action === 'stock_in' ? $prevStock + $qty : max(0, $prevStock - $qty);
+            $db->prepare("UPDATE products SET stock_quantity=? WHERE id=?")->execute([$newStock, $id]);
+            $db->prepare("INSERT INTO inventory_logs (product_id,type,quantity,previous_stock,new_stock,reason,user_id) VALUES (?,?,?,?,?,?,?)")
+               ->execute([$id,$action,$qty,$prevStock,$newStock,$reason,$_SESSION['user_id']]);
+            $msg = "Stock " . ($action==='stock_in'?'added':'deducted') . " successfully. New stock: $newStock";
+        }
+    }
+}
+
+// Filters
+$search = sanitize($_GET['search'] ?? '');
+$catFilter = (int)($_GET['cat'] ?? 0);
+$stockFilter = $_GET['stock'] ?? '';
+$where = ['p.status = "active"']; $params = [];
+if ($search) { $where[] = 'p.name LIKE ?'; $params[] = "%$search%"; }
+if ($catFilter) { $where[] = 'p.category_id=?'; $params[] = $catFilter; }
+if ($stockFilter === 'low') { $where[] = 'p.stock_quantity <= p.low_stock_alert'; }
+if ($stockFilter === 'out') { $where[] = 'p.stock_quantity = 0'; }
+$whereStr = implode(' AND ', $where);
+
+$products = $db->prepare("
+    SELECT p.*, c.name as cat_name, s.company_name as supplier_name
+    FROM products p
+    JOIN categories c ON c.id=p.category_id
+    LEFT JOIN suppliers s ON s.id=p.supplier_id
+    WHERE $whereStr ORDER BY c.name, p.name ASC
+");
+$products->execute($params); $products = $products->fetchAll();
+
+$categories = $db->query("SELECT * FROM categories WHERE status='active' ORDER BY name")->fetchAll();
+$suppliers  = $db->query("SELECT * FROM suppliers WHERE status='active' ORDER BY company_name")->fetchAll();
+
+include __DIR__ . '/../includes/header.php';
+?>
+
+<?php if ($msg): ?>
+<div class="alert alert-<?= $msgType ?>" data-auto-dismiss="4000">
+  <i class="fas fa-<?= $msgType==='success'?'check-circle':'exclamation-circle' ?>"></i> <?= $msg ?>
+</div>
+<?php endif; ?>
+
+<div class="section-header">
+  <h5><i class="fas fa-boxes me-2" style="color:var(--clr-primary)"></i>Inventory — <?= count($products) ?> Products</h5>
+  <div style="display:flex;gap:8px;flex-wrap:wrap;">
+    <a href="?stock=low" class="btn btn-warning btn-sm"><i class="fas fa-exclamation-triangle"></i> Low Stock</a>
+    <a href="?stock=out" class="btn btn-danger btn-sm"><i class="fas fa-times-circle"></i> Out of Stock</a>
+    <button class="btn btn-primary" onclick="openModal('addProductModal')"><i class="fas fa-plus"></i> Add Product</button>
+  </div>
+</div>
+
+<!-- Filter bar -->
+<div class="card" style="margin-bottom:20px;">
+  <div class="card-body" style="padding:14px 20px;">
+    <form method="GET" style="display:flex;gap:10px;flex-wrap:wrap;align-items:flex-end;">
+      <div style="flex:2;min-width:180px;"><label class="form-label" style="margin-bottom:5px;">Search</label>
+        <input type="text" name="search" class="form-control" placeholder="Product name..." value="<?= htmlspecialchars($search) ?>"></div>
+      <div style="flex:1;min-width:160px;"><label class="form-label" style="margin-bottom:5px;">Category</label>
+        <select name="cat" class="form-select">
+          <option value="">All Categories</option>
+          <?php foreach ($categories as $c): ?>
+          <option value="<?= $c['id'] ?>" <?= $catFilter==$c['id']?'selected':'' ?>><?= sanitize($c['name']) ?></option>
+          <?php endforeach; ?>
+        </select></div>
+      <div><button type="submit" class="btn btn-outline-primary"><i class="fas fa-search"></i> Search</button></div>
+      <div><a href="inventory.php" class="btn btn-secondary"><i class="fas fa-undo"></i></a></div>
+    </form>
+  </div>
+</div>
+
+<div class="table-wrapper">
+  <div class="table-responsive">
+    <table class="table">
+      <thead><tr><th>#</th><th>Product</th><th>Category</th><th>Supplier</th><th>Price</th><th>Stock</th><th>Alert</th><th>Status</th><th>Actions</th></tr></thead>
+      <tbody>
+        <?php if (empty($products)): ?>
+        <tr><td colspan="9"><div class="empty-state"><div class="empty-icon"><i class="fas fa-boxes"></i></div><h6>No products found</h6></div></td></tr>
+        <?php else: ?>
+        <?php foreach ($products as $i => $p): ?>
+        <?php $isLow = $p['stock_quantity'] <= $p['low_stock_alert']; $isOut = $p['stock_quantity'] == 0; ?>
+        <tr>
+          <td style="font-size:.78rem;color:var(--text-muted)"><?= $i+1 ?></td>
+          <td>
+            <div style="font-weight:600;font-size:.88rem"><?= sanitize($p['name']) ?></div>
+            <div style="font-size:.7rem;color:var(--text-muted)"><?= sanitize($p['description'] ?: '—') ?></div>
+          </td>
+          <td><span class="badge bg-secondary"><?= sanitize($p['cat_name']) ?></span></td>
+          <td style="font-size:.78rem;color:var(--text-muted)"><?= sanitize($p['supplier_name'] ?? '—') ?></td>
+          <td style="font-weight:700;color:var(--clr-success)"><?= formatCurrency($p['price']) ?></td>
+          <td>
+            <span style="font-weight:700;font-size:.95rem;color:<?= $isOut?'var(--clr-danger)':($isLow?'var(--clr-warning)':'var(--text-primary)') ?>">
+              <?= $p['stock_quantity'] ?>
+            </span>
+            <?php if ($isOut): ?><span class="badge bg-danger" style="font-size:.6rem;margin-left:4px">OUT</span>
+            <?php elseif ($isLow): ?><span class="badge bg-warning" style="font-size:.6rem;margin-left:4px">LOW</span><?php endif; ?>
+          </td>
+          <td style="font-size:.8rem;color:var(--text-muted)"><?= $p['low_stock_alert'] ?></td>
+          <td><?= statusBadge($p['status']) ?></td>
+          <td>
+            <div style="display:flex;gap:4px;">
+              <button class="btn btn-sm btn-success btn-icon" title="Stock In" onclick="openStockModal(<?= $p['id'] ?>, '<?= addslashes($p['name']) ?>', 'stock_in')"><i class="fas fa-plus"></i></button>
+              <button class="btn btn-sm btn-warning btn-icon" title="Stock Out" onclick="openStockModal(<?= $p['id'] ?>, '<?= addslashes($p['name']) ?>', 'stock_out')"><i class="fas fa-minus"></i></button>
+              <button class="btn btn-sm btn-outline-primary btn-icon" title="Edit" onclick="openEditProduct(<?= htmlspecialchars(json_encode($p)) ?>)"><i class="fas fa-edit"></i></button>
+            </div>
+          </td>
+        </tr>
+        <?php endforeach; ?>
+        <?php endif; ?>
+      </tbody>
+    </table>
+  </div>
+</div>
+
+<!-- Add Product Modal -->
+<div class="modal-overlay" id="addProductModal">
+  <div class="modal-box" style="max-width:580px;">
+    <div class="modal-header"><h5><i class="fas fa-plus me-2"></i>Add New Product</h5><button class="modal-close" onclick="closeModal('addProductModal')"><i class="fas fa-times"></i></button></div>
+    <form method="POST">
+      <div class="modal-body">
+        <input type="hidden" name="action" value="add">
+        <div class="form-group"><label class="form-label">Product Name *</label><input type="text" name="name" class="form-control" required></div>
+        <div style="display:flex;gap:12px">
+          <div class="form-group" style="flex:1"><label class="form-label">Category *</label>
+            <select name="category_id" class="form-select" required><option value="">Select</option>
+              <?php foreach ($categories as $c): ?><option value="<?= $c['id'] ?>"><?= sanitize($c['name']) ?></option><?php endforeach; ?>
+            </select></div>
+          <div class="form-group" style="flex:1"><label class="form-label">Supplier</label>
+            <select name="supplier_id" class="form-select"><option value="">None</option>
+              <?php foreach ($suppliers as $s): ?><option value="<?= $s['id'] ?>"><?= sanitize($s['company_name']) ?></option><?php endforeach; ?>
+            </select></div>
+        </div>
+        <div style="display:flex;gap:12px">
+          <div class="form-group" style="flex:1"><label class="form-label">Price (₱) *</label><input type="number" name="price" class="form-control" step="0.01" min="0" required></div>
+          <div class="form-group" style="flex:1"><label class="form-label">Initial Stock</label><input type="number" name="stock_quantity" class="form-control" value="0" min="0"></div>
+          <div class="form-group" style="flex:1"><label class="form-label">Low Stock Alert</label><input type="number" name="low_stock_alert" class="form-control" value="5" min="1"></div>
+        </div>
+        <div class="form-group"><label class="form-label">Description</label><textarea name="description" class="form-control" rows="2"></textarea></div>
+      </div>
+      <div class="modal-footer"><button type="button" class="btn btn-secondary" onclick="closeModal('addProductModal')">Cancel</button><button type="submit" class="btn btn-primary"><i class="fas fa-save"></i> Save Product</button></div>
+    </form>
+  </div>
+</div>
+
+<!-- Edit Product Modal -->
+<div class="modal-overlay" id="editProductModal">
+  <div class="modal-box" style="max-width:580px;">
+    <div class="modal-header"><h5><i class="fas fa-edit me-2"></i>Edit Product</h5><button class="modal-close" onclick="closeModal('editProductModal')"><i class="fas fa-times"></i></button></div>
+    <form method="POST">
+      <div class="modal-body">
+        <input type="hidden" name="action" value="edit"><input type="hidden" name="id" id="epId">
+        <div class="form-group"><label class="form-label">Product Name *</label><input type="text" name="name" id="epName" class="form-control" required></div>
+        <div style="display:flex;gap:12px">
+          <div class="form-group" style="flex:1"><label class="form-label">Category *</label>
+            <select name="category_id" id="epCat" class="form-select" required><option value="">Select</option>
+              <?php foreach ($categories as $c): ?><option value="<?= $c['id'] ?>"><?= sanitize($c['name']) ?></option><?php endforeach; ?>
+            </select></div>
+          <div class="form-group" style="flex:1"><label class="form-label">Supplier</label>
+            <select name="supplier_id" id="epSupp" class="form-select"><option value="">None</option>
+              <?php foreach ($suppliers as $s): ?><option value="<?= $s['id'] ?>"><?= sanitize($s['company_name']) ?></option><?php endforeach; ?>
+            </select></div>
+        </div>
+        <div style="display:flex;gap:12px">
+          <div class="form-group" style="flex:1"><label class="form-label">Price (₱) *</label><input type="number" name="price" id="epPrice" class="form-control" step="0.01" min="0" required></div>
+          <div class="form-group" style="flex:1"><label class="form-label">Low Stock Alert</label><input type="number" name="low_stock_alert" id="epAlert" class="form-control" min="1"></div>
+          <div class="form-group" style="flex:1"><label class="form-label">Status</label>
+            <select name="status" id="epStatus" class="form-select"><option value="active">Active</option><option value="inactive">Inactive</option></select></div>
+        </div>
+        <div class="form-group"><label class="form-label">Description</label><textarea name="description" id="epDesc" class="form-control" rows="2"></textarea></div>
+      </div>
+      <div class="modal-footer"><button type="button" class="btn btn-secondary" onclick="closeModal('editProductModal')">Cancel</button><button type="submit" class="btn btn-primary"><i class="fas fa-save"></i> Update</button></div>
+    </form>
+  </div>
+</div>
+
+<!-- Stock In/Out Modal -->
+<div class="modal-overlay" id="stockModal">
+  <div class="modal-box" style="max-width:400px;">
+    <div class="modal-header"><h5 id="stockModalTitle">Stock In</h5><button class="modal-close" onclick="closeModal('stockModal')"><i class="fas fa-times"></i></button></div>
+    <form method="POST">
+      <div class="modal-body">
+        <input type="hidden" name="id" id="stockProdId">
+        <input type="hidden" name="action" id="stockAction">
+        <p style="font-size:.85rem;color:var(--text-muted);margin-bottom:16px;">Product: <strong id="stockProdName"></strong></p>
+        <div class="form-group"><label class="form-label">Quantity *</label><input type="number" name="qty" class="form-control" min="1" required></div>
+        <div class="form-group"><label class="form-label">Reason / Note</label><input type="text" name="reason" class="form-control" placeholder="e.g. Supplier delivery, Sold..."></div>
+      </div>
+      <div class="modal-footer"><button type="button" class="btn btn-secondary" onclick="closeModal('stockModal')">Cancel</button><button type="submit" class="btn btn-primary" id="stockSubmitBtn">Confirm</button></div>
+    </form>
+  </div>
+</div>
+
+<script>
+function openStockModal(id, name, action) {
+  document.getElementById('stockProdId').value = id;
+  document.getElementById('stockAction').value = action;
+  document.getElementById('stockProdName').textContent = name;
+  const isIn = action === 'stock_in';
+  document.getElementById('stockModalTitle').innerHTML = `<i class="fas fa-${isIn?'plus':'minus'} me-2" style="color:var(--clr-${isIn?'success':'warning'})"></i>${isIn?'Stock In':'Stock Out'}`;
+  document.getElementById('stockSubmitBtn').className = `btn btn-${isIn?'success':'warning'}`;
+  document.getElementById('stockSubmitBtn').innerHTML = `<i class="fas fa-${isIn?'plus':'minus'}"></i> ${isIn?'Add Stock':'Deduct Stock'}`;
+  openModal('stockModal');
+}
+function openEditProduct(p) {
+  document.getElementById('epId').value = p.id;
+  document.getElementById('epName').value = p.name;
+  document.getElementById('epCat').value = p.category_id;
+  document.getElementById('epSupp').value = p.supplier_id || '';
+  document.getElementById('epPrice').value = p.price;
+  document.getElementById('epAlert').value = p.low_stock_alert;
+  document.getElementById('epDesc').value = p.description || '';
+  document.getElementById('epStatus').value = p.status;
+  openModal('editProductModal');
+}
+</script>
+<?php include __DIR__ . '/../includes/footer.php'; ?>
