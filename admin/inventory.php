@@ -179,7 +179,7 @@ document.addEventListener("DOMContentLoaded", function() {
         <?php $isLow = $p['stock_quantity'] <= $p['low_stock_alert']; $isOut = $p['stock_quantity'] == 0; ?>
         <tr>
           <td class="inv-67fd48"><?= $i+1 ?></td>
-          <td style="font-family:monospace; color:var(--text-muted); font-size:0.85rem;"><?= sanitize($p['product_code'] ?: '—') ?></td>
+          <td style="font-family:monospace; color:var(--text-primary); font-size:0.85rem; font-weight:600;"><?= sanitize($p['product_code'] ?: '—') ?></td>
           <td>
             <div style="display:flex; align-items:center; gap:10px;">
               <?php if($p['image']): ?>
@@ -238,7 +238,7 @@ document.addEventListener("DOMContentLoaded", function() {
       </div>
       
       <div style="flex-grow:1;">
-        <div style="font-family:monospace; color:var(--text-muted); font-size:0.75rem; margin-bottom:2px;"><?= sanitize($p['product_code'] ?: '—') ?></div>
+        <div style="font-family:monospace; color:var(--text-primary); font-size:0.85rem; margin-bottom:2px; font-weight:600;"><?= sanitize($p['product_code'] ?: '—') ?></div>
         <div style="font-weight:700; font-size:1.05rem; line-height:1.2; margin-bottom:5px; color:var(--text-primary);"><?= sanitize($p['name']) ?></div>
         <div style="font-size:0.8rem; color:var(--text-muted); margin-bottom:12px;"><?= sanitize($p['cat_name']) ?></div>
       </div>

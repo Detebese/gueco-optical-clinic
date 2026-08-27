@@ -121,7 +121,7 @@ include __DIR__ . '/../includes/header.php';
               <i class="fas fa-glasses" style="color:#fff;font-size:.85rem;"></i>
             </div>
           <?php endif; ?>
-        <div style="font-family:monospace; color:var(--text-muted); font-size:0.7rem; margin-bottom:2px;"><?= sanitize($prod['product_code'] ?: '') ?></div>
+        <div style="font-family:monospace; color:var(--text-primary); font-size:0.8rem; margin-bottom:2px; font-weight:600;"><?= sanitize($prod['product_code'] ?: '') ?></div>
           <div style="font-weight:700;font-size:.82rem;margin-bottom:4px;line-height:1.3"><?= sanitize($prod['name']) ?></div>
         <div style="font-size:.7rem;color:var(--text-muted);margin-bottom:8px"><?= sanitize($prod['category']) ?></div>
         <div style="display:flex;justify-content:space-between;align-items:center;">
