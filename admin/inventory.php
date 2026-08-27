@@ -139,6 +139,7 @@ document.addEventListener("DOMContentLoaded", function() {
 <div class="section-header">
   <h5><i  class="fas fa-boxes me-2 inv-b6b6a8"></i>Inventory — <?= count($products) ?> Products</h5>
   <div class="inv-96b971">
+    <button id="viewToggleBtn" class="btn btn-secondary btn-sm" onclick="toggleView()"><i class="fas fa-th-large"></i> Grid View</button>
     <a href="inventory_logs.php" class="btn btn-info btn-sm text-white"><i class="fas fa-history"></i> Stock History</a>
     <a href="?stock=low" class="btn btn-warning btn-sm"><i class="fas fa-exclamation-triangle"></i> Low Stock</a>
     <a href="?stock=out" class="btn btn-danger btn-sm"><i class="fas fa-times-circle"></i> Out of Stock</a>
@@ -165,7 +166,7 @@ document.addEventListener("DOMContentLoaded", function() {
   </div>
 </div>
 
-<div class="table-wrapper">
+<div class="table-wrapper" id="tableView">
   <div class="table-responsive">
     <table class="table">
       <thead><tr><th>#</th><th>Product</th><th>Category</th><th>Supplier</th><th>Price</th><th>Stock</th><th>Alert</th><th>Status</th><th>Actions</th></tr></thead>
@@ -215,6 +216,51 @@ document.addEventListener("DOMContentLoaded", function() {
       </tbody>
     </table>
   </div>
+</div>
+
+<div id="gridView" style="display:none; grid-template-columns:repeat(auto-fill, minmax(220px, 1fr)); gap:20px; margin-bottom:20px;">
+  <?php foreach ($products as $p): ?>
+    <?php 
+    $isLow = $p['stock_quantity'] <= $p['low_stock_alert'];
+    $isOut = $p['stock_quantity'] == 0; 
+    ?>
+    <div style="background:var(--bg-card); border:1px solid var(--border-color); border-radius:12px; padding:15px; position:relative; display:flex; flex-direction:column;">
+      <div style="text-align:center; margin-bottom:12px; flex-grow:0;">
+        <?php if($p['image']): ?>
+          <img src="<?= BASE_URL ?>assets/images/products/<?= $p['image'] ?>" alt="Product" style="width:100%; height:160px; object-fit:cover; border-radius:8px;">
+        <?php else: ?>
+          <div style="width:100%; height:160px; background:var(--bg-hover); border-radius:8px; display:flex; align-items:center; justify-content:center; color:var(--text-muted); font-size:2rem;">
+            <i class="fas fa-image"></i>
+          </div>
+        <?php endif; ?>
+      </div>
+      
+      <div style="flex-grow:1;">
+        <div style="font-weight:700; font-size:1.05rem; line-height:1.2; margin-bottom:5px; color:var(--text-primary);"><?= sanitize($p['name']) ?></div>
+        <div style="font-size:0.8rem; color:var(--text-muted); margin-bottom:12px;"><?= sanitize($p['cat_name']) ?></div>
+      </div>
+      
+      <div style="display:flex; justify-content:space-between; align-items:end; margin-bottom:15px; flex-grow:0;">
+        <div style="font-weight:800; font-size:1.1rem; color:var(--clr-primary);">₱<?= number_format($p['price'], 2) ?></div>
+        
+        <div style="text-align:right;">
+          <?php if($isOut): ?>
+            <span class="badge bg-danger">Out of Stock</span>
+          <?php elseif($isLow): ?>
+            <span class="badge bg-warning text-dark">Low: <?= $p['stock_quantity'] ?></span>
+          <?php else: ?>
+            <span class="badge bg-success"><?= $p['stock_quantity'] ?> in stock</span>
+          <?php endif; ?>
+        </div>
+      </div>
+      
+      <div style="display:flex; gap:5px; flex-grow:0;">
+        <button class="btn btn-sm btn-outline-success" style="flex:1;" onclick="openStockModal(<?= $p['id'] ?>, '<?= addslashes(sanitize($p['name'])) ?>', 'stock_in')" title="Stock In"><i class="fas fa-plus"></i></button>
+        <button class="btn btn-sm btn-outline-warning" style="flex:1;" onclick="openStockModal(<?= $p['id'] ?>, '<?= addslashes(sanitize($p['name'])) ?>', 'stock_out')" title="Stock Out"><i class="fas fa-minus"></i></button>
+        <button class="btn btn-sm btn-outline-primary" style="flex:1;" onclick='openEditProduct(<?= htmlspecialchars(json_encode($p), ENT_QUOTES, "UTF-8") ?>)' title="Edit"><i class="fas fa-edit"></i></button>
+      </div>
+    </div>
+  <?php endforeach; ?>
 </div>
 
 <!-- Add Product Modal -->
@@ -386,6 +432,30 @@ document.addEventListener("DOMContentLoaded", function() {
     openEditProduct(<?= json_encode($reopenData) ?>);
 });
 <?php endif; ?>
+
+function toggleView() {
+    const isGrid = document.getElementById('gridView').style.display !== 'none';
+    if (isGrid) {
+        document.getElementById('gridView').style.display = 'none';
+        document.getElementById('tableView').style.display = 'block';
+        document.getElementById('viewToggleBtn').innerHTML = '<i class="fas fa-th-large"></i> Grid View';
+        localStorage.setItem('inventoryViewPref', 'list');
+    } else {
+        document.getElementById('gridView').style.display = 'grid';
+        document.getElementById('tableView').style.display = 'none';
+        document.getElementById('viewToggleBtn').innerHTML = '<i class="fas fa-list"></i> List View';
+        localStorage.setItem('inventoryViewPref', 'grid');
+    }
+}
+
+document.addEventListener("DOMContentLoaded", function() {
+    if (localStorage.getItem('inventoryViewPref') === 'grid') {
+        // execute toggle to switch to grid initially without toggling the preference
+        document.getElementById('gridView').style.display = 'grid';
+        document.getElementById('tableView').style.display = 'none';
+        document.getElementById('viewToggleBtn').innerHTML = '<i class="fas fa-list"></i> List View';
+    }
+});
 </script>
 <?php include __DIR__ . '/../includes/footer.php'; ?>
 
