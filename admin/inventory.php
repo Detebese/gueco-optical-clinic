@@ -7,6 +7,7 @@ $pageTitle  = 'Inventory Management';
 $breadcrumb = ['Admin', 'Inventory'];
 $db = getDB();
 $msg = ''; $msgType = 'success';
+$reopenData = null;
 
 // Add/Edit product
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
@@ -37,9 +38,19 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                     $msg = "Product \"$name\" added.";
                 } else {
                     $id = (int)$_POST['id'];
-                    $db->prepare("UPDATE products SET name=?,category_id=?,supplier_id=?,price=?,low_stock_alert=?,description=?,status=? WHERE id=?")
-                       ->execute([$name,$catId,$suppId,$price,$alert,$desc,$stat,$id]);
-                    $msg = "Product updated.";
+                    $stmt = $db->prepare("SELECT name, category_id, supplier_id, price, low_stock_alert, description, status FROM products WHERE id=?");
+                    $stmt->execute([$id]);
+                    $old = $stmt->fetch();
+                    
+                    if ($old && $old['name'] === $name && (int)$old['category_id'] === $catId && (int)$old['supplier_id'] === $suppId && (float)$old['price'] === $price && (int)$old['low_stock_alert'] === $alert && $old['description'] === $desc && $old['status'] === $stat) {
+                        $msg = "No changes were made. Product is already up to date!";
+                        $msgType = "info";
+                        $reopenData = ['id' => $id, 'name' => $name, 'category_id' => $catId, 'supplier_id' => $suppId, 'price' => $price, 'low_stock_alert' => $alert, 'description' => $desc, 'status' => $stat];
+                    } else {
+                        $db->prepare("UPDATE products SET name=?,category_id=?,supplier_id=?,price=?,low_stock_alert=?,description=?,status=? WHERE id=?")
+                           ->execute([$name,$catId,$suppId,$price,$alert,$desc,$stat,$id]);
+                        $msg = "Product updated successfully!";
+                    }
                 }
             } catch (PDOException $e) {
                 if ($e->getCode() == 23000) {
@@ -96,9 +107,21 @@ include __DIR__ . '/../includes/header.php';
 ?>
 
 <?php if ($msg): ?>
-<div class="alert alert-<?= $msgType ?>" data-auto-dismiss="4000">
-  <i class="fas fa-<?= $msgType==='success'?'check-circle':'exclamation-circle' ?>"></i> <?= $msg ?>
-</div>
+<script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
+<script>
+document.addEventListener("DOMContentLoaded", function() {
+    Swal.fire({
+        title: '<?= $msgType === "success" ? "Success!" : ($msgType === "info" ? "Notice" : "Error") ?>',
+        text: '<?= addslashes($msg) ?>',
+        icon: '<?= $msgType === "success" ? "success" : ($msgType === "info" ? "info" : "error") ?>',
+        confirmButtonColor: 'var(--clr-primary)',
+        background: 'var(--bg-card)',
+        color: 'var(--text-primary)',
+        timer: 3000,
+        timerProgressBar: true
+    });
+});
+</script>
 <?php endif; ?>
 
 <div class="section-header">
@@ -272,5 +295,13 @@ function openEditProduct(p) {
   document.getElementById('epStatus').value = p.status;
   openModal('editProductModal');
 }
+
+<?php if ($reopenData): ?>
+// Re-open the modal automatically if there were no changes
+document.addEventListener("DOMContentLoaded", function() {
+    openEditProduct(<?= json_encode($reopenData) ?>);
+});
+<?php endif; ?>
 </script>
 <?php include __DIR__ . '/../includes/footer.php'; ?>
+
