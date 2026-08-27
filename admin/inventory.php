@@ -24,7 +24,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $desc     = sanitize(trim($_POST['description'] ?? ''));
         $stat     = $_POST['status'] ?? 'active';
 
-        if (!$name || !$catId || $price < 0) { $msg = 'Name, category, and a valid price are required.'; $msgType = 'danger'; }
+        if (!$productCode || !$name || !$catId || $price < 0) { $msg = 'Product Code, Name, category, and a valid price are required.'; $msgType = 'danger'; }
         else {
             try {
                 // Image Upload Logic
@@ -273,7 +273,7 @@ document.addEventListener("DOMContentLoaded", function() {
     <form method="POST" enctype="multipart/form-data">
       <div class="modal-body">
         <input type="hidden" name="action" value="add">
-        <div class="form-group"><label class="form-label">Product Code / SKU</label><input type="text" name="product_code" class="form-control" placeholder="Optional"></div>
+        <div class="form-group"><label class="form-label">Product Code / SKU *</label><input type="text" name="product_code" class="form-control" placeholder="Enter Product Code" required></div>
         <div class="form-group"><label class="form-label">Product Name *</label><input type="text" name="name" class="form-control" required></div>
         <div class="inv-b1eb0f">
           <div  class="form-group inv-da5cd6"><label class="form-label">Category *</label>
@@ -305,7 +305,7 @@ document.addEventListener("DOMContentLoaded", function() {
     <form method="POST" enctype="multipart/form-data" onsubmit="return confirmEdit(event, this)">
       <div class="modal-body">
         <input type="hidden" name="action" value="edit"><input type="hidden" name="id" id="epId">
-        <div class="form-group"><label class="form-label">Product Code / SKU</label><input type="text" name="product_code" id="epCode" class="form-control" placeholder="Optional"></div>
+        <div class="form-group"><label class="form-label">Product Code / SKU *</label><input type="text" name="product_code" id="epCode" class="form-control" placeholder="Enter Product Code" required></div>
         <div class="form-group"><label class="form-label">Product Name *</label><input type="text" name="name" id="epName" class="form-control" required></div>
         <div class="inv-b1eb0f">
           <div  class="form-group inv-da5cd6"><label class="form-label">Category *</label>
