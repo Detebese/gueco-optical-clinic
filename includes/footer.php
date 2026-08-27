@@ -9,5 +9,7 @@
 <!-- Main JS -->
 <script src="<?= BASE_URL ?>assets/js/main.js?v=<?= time() ?>"></script>
 <?php if (isset($extraScripts)) echo $extraScripts; ?>
+<script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
 </body>
 </html>
+
