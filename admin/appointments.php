@@ -62,26 +62,37 @@ $appts = $db->prepare("
 $appts->execute($params);
 $appts = $appts->fetchAll();
 
-// Stats for today
-$todayStats = [];
+// Overall Stats
+$overallStats = [];
 foreach (['pending','confirmed','completed','cancelled','no_show'] as $s) {
-    $stmt = $db->prepare("SELECT COUNT(*) as c FROM appointments WHERE appointment_date=? AND status=?");
-    $stmt->execute([$today, $s]); $todayStats[$s] = $stmt->fetch()['c'];
+    $stmt = $db->prepare("SELECT COUNT(*) as c FROM appointments WHERE status=?");
+    $stmt->execute([$s]); $overallStats[$s] = $stmt->fetch()['c'];
 }
 
 $extraHead = '<link rel="stylesheet" href="'.BASE_URL.'assets/css/pages/appointments.css">';
 include __DIR__ . '/../includes/header.php';
 ?>
 
-<!-- Today quick stats -->
-<div class="appt-dcdfc2">
+<!-- Overall quick stats -->
+<div class="appt-stats-container">
   <?php
-  $statCfg = ['pending'=>['warning','clock','Pending'],'confirmed'=>['info','check-circle','Confirmed'],'completed'=>['success','check-double','Completed'],'cancelled'=>['danger','times-circle','Cancelled'],'no_show'=>['secondary','user-times','No Show']];
+  $statCfg = [
+      'pending'=>['warning','clock','Pending'],
+      'confirmed'=>['info','check-circle','Confirmed'],
+      'completed'=>['success','check-double','Completed'],
+      'cancelled'=>['danger','times-circle','Cancelled'],
+      'no_show'=>['secondary','user-times','No Show']
+  ];
   foreach ($statCfg as $s => $cfg): ?>
-  <a href="?date=<?= $today ?>&status=<?= $s ?>" class="appt-1ae704">
-    <div class="appt-1b330c" onmouseover="this.style.boxShadow='var(--shadow-md)'" onmouseout="this.style.boxShadow='none'">
-      <div class="appt-c179b7"><?= $todayStats[$s] ?></div>
-      <div class="appt-f1faad"><?= $cfg[2] ?></div>
+  <a href="?status=<?= $s ?>" class="appt-stat-link">
+    <div class="appt-stat-card border-<?= $cfg[0] ?>">
+      <div class="appt-stat-icon text-<?= $cfg[0] ?>">
+        <i class="fas fa-<?= $cfg[1] ?>"></i>
+      </div>
+      <div class="appt-stat-info">
+        <div class="appt-stat-value"><?= $overallStats[$s] ?></div>
+        <div class="appt-stat-label"><?= $cfg[2] ?></div>
+      </div>
     </div>
   </a>
   <?php endforeach; ?>
@@ -458,3 +469,4 @@ document.addEventListener('DOMContentLoaded', function() {
 
 });
 </script>
+
