@@ -119,8 +119,38 @@ document.addEventListener('DOMContentLoaded', function () {
   // ── Confirm Delete ─────────────────────────────────────
   document.querySelectorAll('[data-confirm]').forEach(btn => {
     btn.addEventListener('click', (e) => {
+      e.preventDefault();
       const msg = btn.dataset.confirm || 'Are you sure you want to delete this?';
-      if (!confirm(msg)) e.preventDefault();
+      
+      if (typeof Swal !== 'undefined') {
+          Swal.fire({
+              title: 'Confirm Action',
+              text: msg,
+              icon: 'warning',
+              showCancelButton: true,
+              confirmButtonColor: 'var(--clr-primary)',
+              cancelButtonColor: 'var(--clr-danger)',
+              confirmButtonText: 'Yes, proceed',
+              background: 'var(--bg-card)',
+              color: 'var(--text-primary)'
+          }).then((result) => {
+              if (result.isConfirmed) {
+                  const form = btn.closest('form');
+                  if (form) {
+                      form.submit();
+                  } else if (btn.tagName === 'A' && btn.href) {
+                      window.location.href = btn.href;
+                  }
+              }
+          });
+      } else {
+          // Fallback if Swal is not loaded
+          if (confirm(msg)) {
+              const form = btn.closest('form');
+              if (form) form.submit();
+              else if (btn.tagName === 'A' && btn.href) window.location.href = btn.href;
+          }
+      }
     });
   });
 

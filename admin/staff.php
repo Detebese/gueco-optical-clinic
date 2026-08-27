@@ -198,7 +198,7 @@ include __DIR__ . '/../includes/header.php';
 <div class="modal-overlay" id="editStaffModal">
   <div class="modal-box">
     <div class="modal-header"><h5><i class="fas fa-edit me-2"></i>Edit Staff Account</h5><button class="modal-close" onclick="closeModal('editStaffModal')"><i class="fas fa-times"></i></button></div>
-    <form method="POST">
+    <form method="POST" onsubmit="return confirmEdit(event, this)">
       <div class="modal-body">
         <input type="hidden" name="action" value="edit"><input type="hidden" name="id" id="esId">
         <div class="form-group"><label class="form-label">Full Name *</label><input type="text" name="full_name" id="esName" class="form-control" required></div>
@@ -231,7 +231,52 @@ include __DIR__ . '/../includes/header.php';
 </div>
 
 <script>
+let currentEditStaff = null;
+
+function confirmEdit(e, form) {
+  e.preventDefault();
+  
+  const s = currentEditStaff;
+  const newPass = form.password.value;
+  if (s) {
+      const name = document.getElementById('esName').value;
+      const email = document.getElementById('esEmail').value;
+      const phone = document.getElementById('esPhone').value;
+      const role = document.getElementById('esRole').value;
+      const stat = document.getElementById('esStatus').value;
+
+      if (!newPass && name === s.full_name && email === s.email && phone === (s.phone || '') && role === s.role && stat === s.status) {
+          Swal.fire({
+              title: 'Notice',
+              text: 'No changes were made. Account is already up to date!',
+              icon: 'info',
+              background: 'var(--bg-card)',
+              color: 'var(--text-primary)',
+              confirmButtonColor: 'var(--clr-primary)'
+          });
+          return;
+      }
+  }
+
+  Swal.fire({
+      title: 'Save Changes?',
+      text: 'Are you sure you want to update this account?',
+      icon: 'warning',
+      showCancelButton: true,
+      confirmButtonColor: 'var(--clr-primary)',
+      cancelButtonColor: 'var(--clr-danger)',
+      confirmButtonText: 'Yes, update it!',
+      background: 'var(--bg-card)',
+      color: 'var(--text-primary)'
+  }).then((result) => {
+      if (result.isConfirmed) {
+          form.submit();
+      }
+  });
+}
+
 function openEditStaff(s) {
+  currentEditStaff = s;
   document.getElementById('esId').value    = s.id;
   document.getElementById('esName').value  = s.full_name;
   document.getElementById('esEmail').value = s.email;
