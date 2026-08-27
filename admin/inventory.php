@@ -229,7 +229,7 @@ document.addEventListener("DOMContentLoaded", function() {
 <div class="modal-overlay" id="editProductModal">
   <div  class="modal-box inv-c9726f">
     <div class="modal-header"><h5><i class="fas fa-edit me-2"></i>Edit Product</h5><button class="modal-close" onclick="closeModal('editProductModal')"><i class="fas fa-times"></i></button></div>
-    <form method="POST">
+    <form method="POST" onsubmit="return confirmEdit(event, this)">
       <div class="modal-body">
         <input type="hidden" name="action" value="edit"><input type="hidden" name="id" id="epId">
         <div class="form-group"><label class="form-label">Product Name *</label><input type="text" name="name" id="epName" class="form-control" required></div>
@@ -284,6 +284,25 @@ function openStockModal(id, name, action) {
   document.getElementById('stockSubmitBtn').innerHTML = `<i class="fas fa-${isIn?'plus':'minus'}"></i> ${isIn?'Add Stock':'Deduct Stock'}`;
   openModal('stockModal');
 }
+function confirmEdit(e, form) {
+  e.preventDefault();
+  Swal.fire({
+      title: 'Save Changes?',
+      text: 'Are you sure you want to update this product?',
+      icon: 'warning',
+      showCancelButton: true,
+      confirmButtonColor: 'var(--clr-primary)',
+      cancelButtonColor: 'var(--clr-danger)',
+      confirmButtonText: 'Yes, update it!',
+      background: 'var(--bg-card)',
+      color: 'var(--text-primary)'
+  }).then((result) => {
+      if (result.isConfirmed) {
+          form.submit();
+      }
+  });
+}
+
 function openEditProduct(p) {
   document.getElementById('epId').value = p.id;
   document.getElementById('epName').value = p.name;
