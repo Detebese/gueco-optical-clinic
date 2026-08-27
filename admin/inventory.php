@@ -83,7 +83,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 $search = sanitize($_GET['search'] ?? '');
 $catFilter = (int)($_GET['cat'] ?? 0);
 $stockFilter = $_GET['stock'] ?? '';
-$where = ['p.status = "active"']; $params = [];
+$where = ['1=1']; $params = [];
 if ($search) { $where[] = 'p.name LIKE ?'; $params[] = "%$search%"; }
 if ($catFilter) { $where[] = 'p.category_id=?'; $params[] = $catFilter; }
 if ($stockFilter === 'low') { $where[] = 'p.stock_quantity <= p.low_stock_alert'; }
