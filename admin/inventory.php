@@ -23,21 +23,33 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $stat     = $_POST['status'] ?? 'active';
 
         if (!$name || !$catId || $price < 0) { $msg = 'Name, category, and a valid price are required.'; $msgType = 'danger'; }
-        elseif ($action === 'add') {
-            $db->prepare("INSERT INTO products (name,category_id,supplier_id,price,stock_quantity,low_stock_alert,description,status) VALUES (?,?,?,?,?,?,?,?)")
-               ->execute([$name,$catId,$suppId,$price,$stock,$alert,$desc,$stat]);
-            // Log inventory
-            $newId = $db->lastInsertId();
-            if ($stock > 0) {
-                $db->prepare("INSERT INTO inventory_logs (product_id,type,quantity,previous_stock,new_stock,reason,user_id) VALUES (?,?,?,?,?,?,?)")
-                   ->execute([$newId,'stock_in',$stock,0,$stock,'Initial stock',$_SESSION['user_id']]);
+        else {
+            try {
+                if ($action === 'add') {
+                    $db->prepare("INSERT INTO products (name,category_id,supplier_id,price,stock_quantity,low_stock_alert,description,status) VALUES (?,?,?,?,?,?,?,?)")
+                       ->execute([$name,$catId,$suppId,$price,$stock,$alert,$desc,$stat]);
+                    // Log inventory
+                    $newId = $db->lastInsertId();
+                    if ($stock > 0) {
+                        $db->prepare("INSERT INTO inventory_logs (product_id,type,quantity,previous_stock,new_stock,reason,user_id) VALUES (?,?,?,?,?,?,?)")
+                           ->execute([$newId,'stock_in',$stock,0,$stock,'Initial stock',$_SESSION['user_id']]);
+                    }
+                    $msg = "Product \"$name\" added.";
+                } else {
+                    $id = (int)$_POST['id'];
+                    $db->prepare("UPDATE products SET name=?,category_id=?,supplier_id=?,price=?,low_stock_alert=?,description=?,status=? WHERE id=?")
+                       ->execute([$name,$catId,$suppId,$price,$alert,$desc,$stat,$id]);
+                    $msg = "Product updated.";
+                }
+            } catch (PDOException $e) {
+                if ($e->getCode() == 23000) {
+                    $msg = "Error: A product with this name already exists.";
+                    $msgType = "danger";
+                } else {
+                    $msg = "An error occurred: " . $e->getMessage();
+                    $msgType = "danger";
+                }
             }
-            $msg = "Product \"$name\" added.";
-        } else {
-            $id = (int)$_POST['id'];
-            $db->prepare("UPDATE products SET name=?,category_id=?,supplier_id=?,price=?,low_stock_alert=?,description=?,status=? WHERE id=?")
-               ->execute([$name,$catId,$suppId,$price,$alert,$desc,$stat,$id]);
-            $msg = "Product updated.";
         }
     } elseif ($action === 'stock_in' || $action === 'stock_out') {
         $id  = (int)$_POST['id'];
