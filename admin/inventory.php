@@ -126,6 +126,7 @@ document.addEventListener("DOMContentLoaded", function() {
 <div class="section-header">
   <h5><i  class="fas fa-boxes me-2 inv-b6b6a8"></i>Inventory — <?= count($products) ?> Products</h5>
   <div class="inv-96b971">
+    <a href="inventory_logs.php" class="btn btn-info btn-sm text-white"><i class="fas fa-history"></i> Stock History</a>
     <a href="?stock=low" class="btn btn-warning btn-sm"><i class="fas fa-exclamation-triangle"></i> Low Stock</a>
     <a href="?stock=out" class="btn btn-danger btn-sm"><i class="fas fa-times-circle"></i> Out of Stock</a>
     <button class="btn btn-primary" onclick="openModal('addProductModal')"><i class="fas fa-plus"></i> Add Product</button>
