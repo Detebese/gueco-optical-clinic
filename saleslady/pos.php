@@ -75,7 +75,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action'] ?? '') === 'proce
 // Search products AJAX
 if (isset($_GET['search_products'])) {
     $q = '%' . sanitize($_GET['search_products']) . '%';
-    $prods = $db->prepare("SELECT p.id, p.name, p.price, p.stock_quantity, c.name as category FROM products p JOIN categories c ON c.id=p.category_id WHERE (p.name LIKE ? OR c.name LIKE ?) AND p.status='active' AND p.stock_quantity>0 ORDER BY p.name LIMIT 20");
+    $prods = $db->prepare("SELECT p.id, p.name, p.price, p.stock_quantity, p.image, c.name as category FROM products p JOIN categories c ON c.id=p.category_id WHERE (p.name LIKE ? OR c.name LIKE ?) AND p.status='active' AND p.stock_quantity>0 ORDER BY p.name LIMIT 20");
     $prods->execute([$q,$q]);
     header('Content-Type: application/json');
     echo json_encode($prods->fetchAll());
@@ -84,7 +84,7 @@ if (isset($_GET['search_products'])) {
 
 // Get all products by category for initial load
 $categories = $db->query("SELECT c.*, (SELECT COUNT(*) FROM products p WHERE p.category_id=c.id AND p.status='active' AND p.stock_quantity>0) as prod_count FROM categories c WHERE c.status='active' ORDER BY c.name")->fetchAll();
-$allProducts = $db->query("SELECT p.id,p.name,p.price,p.stock_quantity,c.name as category FROM products p JOIN categories c ON c.id=p.category_id WHERE p.status='active' AND p.stock_quantity>0 ORDER BY c.name,p.name")->fetchAll();
+$allProducts = $db->query("SELECT p.id,p.name,p.price,p.stock_quantity,p.image,c.name as category FROM products p JOIN categories c ON c.id=p.category_id WHERE p.status='active' AND p.stock_quantity>0 ORDER BY c.name,p.name")->fetchAll();
 
 $patients = $db->query("SELECT id, full_name, phone FROM patients WHERE status='active' ORDER BY full_name")->fetchAll();
 
@@ -114,9 +114,13 @@ include __DIR__ . '/../includes/header.php';
            style="background:var(--bg-card);border:1px solid var(--border-color);border-radius:12px;padding:14px;cursor:pointer;transition:all .2s ease;"
            onmouseover="this.style.borderColor='var(--clr-primary)';this.style.boxShadow='0 4px 20px rgba(37,99,235,.15)'"
            onmouseout="this.style.borderColor='var(--border-color)';this.style.boxShadow='none'">
-        <div style="width:36px;height:36px;background:linear-gradient(135deg,var(--clr-primary),var(--clr-secondary));border-radius:10px;display:flex;align-items:center;justify-content:center;margin-bottom:10px;">
-          <i class="fas fa-glasses" style="color:#fff;font-size:.85rem;"></i>
-        </div>
+          <?php if($prod['image']): ?>
+            <img src="<?= BASE_URL ?>assets/images/products/<?= $prod['image'] ?>" alt="Product" style="width:36px;height:36px;object-fit:cover;border-radius:10px;margin-bottom:10px;">
+          <?php else: ?>
+            <div style="width:36px;height:36px;background:linear-gradient(135deg,var(--clr-primary),var(--clr-secondary));border-radius:10px;display:flex;align-items:center;justify-content:center;margin-bottom:10px;">
+              <i class="fas fa-glasses" style="color:#fff;font-size:.85rem;"></i>
+            </div>
+          <?php endif; ?>
         <div style="font-weight:700;font-size:.82rem;margin-bottom:4px;line-height:1.3"><?= sanitize($prod['name']) ?></div>
         <div style="font-size:.7rem;color:var(--text-muted);margin-bottom:8px"><?= sanitize($prod['category']) ?></div>
         <div style="display:flex;justify-content:space-between;align-items:center;">

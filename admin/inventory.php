@@ -26,9 +26,17 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         if (!$name || !$catId || $price < 0) { $msg = 'Name, category, and a valid price are required.'; $msgType = 'danger'; }
         else {
             try {
+                // Image Upload Logic
+                $imagePath = null;
+                if (isset($_FILES['image']) && $_FILES['image']['error'] === UPLOAD_ERR_OK) {
+                    $ext = pathinfo($_FILES['image']['name'], PATHINFO_EXTENSION);
+                    $imagePath = uniqid('prod_') . '.' . $ext;
+                    move_uploaded_file($_FILES['image']['tmp_name'], __DIR__ . '/../assets/images/products/' . $imagePath);
+                }
+
                 if ($action === 'add') {
-                    $db->prepare("INSERT INTO products (name,category_id,supplier_id,price,stock_quantity,low_stock_alert,description,status) VALUES (?,?,?,?,?,?,?,?)")
-                       ->execute([$name,$catId,$suppId,$price,$stock,$alert,$desc,$stat]);
+                    $db->prepare("INSERT INTO products (name,category_id,supplier_id,price,stock_quantity,low_stock_alert,description,status,image) VALUES (?,?,?,?,?,?,?,?,?)")
+                       ->execute([$name,$catId,$suppId,$price,$stock,$alert,$desc,$stat,$imagePath]);
                     // Log inventory
                     $newId = $db->lastInsertId();
                     if ($stock > 0) {
@@ -42,13 +50,18 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                     $stmt->execute([$id]);
                     $old = $stmt->fetch();
                     
-                    if ($old && $old['name'] === $name && (int)$old['category_id'] === $catId && (int)$old['supplier_id'] === $suppId && (float)$old['price'] === $price && (int)$old['low_stock_alert'] === $alert && $old['description'] === $desc && $old['status'] === $stat) {
+                    if ($old && $old['name'] === $name && (int)$old['category_id'] === $catId && (int)$old['supplier_id'] === $suppId && (float)$old['price'] === $price && (int)$old['low_stock_alert'] === $alert && $old['description'] === $desc && $old['status'] === $stat && !$imagePath) {
                         $msg = "No changes were made. Product is already up to date!";
                         $msgType = "info";
                         $reopenData = ['id' => $id, 'name' => $name, 'category_id' => $catId, 'supplier_id' => $suppId, 'price' => $price, 'low_stock_alert' => $alert, 'description' => $desc, 'status' => $stat];
                     } else {
-                        $db->prepare("UPDATE products SET name=?,category_id=?,supplier_id=?,price=?,low_stock_alert=?,description=?,status=? WHERE id=?")
-                           ->execute([$name,$catId,$suppId,$price,$alert,$desc,$stat,$id]);
+                        if ($imagePath) {
+                            $db->prepare("UPDATE products SET name=?,category_id=?,supplier_id=?,price=?,low_stock_alert=?,description=?,status=?,image=? WHERE id=?")
+                               ->execute([$name,$catId,$suppId,$price,$alert,$desc,$stat,$imagePath,$id]);
+                        } else {
+                            $db->prepare("UPDATE products SET name=?,category_id=?,supplier_id=?,price=?,low_stock_alert=?,description=?,status=? WHERE id=?")
+                               ->execute([$name,$catId,$suppId,$price,$alert,$desc,$stat,$id]);
+                        }
                         $msg = "Product updated successfully!";
                     }
                 }
@@ -165,8 +178,17 @@ document.addEventListener("DOMContentLoaded", function() {
         <tr>
           <td class="inv-67fd48"><?= $i+1 ?></td>
           <td>
-            <div class="inv-bac3c9"><?= sanitize($p['name']) ?></div>
-            <div class="inv-26a4f5"><?= sanitize($p['description'] ?: '—') ?></div>
+            <div style="display:flex; align-items:center; gap:10px;">
+              <?php if($p['image']): ?>
+                <img src="<?= BASE_URL ?>assets/images/products/<?= $p['image'] ?>" alt="Product" style="width:40px; height:40px; object-fit:cover; border-radius:5px;">
+              <?php else: ?>
+                <div style="width:40px; height:40px; background:var(--bg-card); border-radius:5px; display:flex; align-items:center; justify-content:center; color:var(--text-muted);"><i class="fas fa-image"></i></div>
+              <?php endif; ?>
+              <div>
+                <div class="inv-bac3c9"><?= sanitize($p['name']) ?></div>
+                <div class="inv-26a4f5"><?= sanitize($p['description'] ?: '—') ?></div>
+              </div>
+            </div>
           </td>
           <td><span class="badge bg-secondary"><?= sanitize($p['cat_name']) ?></span></td>
           <td class="inv-67fd48"><?= sanitize($p['supplier_name'] ?? '—') ?></td>
@@ -199,7 +221,7 @@ document.addEventListener("DOMContentLoaded", function() {
 <div class="modal-overlay" id="addProductModal">
   <div  class="modal-box inv-c9726f">
     <div class="modal-header"><h5><i class="fas fa-plus me-2"></i>Add New Product</h5><button class="modal-close" onclick="closeModal('addProductModal')"><i class="fas fa-times"></i></button></div>
-    <form method="POST">
+    <form method="POST" enctype="multipart/form-data">
       <div class="modal-body">
         <input type="hidden" name="action" value="add">
         <div class="form-group"><label class="form-label">Product Name *</label><input type="text" name="name" class="form-control" required></div>
@@ -218,6 +240,7 @@ document.addEventListener("DOMContentLoaded", function() {
           <div  class="form-group inv-da5cd6"><label class="form-label">Initial Stock</label><input type="number" name="stock_quantity" class="form-control" value="0" min="0"></div>
           <div  class="form-group inv-da5cd6"><label class="form-label">Low Stock Alert</label><input type="number" name="low_stock_alert" class="form-control" value="5" min="1"></div>
         </div>
+        <div class="form-group"><label class="form-label">Product Image</label><input type="file" name="image" class="form-control" accept="image/*"></div>
         <div class="form-group"><label class="form-label">Description</label><textarea name="description" class="form-control" rows="2"></textarea></div>
       </div>
       <div class="modal-footer"><button type="button" class="btn btn-secondary" onclick="closeModal('addProductModal')">Cancel</button><button type="submit" class="btn btn-primary"><i class="fas fa-save"></i> Save Product</button></div>
@@ -229,7 +252,7 @@ document.addEventListener("DOMContentLoaded", function() {
 <div class="modal-overlay" id="editProductModal">
   <div  class="modal-box inv-c9726f">
     <div class="modal-header"><h5><i class="fas fa-edit me-2"></i>Edit Product</h5><button class="modal-close" onclick="closeModal('editProductModal')"><i class="fas fa-times"></i></button></div>
-    <form method="POST" onsubmit="return confirmEdit(event, this)">
+    <form method="POST" enctype="multipart/form-data" onsubmit="return confirmEdit(event, this)">
       <div class="modal-body">
         <input type="hidden" name="action" value="edit"><input type="hidden" name="id" id="epId">
         <div class="form-group"><label class="form-label">Product Name *</label><input type="text" name="name" id="epName" class="form-control" required></div>
@@ -249,6 +272,7 @@ document.addEventListener("DOMContentLoaded", function() {
           <div  class="form-group inv-da5cd6"><label class="form-label">Status</label>
             <select name="status" id="epStatus" class="form-select"><option value="active">Active</option><option value="inactive">Inactive</option></select></div>
         </div>
+        <div class="form-group"><label class="form-label">Product Image (Leave empty to keep current)</label><input type="file" name="image" id="epImage" class="form-control" accept="image/*"></div>
         <div class="form-group"><label class="form-label">Description</label><textarea name="description" id="epDesc" class="form-control" rows="2"></textarea></div>
       </div>
       <div class="modal-footer"><button type="button" class="btn btn-secondary" onclick="closeModal('editProductModal')">Cancel</button><button type="submit" class="btn btn-primary"><i class="fas fa-save"></i> Update</button></div>
@@ -299,11 +323,13 @@ function confirmEdit(e, form) {
       const alert = parseInt(document.getElementById('epAlert').value);
       const desc = document.getElementById('epDesc').value || null;
       const stat = document.getElementById('epStatus').value;
+      const hasImage = document.getElementById('epImage').files.length > 0;
 
       const oldSupp = p.supplier_id ? String(p.supplier_id) : null;
       const oldDesc = p.description ? p.description : null;
 
       if (
+          !hasImage &&
           name === p.name &&
           cat === String(p.category_id) &&
           supp === oldSupp &&
