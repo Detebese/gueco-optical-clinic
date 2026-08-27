@@ -27,12 +27,13 @@ if ($_SERVER['REQUEST_METHOD']==='POST' && ($_POST['action']??'')==='toggle') {
     header('Location: patients.php'); exit;
 }
 
+$extraHead = '<link rel="stylesheet" href="'.BASE_URL.'assets/css/pages/patients.css">';
 include __DIR__ . '/../includes/header.php';
 ?>
 <div class="section-header">
-  <h5><i class="fas fa-users me-2" style="color:var(--clr-primary)"></i>Patient Accounts (<?= $total ?>)</h5>
-  <form method="GET" style="display:flex;gap:8px;">
-    <input type="text" name="search" class="form-control" placeholder="Search name, email, phone..." value="<?= htmlspecialchars($search) ?>" style="width:260px;">
+  <h5><i  class="fas fa-users me-2 pat-b6b6a8"></i>Patient Accounts (<?= $total ?>)</h5>
+  <form method="GET" class="pat-1952d6">
+    <input type="text" name="search" class="form-control" placeholder="Search name, email, phone..." value="<?= htmlspecialchars($search) ?>" class="pat-a712ff">
     <button type="submit" class="btn btn-primary"><i class="fas fa-search"></i></button>
     <?php if ($search): ?><a href="patients.php" class="btn btn-secondary"><i class="fas fa-undo"></i></a><?php endif; ?>
   </form>
@@ -48,20 +49,20 @@ include __DIR__ . '/../includes/header.php';
         <?php else: ?>
         <?php foreach ($patients as $i => $p): ?>
         <tr>
-          <td style="font-size:.78rem;color:var(--text-muted)"><?= $pg['offset']+$i+1 ?></td>
+          <td class="pat-67fd48"><?= $pg['offset']+$i+1 ?></td>
           <td>
-            <div style="display:flex;align-items:center;gap:10px;">
-              <div style="width:34px;height:34px;background:linear-gradient(135deg,var(--clr-primary),var(--clr-secondary));border-radius:50%;display:flex;align-items:center;justify-content:center;color:#fff;font-weight:700;font-size:.8rem;flex-shrink:0;"><?= strtoupper(substr($p['full_name'],0,1)) ?></div>
-              <div><div style="font-weight:600;font-size:.88rem"><?= sanitize($p['full_name']) ?></div><div style="font-size:.7rem;color:var(--text-muted)"><?= sanitize($p['email']) ?></div></div>
+            <div class="pat-3b6fff">
+              <div class="pat-ec276b"><?= strtoupper(substr($p['full_name'],0,1)) ?></div>
+              <div><div class="pat-bac3c9"><?= sanitize($p['full_name']) ?></div><div class="pat-26a4f5"><?= sanitize($p['email']) ?></div></div>
             </div>
           </td>
-          <td style="font-size:.82rem"><?= sanitize($p['phone']??'—') ?></td>
-          <td style="font-size:.78rem;color:var(--text-muted)"><?= sanitize($p['address']??'—') ?></td>
+          <td class="pat-0de4e7"><?= sanitize($p['phone']??'—') ?></td>
+          <td class="pat-67fd48"><?= sanitize($p['address']??'—') ?></td>
           <td><span class="badge bg-info"><?= $p['appt_count'] ?> appts</span></td>
           <td><?= statusBadge($p['status']) ?></td>
-          <td style="font-size:.78rem;color:var(--text-muted)"><?= formatDate($p['created_at']) ?></td>
+          <td class="pat-67fd48"><?= formatDate($p['created_at']) ?></td>
           <td>
-            <form method="POST" style="display:inline">
+            <form method="POST" class="pat-5677b9">
               <input type="hidden" name="action" value="toggle"><input type="hidden" name="id" value="<?= $p['id'] ?>"><input type="hidden" name="cur" value="<?= $p['status'] ?>">
               <button class="btn btn-sm <?= $p['status']==='active'?'btn-warning':'btn-success' ?> btn-icon"
                       data-confirm="<?= $p['status']==='active'?'Deactivate':'Activate' ?> this patient account?"
@@ -77,7 +78,7 @@ include __DIR__ . '/../includes/header.php';
     </table>
   </div>
   <?php if ($pg['total_pages']>1): ?>
-  <div style="padding:14px 20px;border-top:1px solid var(--border-light);">
+  <div class="pat-4174a0">
     <div class="pagination">
       <?php if ($pg['has_prev']): ?><a href="?search=<?= urlencode($search) ?>&page=<?= $page-1 ?>" class="page-btn"><i class="fas fa-chevron-left"></i></a><?php endif; ?>
       <?php for ($p=1;$p<=$pg['total_pages'];$p++): ?><a href="?search=<?= urlencode($search) ?>&page=<?= $p ?>" class="page-btn <?= $p===$page?'active':'' ?>"><?= $p ?></a><?php endfor; ?>

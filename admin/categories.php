@@ -59,19 +59,12 @@ $categories = $db->query("
     FROM categories c ORDER BY c.name ASC
 ")->fetchAll();
 
+$extraHead = '<link rel="stylesheet" href="'.BASE_URL.'assets/css/pages/categories.css">';
 include __DIR__ . '/../includes/header.php';
 ?>
 
 <?php if ($msg): ?>
 <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
-<style>
-/* Fix for SweetAlert2 success icon white background masks in dark mode */
-.swal2-success-circular-line-left,
-.swal2-success-circular-line-right,
-.swal2-success-fix {
-    background-color: var(--bg-card) !important;
-}
-</style>
 <script>
 document.addEventListener("DOMContentLoaded", function() {
     Swal.fire({
@@ -89,7 +82,7 @@ document.addEventListener("DOMContentLoaded", function() {
 <?php endif; ?>
 
 <div class="section-header">
-  <h5><i class="fas fa-th-large me-2" style="color:var(--clr-primary)"></i>Product Categories</h5>
+  <h5><i class="fas fa-th-large me-2" class="cat-header-icon"></i>Product Categories</h5>
   <button class="btn btn-primary" onclick="openModal('addModal')">
     <i class="fas fa-plus"></i> Add Category
   </button>
@@ -107,19 +100,19 @@ document.addEventListener("DOMContentLoaded", function() {
         <?php else: ?>
         <?php foreach ($categories as $i => $cat): ?>
         <tr>
-          <td style="font-size:.78rem;color:var(--text-muted)"><?= $i+1 ?></td>
-          <td><div style="font-weight:600;font-size:.88rem"><?= sanitize($cat['name']) ?></div></td>
-          <td style="font-size:.8rem;color:var(--text-muted)"><?= sanitize($cat['description'] ?: '—') ?></td>
+          <td class="cat-table-index"><?= $i+1 ?></td>
+          <td><div class="cat-table-name"><?= sanitize($cat['name']) ?></div></td>
+          <td class="cat-table-desc"><?= sanitize($cat['description'] ?: '—') ?></td>
           <td><span class="badge bg-info"><?= $cat['product_count'] ?> products</span></td>
           <td><?= statusBadge($cat['status']) ?></td>
-          <td style="font-size:.78rem;color:var(--text-muted)"><?= formatDate($cat['created_at']) ?></td>
+          <td class="cat-table-created"><?= formatDate($cat['created_at']) ?></td>
           <td>
             <button class="btn btn-sm btn-outline-primary btn-icon" title="Edit"
               onclick="openEdit(<?= $cat['id'] ?>, '<?= addslashes($cat['name']) ?>', '<?= addslashes($cat['description']) ?>', '<?= $cat['status'] ?>')">
               <i class="fas fa-edit"></i>
             </button>
             <?php if ($cat['product_count'] == 0): ?>
-            <form method="POST" style="display:inline">
+            <form method="POST" class="cat-delete-form">
               <input type="hidden" name="action" value="delete">
               <input type="hidden" name="id" value="<?= $cat['id'] ?>">
               <button class="btn btn-sm btn-danger btn-icon" title="Deactivate" data-confirm="Deactivate this category?"><i class="fas fa-ban"></i></button>
@@ -138,14 +131,14 @@ document.addEventListener("DOMContentLoaded", function() {
 <div class="modal-overlay" id="addModal">
   <div class="modal-box">
     <div class="modal-header">
-      <h5><i class="fas fa-plus me-2" style="color:var(--clr-primary)"></i>Add Category</h5>
+      <h5><i class="fas fa-plus me-2" class="cat-header-icon"></i>Add Category</h5>
       <button class="modal-close" onclick="closeModal('addModal')"><i class="fas fa-times"></i></button>
     </div>
     <form method="POST">
       <div class="modal-body">
         <input type="hidden" name="action" value="add">
         <div class="form-group">
-          <label class="form-label">Category Name <span style="color:var(--clr-danger)">*</span></label>
+          <label class="form-label">Category Name <span class="cat-required-star">*</span></label>
           <input type="text" name="name" class="form-control" placeholder="e.g. Frames" required>
         </div>
         <div class="form-group">
@@ -165,7 +158,7 @@ document.addEventListener("DOMContentLoaded", function() {
 <div class="modal-overlay" id="editModal">
   <div class="modal-box">
     <div class="modal-header">
-      <h5><i class="fas fa-edit me-2" style="color:var(--clr-primary)"></i>Edit Category</h5>
+      <h5><i class="fas fa-edit me-2" class="cat-header-icon"></i>Edit Category</h5>
       <button class="modal-close" onclick="closeModal('editModal')"><i class="fas fa-times"></i></button>
     </div>
     <form method="POST">
@@ -173,7 +166,7 @@ document.addEventListener("DOMContentLoaded", function() {
         <input type="hidden" name="action" value="edit">
         <input type="hidden" name="id" id="editId">
         <div class="form-group">
-          <label class="form-label">Category Name <span style="color:var(--clr-danger)">*</span></label>
+          <label class="form-label">Category Name <span class="cat-required-star">*</span></label>
           <input type="text" name="name" id="editName" class="form-control" required>
         </div>
         <div class="form-group">
@@ -219,3 +212,4 @@ document.addEventListener("DOMContentLoaded", function() {
 </script>
 
 <?php include __DIR__ . '/../includes/footer.php'; ?>
+

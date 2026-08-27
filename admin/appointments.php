@@ -69,33 +69,34 @@ foreach (['pending','confirmed','completed','cancelled','no_show'] as $s) {
     $stmt->execute([$today, $s]); $todayStats[$s] = $stmt->fetch()['c'];
 }
 
+$extraHead = '<link rel="stylesheet" href="'.BASE_URL.'assets/css/pages/appointments.css">';
 include __DIR__ . '/../includes/header.php';
 ?>
 
 <!-- Today quick stats -->
-<div style="display:flex;gap:10px;margin-bottom:20px;flex-wrap:wrap;">
+<div class="appt-dcdfc2">
   <?php
   $statCfg = ['pending'=>['warning','clock','Pending'],'confirmed'=>['info','check-circle','Confirmed'],'completed'=>['success','check-double','Completed'],'cancelled'=>['danger','times-circle','Cancelled'],'no_show'=>['secondary','user-times','No Show']];
   foreach ($statCfg as $s => $cfg): ?>
-  <a href="?date=<?= $today ?>&status=<?= $s ?>" style="text-decoration:none;flex:1;min-width:100px;">
-    <div style="background:var(--bg-card);border:1px solid var(--border-color);border-radius:12px;padding:14px;text-align:center;transition:all .2s ease;" onmouseover="this.style.boxShadow='var(--shadow-md)'" onmouseout="this.style.boxShadow='none'">
-      <div style="font-size:1.4rem;font-weight:800;color:var(--text-primary)"><?= $todayStats[$s] ?></div>
-      <div style="font-size:.7rem;color:var(--text-muted);font-weight:500"><?= $cfg[2] ?></div>
+  <a href="?date=<?= $today ?>&status=<?= $s ?>" class="appt-1ae704">
+    <div class="appt-1b330c" onmouseover="this.style.boxShadow='var(--shadow-md)'" onmouseout="this.style.boxShadow='none'">
+      <div class="appt-c179b7"><?= $todayStats[$s] ?></div>
+      <div class="appt-f1faad"><?= $cfg[2] ?></div>
     </div>
   </a>
   <?php endforeach; ?>
 </div>
 
 <!-- Filters -->
-<div class="card" style="margin-bottom:20px;">
-  <div class="card-body" style="padding:16px 20px;">
-    <form method="GET" style="display:flex;gap:12px;flex-wrap:wrap;align-items:flex-end;">
-      <div style="flex:1;min-width:160px;">
-        <label class="form-label" style="margin-bottom:6px;">Date</label>
+<div  class="card appt-684111">
+  <div  class="card-body appt-1206e8">
+    <form method="GET" class="appt-4f7fcd">
+      <div class="appt-398dad">
+        <label  class="form-label appt-25aea1">Date</label>
         <input type="date" name="date" class="form-control" value="<?= htmlspecialchars($filterDate) ?>">
       </div>
-      <div style="flex:1;min-width:160px;">
-        <label class="form-label" style="margin-bottom:6px;">Status</label>
+      <div class="appt-398dad">
+        <label  class="form-label appt-25aea1">Status</label>
         <select name="status" class="form-select">
           <option value="">All Statuses</option>
           <?php foreach (['pending','confirmed','completed','cancelled','no_show'] as $s): ?>
@@ -103,11 +104,11 @@ include __DIR__ . '/../includes/header.php';
           <?php endforeach; ?>
         </select>
       </div>
-      <div style="flex:2;min-width:200px;">
-        <label class="form-label" style="margin-bottom:6px;">Search Patient</label>
+      <div class="appt-e19ef5">
+        <label  class="form-label appt-25aea1">Search Patient</label>
         <input type="text" name="search" class="form-control" placeholder="Patient name..." value="<?= htmlspecialchars($search) ?>">
       </div>
-      <div style="display:flex;gap:8px;">
+      <div class="appt-1952d6">
         <button type="submit" class="btn btn-primary"><i class="fas fa-search"></i> Filter</button>
         <a href="appointments.php" class="btn btn-secondary"><i class="fas fa-undo"></i></a>
         <a href="appointments.php?date=<?= $today ?>" class="btn btn-outline-primary"><i class="fas fa-calendar-day"></i> Today</a>
@@ -117,7 +118,7 @@ include __DIR__ . '/../includes/header.php';
 </div>
 
 <!-- View Toggles -->
-<div style="display:flex; justify-content:flex-end; margin-bottom: 20px;">
+<div class="appt-ef4f51">
   <div class="btn-group" role="group" aria-label="View Toggle">
     <button type="button" class="btn btn-outline-primary active" id="btnListView">
       <i class="fas fa-list me-1"></i> List View
@@ -129,20 +130,20 @@ include __DIR__ . '/../includes/header.php';
 </div>
 
 <!-- Calendar View -->
-<div id="calendarView" class="card" style="display: none; margin-bottom:20px;">
-  <div class="card-body" style="padding: 20px;">
+<div id="calendarView"  class="card appt-7eeafe">
+  <div  class="card-body appt-32c16d">
     <div id="calendar"></div>
   </div>
 </div>
 
 <!-- Appointments Table -->
 <div id="listView" class="table-wrapper">
-  <div style="padding:16px 20px;border-bottom:1px solid var(--border-light);display:flex;align-items:center;justify-content:space-between;">
-    <span style="font-size:.85rem;font-weight:600;color:var(--text-primary)">
-      <i class="fas fa-calendar-check me-2" style="color:var(--clr-primary)"></i>
+  <div class="appt-823201">
+    <span class="appt-9c46bd">
+      <i  class="fas fa-calendar-check me-2 appt-b6b6a8"></i>
       <?= $total ?> Appointment<?= $total !== 1 ? 's' : '' ?> Found
     </span>
-    <span style="font-size:.78rem;color:var(--text-muted)">
+    <span class="appt-67fd48">
       <?= $filterDate ? 'Date: ' . formatDate($filterDate) : 'All dates' ?>
     </span>
   </div>
@@ -173,38 +174,38 @@ include __DIR__ . '/../includes/header.php';
         <?php else: ?>
         <?php foreach ($appts as $i => $a): ?>
         <tr>
-          <td style="font-size:.78rem;color:var(--text-muted)"><?= $pagination['offset'] + $i + 1 ?></td>
+          <td class="appt-67fd48"><?= $pagination['offset'] + $i + 1 ?></td>
           <td>
-            <div style="font-weight:600;font-size:.85rem"><?= sanitize($a['patient_name']) ?></div>
-            <div style="font-size:.7rem;color:var(--text-muted)"><?= sanitize($a['patient_email']) ?></div>
+            <div class="appt-736493"><?= sanitize($a['patient_name']) ?></div>
+            <div class="appt-26a4f5"><?= sanitize($a['patient_email']) ?></div>
           </td>
-          <td style="font-size:.82rem"><?= sanitize($a['phone'] ?? '—') ?></td>
-          <td style="font-size:.83rem;font-weight:500"><?= formatDate($a['appointment_date']) ?></td>
-          <td style="font-size:.83rem;font-weight:600;color:var(--clr-primary)"><?= formatTime($a['appointment_time']) ?></td>
-          <td style="font-size:.78rem"><?= ucwords(str_replace('_',' ',$a['purpose'])) ?></td>
-          <td style="font-size:.75rem;color:var(--text-muted);max-width:150px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;"><?= sanitize($a['notes'] ?? '—') ?></td>
+          <td class="appt-0de4e7"><?= sanitize($a['phone'] ?? '—') ?></td>
+          <td class="appt-86a1f6"><?= formatDate($a['appointment_date']) ?></td>
+          <td class="appt-059a4a"><?= formatTime($a['appointment_time']) ?></td>
+          <td class="appt-bb0425"><?= ucwords(str_replace('_',' ',$a['purpose'])) ?></td>
+          <td class="appt-7a6eb0"><?= sanitize($a['notes'] ?? '—') ?></td>
           <td><?= statusBadge($a['status']) ?></td>
           <td>
-            <div style="display:flex;gap:4px;">
+            <div class="appt-152c49">
               <?php if ($a['status'] === 'pending'): ?>
-              <form method="POST" style="margin:0" onsubmit="return confirmAction(this, 'Confirm this appointment?');">
+              <form method="POST" class="appt-1386d5" onsubmit="return confirmAction(this, 'Confirm this appointment?');">
                 <input type="hidden" name="appt_id" value="<?= $a['id'] ?>">
                 <input type="hidden" name="action" value="confirm">
                 <button class="btn btn-sm btn-success btn-icon" title="Confirm"><i class="fas fa-check"></i></button>
               </form>
               <?php endif; ?>
               <?php if (in_array($a['status'],['pending','confirmed'])): ?>
-              <form method="POST" style="margin:0" onsubmit="return confirmAction(this, 'Mark this appointment as Complete?');">
+              <form method="POST" class="appt-1386d5" onsubmit="return confirmAction(this, 'Mark this appointment as Complete?');">
                 <input type="hidden" name="appt_id" value="<?= $a['id'] ?>">
                 <input type="hidden" name="action" value="complete">
                 <button class="btn btn-sm btn-primary btn-icon" title="Mark Complete"><i class="fas fa-check-double"></i></button>
               </form>
-              <form method="POST" style="margin:0" onsubmit="return confirmAction(this, 'Mark patient as No Show?');">
+              <form method="POST" class="appt-1386d5" onsubmit="return confirmAction(this, 'Mark patient as No Show?');">
                 <input type="hidden" name="appt_id" value="<?= $a['id'] ?>">
                 <input type="hidden" name="action" value="no_show">
                 <button class="btn btn-sm btn-secondary btn-icon" title="No Show"><i class="fas fa-user-times"></i></button>
               </form>
-              <form method="POST" style="margin:0" onsubmit="return confirmAction(this, 'Cancel this appointment?');">
+              <form method="POST" class="appt-1386d5" onsubmit="return confirmAction(this, 'Cancel this appointment?');">
                 <input type="hidden" name="appt_id" value="<?= $a['id'] ?>">
                 <input type="hidden" name="action" value="cancel">
                 <button class="btn btn-sm btn-danger btn-icon" title="Cancel"><?php echo '<i class="fas fa-times"></i>'; ?></button>
@@ -221,7 +222,7 @@ include __DIR__ . '/../includes/header.php';
 
   <!-- Pagination -->
   <?php if ($pagination['total_pages'] > 1): ?>
-  <div style="padding:16px 20px;border-top:1px solid var(--border-light);">
+  <div class="appt-3eb868">
     <div class="pagination">
       <?php if ($pagination['has_prev']): ?>
       <a href="?date=<?= $filterDate ?>&status=<?= $filterStatus ?>&search=<?= urlencode($search) ?>&page=<?= $page-1 ?>" class="page-btn"><i class="fas fa-chevron-left"></i></a>
@@ -239,7 +240,7 @@ include __DIR__ . '/../includes/header.php';
 
 <!-- Appointment Details Modal -->
 <div class="modal fade" id="apptDetailsModal" tabindex="-1" aria-hidden="true">
-  <div class="modal-dialog modal-dialog-centered" style="max-width: 550px;">
+  <div  class="modal-dialog modal-dialog-centered appt-17d584">
     <div class="modal-content">
       <div class="modal-header">
         <h5 class="modal-title"><i class="fas fa-calendar-check me-2 text-primary"></i>Appointment Details</h5>
@@ -272,11 +273,11 @@ include __DIR__ . '/../includes/header.php';
         </div>
         <div class="mb-3">
           <label class="text-muted small">Notes</label>
-          <div id="modalNotes" class="bg-light p-2 rounded text-muted" style="min-height: 40px;"></div>
+          <div id="modalNotes"  class="bg-light p-2 rounded text-muted appt-d4357b"></div>
         </div>
 
         <hr>
-        <div id="modalActions" style="display:flex;gap:6px;justify-content:flex-end;flex-wrap:wrap;">
+        <div id="modalActions" class="appt-d2254c">
           <!-- Action buttons will be injected here via JS -->
         </div>
       </div>
@@ -290,149 +291,6 @@ include __DIR__ . '/../includes/header.php';
 <script src="https://cdn.jsdelivr.net/npm/fullcalendar@6.1.15/index.global.min.js"></script>
 <!-- SweetAlert2 -->
 <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
-
-<style>
-/* Modern FullCalendar overrides for Dark and Light Mode */
-#calendar {
-  --fc-border-color: var(--border-light); /* Theme-aware grid lines */
-  --fc-button-bg-color: var(--bg-card);
-  --fc-button-border-color: var(--border-color);
-  --fc-button-text-color: var(--text-primary);
-  --fc-button-hover-bg-color: rgba(37, 99, 235, 0.1);
-  --fc-button-hover-border-color: var(--clr-primary);
-  --fc-button-active-bg-color: var(--clr-primary);
-  --fc-button-active-border-color: var(--clr-primary);
-  --fc-today-bg-color: rgba(37, 99, 235, 0.08); /* Soft blue for today */
-  font-family: 'Poppins', sans-serif;
-}
-
-/* Header & Title */
-.fc-toolbar-title {
-  color: var(--text-primary) !important;
-  font-weight: 700 !important;
-  letter-spacing: -0.5px;
-  font-size: 1.5rem !important;
-}
-
-/* Modern Pill Buttons */
-.fc .fc-button {
-  border-radius: 20px !important; /* Pill shape */
-  text-transform: capitalize;
-  font-weight: 500;
-  padding: 0.4em 1.2em;
-  transition: all 0.2s ease;
-  box-shadow: none !important;
-}
-.fc .fc-button-group > .fc-button {
-  border-radius: 0 !important;
-}
-.fc .fc-button-group > .fc-button:first-child {
-  border-top-left-radius: 20px !important;
-  border-bottom-left-radius: 20px !important;
-}
-.fc .fc-button-group > .fc-button:last-child {
-  border-top-right-radius: 20px !important;
-  border-bottom-right-radius: 20px !important;
-}
-
-/* Column Headers (Days) */
-.fc-col-header-cell {
-  background: var(--bg-hover);
-  border-bottom: 1px solid var(--fc-border-color) !important;
-  padding: 10px 0 !important;
-}
-.fc-col-header-cell-cushion {
-  color: var(--text-muted) !important;
-  text-transform: uppercase;
-  font-size: 0.75rem;
-  letter-spacing: 1.5px;
-  font-weight: 600;
-  text-decoration: none !important;
-}
-
-/* Day Number Links */
-.fc-daygrid-day-number {
-  color: var(--text-secondary) !important;
-  font-weight: 500;
-  font-size: 0.9rem;
-  padding: 8px 10px !important;
-  text-decoration: none !important;
-  transition: color 0.2s;
-}
-.fc-daygrid-day-number:hover {
-  color: var(--clr-primary) !important;
-}
-
-/* Today Cell Highlight */
-.fc-day-today .fc-daygrid-day-number {
-  color: var(--clr-primary) !important;
-  font-weight: 700;
-}
-
-/* Cell hover effect */
-.fc-daygrid-day:hover {
-  background-color: var(--bg-hover);
-}
-
-/* General text colors for TimeGrid */
-.fc-timegrid-slot-label-cushion,
-.fc-timegrid-axis-cushion,
-.fc-list-day-text,
-.fc-list-day-side-text {
-  color: var(--text-secondary) !important;
-  font-size: 0.8rem;
-  text-decoration: none;
-}
-
-/* Modern Event Card Wrapper */
-.fc-event {
-  cursor: pointer;
-  border: none !important;
-  background: transparent !important;
-  box-shadow: none !important;
-  padding: 0 !important;
-  margin: 0 !important;
-}
-
-.fc-event-main {
-  width: 100%;
-  height: 100%;
-}
-
-/* Our Custom Card rendered inside eventContent */
-.custom-event-card {
-  background-color: var(--bg-card);
-  border: 1px solid var(--border-color);
-  border-radius: 6px;
-  padding: 4px 6px;
-  box-shadow: var(--shadow-sm);
-  transition: transform 0.2s ease, box-shadow 0.2s ease;
-  height: 100%;
-  box-sizing: border-box;
-  display: flex;
-  flex-direction: column;
-  overflow: hidden;
-}
-.fc-event:hover .custom-event-card {
-  transform: translateY(-1px);
-  box-shadow: var(--shadow-md);
-}
-.custom-event-top {
-  display: flex;
-  flex-wrap: wrap;
-  justify-content: space-between;
-  align-items: center;
-  gap: 2px;
-  margin-bottom: 2px;
-}
-
-/* Remove default blue outline on focus */
-.fc .fc-button:focus,
-.fc .fc-event:focus {
-  outline: none !important;
-  box-shadow: none !important;
-}
-</style>
 
 <script>
 // Custom confirmation popup using SweetAlert2
@@ -523,14 +381,14 @@ document.addEventListener('DOMContentLoaded', function() {
         let html = `
           <div class="custom-event-card" style="border-left-color: ${color}; border-left-width: 4px; border-left-style: solid;">
             <div class="custom-event-top">
-                <div style="color: var(--clr-primary); font-size: 0.7rem; font-weight: 600;">
+                <div class="appt-745460">
                     <i class="far fa-clock"></i> ${timeStr}
                 </div>
                 <div style="background-color: ${color}20; color: ${color}; font-size: 0.65rem; font-weight: 700; padding: 2px 6px; border-radius: 10px; line-height: 1;">
                     ${statusStr}
                 </div>
             </div>
-            <div style="color: var(--text-primary); font-size: 0.8rem; font-weight: 600; text-overflow: ellipsis; overflow: hidden; white-space: nowrap;">
+            <div class="appt-2760e6">
                 ${name}
             </div>
           </div>

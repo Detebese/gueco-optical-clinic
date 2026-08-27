@@ -79,6 +79,7 @@ $products->execute($params); $products = $products->fetchAll();
 $categories = $db->query("SELECT * FROM categories WHERE status='active' ORDER BY name")->fetchAll();
 $suppliers  = $db->query("SELECT * FROM suppliers WHERE status='active' ORDER BY company_name")->fetchAll();
 
+$extraHead = '<link rel="stylesheet" href="'.BASE_URL.'assets/css/pages/inventory.css">';
 include __DIR__ . '/../includes/header.php';
 ?>
 
@@ -89,8 +90,8 @@ include __DIR__ . '/../includes/header.php';
 <?php endif; ?>
 
 <div class="section-header">
-  <h5><i class="fas fa-boxes me-2" style="color:var(--clr-primary)"></i>Inventory — <?= count($products) ?> Products</h5>
-  <div style="display:flex;gap:8px;flex-wrap:wrap;">
+  <h5><i  class="fas fa-boxes me-2 inv-b6b6a8"></i>Inventory — <?= count($products) ?> Products</h5>
+  <div class="inv-96b971">
     <a href="?stock=low" class="btn btn-warning btn-sm"><i class="fas fa-exclamation-triangle"></i> Low Stock</a>
     <a href="?stock=out" class="btn btn-danger btn-sm"><i class="fas fa-times-circle"></i> Out of Stock</a>
     <button class="btn btn-primary" onclick="openModal('addProductModal')"><i class="fas fa-plus"></i> Add Product</button>
@@ -98,12 +99,12 @@ include __DIR__ . '/../includes/header.php';
 </div>
 
 <!-- Filter bar -->
-<div class="card" style="margin-bottom:20px;">
-  <div class="card-body" style="padding:14px 20px;">
-    <form method="GET" style="display:flex;gap:10px;flex-wrap:wrap;align-items:flex-end;">
-      <div style="flex:2;min-width:180px;"><label class="form-label" style="margin-bottom:5px;">Search</label>
+<div  class="card inv-684111">
+  <div  class="card-body inv-140fb6">
+    <form method="GET" class="inv-7cdce4">
+      <div class="inv-ce6b9e"><label  class="form-label inv-7c8fee">Search</label>
         <input type="text" name="search" class="form-control" placeholder="Product name..." value="<?= htmlspecialchars($search) ?>"></div>
-      <div style="flex:1;min-width:160px;"><label class="form-label" style="margin-bottom:5px;">Category</label>
+      <div class="inv-398dad"><label  class="form-label inv-7c8fee">Category</label>
         <select name="cat" class="form-select">
           <option value="">All Categories</option>
           <?php foreach ($categories as $c): ?>
@@ -127,25 +128,25 @@ include __DIR__ . '/../includes/header.php';
         <?php foreach ($products as $i => $p): ?>
         <?php $isLow = $p['stock_quantity'] <= $p['low_stock_alert']; $isOut = $p['stock_quantity'] == 0; ?>
         <tr>
-          <td style="font-size:.78rem;color:var(--text-muted)"><?= $i+1 ?></td>
+          <td class="inv-67fd48"><?= $i+1 ?></td>
           <td>
-            <div style="font-weight:600;font-size:.88rem"><?= sanitize($p['name']) ?></div>
-            <div style="font-size:.7rem;color:var(--text-muted)"><?= sanitize($p['description'] ?: '—') ?></div>
+            <div class="inv-bac3c9"><?= sanitize($p['name']) ?></div>
+            <div class="inv-26a4f5"><?= sanitize($p['description'] ?: '—') ?></div>
           </td>
           <td><span class="badge bg-secondary"><?= sanitize($p['cat_name']) ?></span></td>
-          <td style="font-size:.78rem;color:var(--text-muted)"><?= sanitize($p['supplier_name'] ?? '—') ?></td>
-          <td style="font-weight:700;color:var(--clr-success)"><?= formatCurrency($p['price']) ?></td>
+          <td class="inv-67fd48"><?= sanitize($p['supplier_name'] ?? '—') ?></td>
+          <td class="inv-c0f652"><?= formatCurrency($p['price']) ?></td>
           <td>
             <span style="font-weight:700;font-size:.95rem;color:<?= $isOut?'var(--clr-danger)':($isLow?'var(--clr-warning)':'var(--text-primary)') ?>">
               <?= $p['stock_quantity'] ?>
             </span>
-            <?php if ($isOut): ?><span class="badge bg-danger" style="font-size:.6rem;margin-left:4px">OUT</span>
-            <?php elseif ($isLow): ?><span class="badge bg-warning" style="font-size:.6rem;margin-left:4px">LOW</span><?php endif; ?>
+            <?php if ($isOut): ?><span  class="badge bg-danger inv-c1ae5c">OUT</span>
+            <?php elseif ($isLow): ?><span  class="badge bg-warning inv-c1ae5c">LOW</span><?php endif; ?>
           </td>
-          <td style="font-size:.8rem;color:var(--text-muted)"><?= $p['low_stock_alert'] ?></td>
+          <td class="inv-00a7ed"><?= $p['low_stock_alert'] ?></td>
           <td><?= statusBadge($p['status']) ?></td>
           <td>
-            <div style="display:flex;gap:4px;">
+            <div class="inv-152c49">
               <button class="btn btn-sm btn-success btn-icon" title="Stock In" onclick="openStockModal(<?= $p['id'] ?>, '<?= addslashes($p['name']) ?>', 'stock_in')"><i class="fas fa-plus"></i></button>
               <button class="btn btn-sm btn-warning btn-icon" title="Stock Out" onclick="openStockModal(<?= $p['id'] ?>, '<?= addslashes($p['name']) ?>', 'stock_out')"><i class="fas fa-minus"></i></button>
               <button class="btn btn-sm btn-outline-primary btn-icon" title="Edit" onclick="openEditProduct(<?= htmlspecialchars(json_encode($p)) ?>)"><i class="fas fa-edit"></i></button>
@@ -161,26 +162,26 @@ include __DIR__ . '/../includes/header.php';
 
 <!-- Add Product Modal -->
 <div class="modal-overlay" id="addProductModal">
-  <div class="modal-box" style="max-width:580px;">
+  <div  class="modal-box inv-c9726f">
     <div class="modal-header"><h5><i class="fas fa-plus me-2"></i>Add New Product</h5><button class="modal-close" onclick="closeModal('addProductModal')"><i class="fas fa-times"></i></button></div>
     <form method="POST">
       <div class="modal-body">
         <input type="hidden" name="action" value="add">
         <div class="form-group"><label class="form-label">Product Name *</label><input type="text" name="name" class="form-control" required></div>
-        <div style="display:flex;gap:12px">
-          <div class="form-group" style="flex:1"><label class="form-label">Category *</label>
+        <div class="inv-b1eb0f">
+          <div  class="form-group inv-da5cd6"><label class="form-label">Category *</label>
             <select name="category_id" class="form-select" required><option value="">Select</option>
               <?php foreach ($categories as $c): ?><option value="<?= $c['id'] ?>"><?= sanitize($c['name']) ?></option><?php endforeach; ?>
             </select></div>
-          <div class="form-group" style="flex:1"><label class="form-label">Supplier</label>
+          <div  class="form-group inv-da5cd6"><label class="form-label">Supplier</label>
             <select name="supplier_id" class="form-select"><option value="">None</option>
               <?php foreach ($suppliers as $s): ?><option value="<?= $s['id'] ?>"><?= sanitize($s['company_name']) ?></option><?php endforeach; ?>
             </select></div>
         </div>
-        <div style="display:flex;gap:12px">
-          <div class="form-group" style="flex:1"><label class="form-label">Price (₱) *</label><input type="number" name="price" class="form-control" step="0.01" min="0" required></div>
-          <div class="form-group" style="flex:1"><label class="form-label">Initial Stock</label><input type="number" name="stock_quantity" class="form-control" value="0" min="0"></div>
-          <div class="form-group" style="flex:1"><label class="form-label">Low Stock Alert</label><input type="number" name="low_stock_alert" class="form-control" value="5" min="1"></div>
+        <div class="inv-b1eb0f">
+          <div  class="form-group inv-da5cd6"><label class="form-label">Price (₱) *</label><input type="number" name="price" class="form-control" step="0.01" min="0" required></div>
+          <div  class="form-group inv-da5cd6"><label class="form-label">Initial Stock</label><input type="number" name="stock_quantity" class="form-control" value="0" min="0"></div>
+          <div  class="form-group inv-da5cd6"><label class="form-label">Low Stock Alert</label><input type="number" name="low_stock_alert" class="form-control" value="5" min="1"></div>
         </div>
         <div class="form-group"><label class="form-label">Description</label><textarea name="description" class="form-control" rows="2"></textarea></div>
       </div>
@@ -191,26 +192,26 @@ include __DIR__ . '/../includes/header.php';
 
 <!-- Edit Product Modal -->
 <div class="modal-overlay" id="editProductModal">
-  <div class="modal-box" style="max-width:580px;">
+  <div  class="modal-box inv-c9726f">
     <div class="modal-header"><h5><i class="fas fa-edit me-2"></i>Edit Product</h5><button class="modal-close" onclick="closeModal('editProductModal')"><i class="fas fa-times"></i></button></div>
     <form method="POST">
       <div class="modal-body">
         <input type="hidden" name="action" value="edit"><input type="hidden" name="id" id="epId">
         <div class="form-group"><label class="form-label">Product Name *</label><input type="text" name="name" id="epName" class="form-control" required></div>
-        <div style="display:flex;gap:12px">
-          <div class="form-group" style="flex:1"><label class="form-label">Category *</label>
+        <div class="inv-b1eb0f">
+          <div  class="form-group inv-da5cd6"><label class="form-label">Category *</label>
             <select name="category_id" id="epCat" class="form-select" required><option value="">Select</option>
               <?php foreach ($categories as $c): ?><option value="<?= $c['id'] ?>"><?= sanitize($c['name']) ?></option><?php endforeach; ?>
             </select></div>
-          <div class="form-group" style="flex:1"><label class="form-label">Supplier</label>
+          <div  class="form-group inv-da5cd6"><label class="form-label">Supplier</label>
             <select name="supplier_id" id="epSupp" class="form-select"><option value="">None</option>
               <?php foreach ($suppliers as $s): ?><option value="<?= $s['id'] ?>"><?= sanitize($s['company_name']) ?></option><?php endforeach; ?>
             </select></div>
         </div>
-        <div style="display:flex;gap:12px">
-          <div class="form-group" style="flex:1"><label class="form-label">Price (₱) *</label><input type="number" name="price" id="epPrice" class="form-control" step="0.01" min="0" required></div>
-          <div class="form-group" style="flex:1"><label class="form-label">Low Stock Alert</label><input type="number" name="low_stock_alert" id="epAlert" class="form-control" min="1"></div>
-          <div class="form-group" style="flex:1"><label class="form-label">Status</label>
+        <div class="inv-b1eb0f">
+          <div  class="form-group inv-da5cd6"><label class="form-label">Price (₱) *</label><input type="number" name="price" id="epPrice" class="form-control" step="0.01" min="0" required></div>
+          <div  class="form-group inv-da5cd6"><label class="form-label">Low Stock Alert</label><input type="number" name="low_stock_alert" id="epAlert" class="form-control" min="1"></div>
+          <div  class="form-group inv-da5cd6"><label class="form-label">Status</label>
             <select name="status" id="epStatus" class="form-select"><option value="active">Active</option><option value="inactive">Inactive</option></select></div>
         </div>
         <div class="form-group"><label class="form-label">Description</label><textarea name="description" id="epDesc" class="form-control" rows="2"></textarea></div>
@@ -222,13 +223,13 @@ include __DIR__ . '/../includes/header.php';
 
 <!-- Stock In/Out Modal -->
 <div class="modal-overlay" id="stockModal">
-  <div class="modal-box" style="max-width:400px;">
+  <div  class="modal-box inv-a833a4">
     <div class="modal-header"><h5 id="stockModalTitle">Stock In</h5><button class="modal-close" onclick="closeModal('stockModal')"><i class="fas fa-times"></i></button></div>
     <form method="POST">
       <div class="modal-body">
         <input type="hidden" name="id" id="stockProdId">
         <input type="hidden" name="action" id="stockAction">
-        <p style="font-size:.85rem;color:var(--text-muted);margin-bottom:16px;">Product: <strong id="stockProdName"></strong></p>
+        <p class="inv-8c7aac">Product: <strong id="stockProdName"></strong></p>
         <div class="form-group"><label class="form-label">Quantity *</label><input type="number" name="qty" class="form-control" min="1" required></div>
         <div class="form-group"><label class="form-label">Reason / Note</label><input type="text" name="reason" class="form-control" placeholder="e.g. Supplier delivery, Sold..."></div>
       </div>

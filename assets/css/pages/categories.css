@@ -1,0 +1,45 @@
+/* 
+ * Categories Page Styles 
+ */
+
+/* Fix for SweetAlert2 success icon white background masks in dark mode */
+.swal2-success-circular-line-left,
+.swal2-success-circular-line-right,
+.swal2-success-fix {
+    background-color: var(--bg-card) !important;
+}
+
+/* Table Column Styles */
+.cat-table-index {
+    font-size: 0.78rem;
+    color: var(--text-muted);
+}
+
+.cat-table-name {
+    font-weight: 600;
+    font-size: 0.88rem;
+}
+
+.cat-table-desc {
+    font-size: 0.8rem;
+    color: var(--text-muted);
+}
+
+.cat-table-created {
+    font-size: 0.78rem;
+    color: var(--text-muted);
+}
+
+/* Icon Styles */
+.cat-header-icon {
+    color: var(--clr-primary);
+}
+
+/* Form Styles */
+.cat-required-star {
+    color: var(--clr-danger);
+}
+
+.cat-delete-form {
+    display: inline;
+}

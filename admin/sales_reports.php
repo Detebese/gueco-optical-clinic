@@ -59,15 +59,16 @@ $sales = $db->prepare("
 ");
 $sales->execute([$filterFrom,$filterTo,$perPage,$pg['offset']]); $sales = $sales->fetchAll();
 
+$extraHead = '<link rel="stylesheet" href="'.BASE_URL.'assets/css/pages/sales_reports.css">';
 include __DIR__ . '/../includes/header.php';
 ?>
 
 <!-- Filter -->
-<div class="card" style="margin-bottom:20px;">
-  <div class="card-body" style="padding:16px 20px;">
-    <form method="GET" style="display:flex;gap:12px;align-items:flex-end;flex-wrap:wrap;">
-      <div style="flex:1;min-width:140px;"><label class="form-label" style="margin-bottom:5px;">From</label><input type="date" name="from" class="form-control" value="<?= $filterFrom ?>"></div>
-      <div style="flex:1;min-width:140px;"><label class="form-label" style="margin-bottom:5px;">To</label><input type="date" name="to" class="form-control" value="<?= $filterTo ?>"></div>
+<div  class="card sales-684111">
+  <div  class="card-body sales-1206e8">
+    <form method="GET" class="sales-c9b9c2">
+      <div class="sales-131150"><label  class="form-label sales-7c8fee">From</label><input type="date" name="from" class="form-control" value="<?= $filterFrom ?>"></div>
+      <div class="sales-131150"><label  class="form-label sales-7c8fee">To</label><input type="date" name="to" class="form-control" value="<?= $filterTo ?>"></div>
       <div>
         <button type="submit" class="btn btn-primary"><i class="fas fa-filter"></i> Apply</button>
         <a href="?from=<?= date('Y-m-01') ?>&to=<?= date('Y-m-d') ?>" class="btn btn-secondary ms-1">This Month</a>
@@ -78,21 +79,21 @@ include __DIR__ . '/../includes/header.php';
 </div>
 
 <!-- Summary Cards -->
-<div class="row" style="margin-bottom:24px;">
+<div  class="row sales-7afe40">
   <div class="col-4">
-    <div class="stat-card" style="--stat-color:var(--clr-success)">
+    <div  class="stat-card sales-5bc9bb">
       <div class="stat-icon green"><i class="fas fa-peso-sign"></i></div>
       <div class="stat-info"><div class="stat-value"><?= formatCurrency($summary['total_sales']) ?></div><div class="stat-label">Total Revenue</div></div>
     </div>
   </div>
   <div class="col-4">
-    <div class="stat-card" style="--stat-color:var(--clr-primary)">
+    <div  class="stat-card sales-bc6c06">
       <div class="stat-icon blue"><i class="fas fa-receipt"></i></div>
       <div class="stat-info"><div class="stat-value"><?= number_format($summary['total_tx']) ?></div><div class="stat-label">Total Transactions</div></div>
     </div>
   </div>
   <div class="col-4">
-    <div class="stat-card" style="--stat-color:var(--clr-warning)">
+    <div  class="stat-card sales-0ff679">
       <div class="stat-icon orange"><i class="fas fa-tags"></i></div>
       <div class="stat-info"><div class="stat-value"><?= formatCurrency($summary['total_discount']) ?></div><div class="stat-label">Total Discounts Given</div></div>
     </div>
@@ -100,40 +101,40 @@ include __DIR__ . '/../includes/header.php';
 </div>
 
 <!-- Charts -->
-<div class="row" style="margin-bottom:24px;">
+<div  class="row sales-7afe40">
   <div class="col-8">
     <div class="card">
-      <div class="card-header"><h6><i class="fas fa-chart-area me-2" style="color:var(--clr-primary)"></i>Daily Sales — <?= formatDate($filterFrom) ?> to <?= formatDate($filterTo) ?></h6></div>
-      <div class="card-body"><div class="chart-container" style="height:240px;"><canvas id="salesChart"></canvas></div></div>
+      <div class="card-header"><h6><i  class="fas fa-chart-area me-2 sales-b6b6a8"></i>Daily Sales — <?= formatDate($filterFrom) ?> to <?= formatDate($filterTo) ?></h6></div>
+      <div class="card-body"><div  class="chart-container sales-47f393"><canvas id="salesChart"></canvas></div></div>
     </div>
   </div>
   <div class="col-4">
-    <div class="card" style="height:100%;">
-      <div class="card-header"><h6><i class="fas fa-credit-card me-2" style="color:var(--clr-secondary)"></i>Payment Methods</h6></div>
-      <div class="card-body" style="display:flex;align-items:center;justify-content:center;">
-        <div class="chart-container" style="height:220px;width:220px;"><canvas id="payChart"></canvas></div>
+    <div  class="card sales-0d61ee">
+      <div class="card-header"><h6><i  class="fas fa-credit-card me-2 sales-0cac58"></i>Payment Methods</h6></div>
+      <div  class="card-body sales-3543ea">
+        <div  class="chart-container sales-510716"><canvas id="payChart"></canvas></div>
       </div>
     </div>
   </div>
 </div>
 
 <!-- Top Products + Sales Table -->
-<div class="row" style="margin-bottom:24px;">
+<div  class="row sales-7afe40">
   <div class="col-4">
     <div class="card">
-      <div class="card-header"><h6><i class="fas fa-fire me-2" style="color:var(--clr-warning)"></i>Top Selling Products</h6></div>
+      <div class="card-header"><h6><i  class="fas fa-fire me-2 sales-e3e24c"></i>Top Selling Products</h6></div>
       <div class="card-body">
         <?php if (empty($topProds)): ?>
-        <div style="text-align:center;color:var(--text-muted);padding:20px;font-size:.82rem;">No data for this period</div>
+        <div class="sales-34c8a2">No data for this period</div>
         <?php else: ?>
         <?php foreach ($topProds as $i => $tp): ?>
-        <div style="display:flex;align-items:center;gap:10px;padding:10px 0;border-bottom:1px solid var(--border-light);">
+        <div class="sales-ef20e9">
           <div style="width:28px;height:28px;background:var(--clr-<?= $i===0?'warning':($i===1?'secondary':'primary') ?>);border-radius:50%;display:flex;align-items:center;justify-content:center;color:#fff;font-weight:700;font-size:.75rem;flex-shrink:0;"><?= $i+1 ?></div>
-          <div style="flex:1;overflow:hidden;">
-            <div style="font-weight:600;font-size:.83rem;white-space:nowrap;overflow:hidden;text-overflow:ellipsis"><?= sanitize($tp['name']) ?></div>
-            <div style="font-size:.72rem;color:var(--text-muted)"><?= $tp['units_sold'] ?> units sold</div>
+          <div class="sales-8b56c7">
+            <div class="sales-262d15"><?= sanitize($tp['name']) ?></div>
+            <div class="sales-46d9fd"><?= $tp['units_sold'] ?> units sold</div>
           </div>
-          <div style="font-weight:700;color:var(--clr-success);font-size:.85rem;flex-shrink:0"><?= formatCurrency($tp['revenue']) ?></div>
+          <div class="sales-c58223"><?= formatCurrency($tp['revenue']) ?></div>
         </div>
         <?php endforeach; ?>
         <?php endif; ?>
@@ -143,24 +144,24 @@ include __DIR__ . '/../includes/header.php';
   <div class="col-8">
     <div class="card">
       <div class="card-header">
-        <h6><i class="fas fa-table me-2" style="color:var(--clr-primary)"></i>All Transactions (<?= $total ?>)</h6>
+        <h6><i  class="fas fa-table me-2 sales-b6b6a8"></i>All Transactions (<?= $total ?>)</h6>
       </div>
       <div class="table-responsive">
         <table class="table">
           <thead><tr><th>Invoice</th><th>Patient</th><th>Cashier</th><th>Total</th><th>Discount</th><th>Method</th><th>Date</th><th>Status</th></tr></thead>
           <tbody>
             <?php if (empty($sales)): ?>
-            <tr><td colspan="8"><div class="empty-state" style="padding:30px"><div class="empty-icon"><i class="fas fa-receipt"></i></div><h6>No transactions</h6></div></td></tr>
+            <tr><td colspan="8"><div  class="empty-state sales-35a11d"><div class="empty-icon"><i class="fas fa-receipt"></i></div><h6>No transactions</h6></div></td></tr>
             <?php else: ?>
             <?php foreach ($sales as $s): ?>
             <tr>
-              <td><span style="font-family:monospace;font-size:.78rem;color:var(--clr-primary);font-weight:600"><?= sanitize($s['invoice_no']) ?></span></td>
-              <td style="font-size:.82rem"><?= sanitize($s['patient_name'] ?? 'Walk-in') ?></td>
-              <td style="font-size:.78rem;color:var(--text-muted)"><?= sanitize($s['cashier_name']) ?></td>
-              <td style="font-weight:700;color:var(--clr-success)"><?= formatCurrency($s['total']) ?></td>
-              <td style="font-size:.8rem;color:var(--clr-warning)"><?= $s['discount']>0?formatCurrency($s['discount']):'—' ?></td>
+              <td><span class="sales-95754e"><?= sanitize($s['invoice_no']) ?></span></td>
+              <td class="sales-0de4e7"><?= sanitize($s['patient_name'] ?? 'Walk-in') ?></td>
+              <td class="sales-67fd48"><?= sanitize($s['cashier_name']) ?></td>
+              <td class="sales-c0f652"><?= formatCurrency($s['total']) ?></td>
+              <td class="sales-26dfd7"><?= $s['discount']>0?formatCurrency($s['discount']):'—' ?></td>
               <td><span class="badge bg-info"><?= strtoupper($s['payment_method']) ?></span></td>
-              <td style="font-size:.75rem;color:var(--text-muted)"><?= formatDateTime($s['created_at']) ?></td>
+              <td class="sales-d44d31"><?= formatDateTime($s['created_at']) ?></td>
               <td><?= statusBadge($s['status']) ?></td>
             </tr>
             <?php endforeach; ?>
@@ -169,7 +170,7 @@ include __DIR__ . '/../includes/header.php';
         </table>
       </div>
       <?php if ($pg['total_pages'] > 1): ?>
-      <div style="padding:14px 20px;border-top:1px solid var(--border-light);">
+      <div class="sales-4174a0">
         <div class="pagination">
           <?php if ($pg['has_prev']): ?><a href="?from=<?= $filterFrom ?>&to=<?= $filterTo ?>&page=<?= $page-1 ?>" class="page-btn"><i class="fas fa-chevron-left"></i></a><?php endif; ?>
           <?php for ($p=1;$p<=$pg['total_pages'];$p++): ?>

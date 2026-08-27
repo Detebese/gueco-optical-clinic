@@ -65,13 +65,14 @@ $recentSales = $db->query("
     LIMIT 5
 ")->fetchAll();
 
+$extraHead = '<link rel="stylesheet" href="'.BASE_URL.'assets/css/pages/dashboard.css">';
 include __DIR__ . '/../includes/header.php';
 ?>
 
 <!-- Stats Row -->
-<div class="row" style="margin-bottom:24px;">
+<div  class="row dash-7afe40">
   <div class="col-3">
-    <div class="stat-card" style="--stat-color:var(--clr-primary)">
+    <div  class="stat-card dash-bc6c06">
       <div class="stat-icon blue"><i class="fas fa-users"></i></div>
       <div class="stat-info">
         <div class="stat-value"><?= number_format($stats['totalPatients']) ?></div>
@@ -81,19 +82,19 @@ include __DIR__ . '/../includes/header.php';
     </div>
   </div>
   <div class="col-3">
-    <div class="stat-card" style="--stat-color:var(--clr-info)">
+    <div  class="stat-card dash-12da58">
       <div class="stat-icon teal"><i class="fas fa-calendar-check"></i></div>
       <div class="stat-info">
         <div class="stat-value"><?= number_format($stats['todayAppointments']) ?></div>
         <div class="stat-label">Today's Appointments</div>
-        <div class="stat-change" style="color:var(--clr-info)">
+        <div  class="stat-change dash-83f400">
           <i class="fas fa-clock"></i> <?= number_format($stats['pendingAppts']) ?> pending
         </div>
       </div>
     </div>
   </div>
   <div class="col-3">
-    <div class="stat-card" style="--stat-color:var(--clr-success)">
+    <div  class="stat-card dash-5bc9bb">
       <div class="stat-icon green"><i class="fas fa-peso-sign"></i></div>
       <div class="stat-info">
         <div class="stat-value"><?= formatCurrency($stats['todaySales']) ?></div>
@@ -122,16 +123,16 @@ include __DIR__ . '/../includes/header.php';
 </div>
 
 <!-- Charts Row -->
-<div class="row" style="margin-bottom:24px;">
+<div  class="row dash-7afe40">
   <!-- Sales Line Chart -->
   <div class="col-8">
     <div class="card">
       <div class="card-header">
-        <h6><i class="fas fa-chart-line me-2" style="color:var(--clr-primary)"></i>Sales — Last 7 Days</h6>
+        <h6><i  class="fas fa-chart-line me-2 dash-b6b6a8"></i>Sales — Last 7 Days</h6>
         <a href="../admin/sales_reports.php" class="btn btn-sm btn-outline-primary">View All</a>
       </div>
       <div class="card-body">
-        <div class="chart-container" style="height:240px;">
+        <div  class="chart-container dash-47f393">
           <canvas id="salesChart"></canvas>
         </div>
       </div>
@@ -140,12 +141,12 @@ include __DIR__ . '/../includes/header.php';
 
   <!-- Category Donut -->
   <div class="col-4">
-    <div class="card" style="height:100%;">
+    <div  class="card dash-0d61ee">
       <div class="card-header">
-        <h6><i class="fas fa-chart-pie me-2" style="color:var(--clr-secondary)"></i>Sales by Category</h6>
+        <h6><i  class="fas fa-chart-pie me-2 dash-0cac58"></i>Sales by Category</h6>
       </div>
-      <div class="card-body" style="display:flex;align-items:center;justify-content:center;">
-        <div class="chart-container" style="height:200px;width:200px;">
+      <div  class="card-body dash-3543ea">
+        <div  class="chart-container dash-19b6fa">
           <canvas id="catChart"></canvas>
         </div>
       </div>
@@ -154,12 +155,12 @@ include __DIR__ . '/../includes/header.php';
 </div>
 
 <!-- Lower Row: Appointments + Low Stock -->
-<div class="row" style="margin-bottom:24px;">
+<div  class="row dash-7afe40">
   <!-- Today's Appointments -->
   <div class="col-6">
     <div class="card">
       <div class="card-header">
-        <h6><i class="fas fa-calendar-day me-2" style="color:var(--clr-info)"></i>Today's Appointments</h6>
+        <h6><i  class="fas fa-calendar-day me-2 dash-83f400"></i>Today's Appointments</h6>
         <a href="../admin/appointments.php" class="btn btn-sm btn-outline-primary">Manage</a>
       </div>
       <div class="table-responsive">
@@ -175,20 +176,20 @@ include __DIR__ . '/../includes/header.php';
           <tbody>
             <?php if (empty($appointments)): ?>
             <tr><td colspan="4">
-              <div class="empty-state" style="padding:30px;">
-                <div class="empty-icon" style="width:50px;height:50px;margin-bottom:12px;font-size:1.3rem;"><i class="fas fa-calendar"></i></div>
-                <p style="margin:0;font-size:.82rem;">No appointments today</p>
+              <div  class="empty-state dash-0a496d">
+                <div  class="empty-icon dash-03f549"><i class="fas fa-calendar"></i></div>
+                <p class="dash-15bedf">No appointments today</p>
               </div>
             </td></tr>
             <?php else: ?>
             <?php foreach ($appointments as $appt): ?>
             <tr>
               <td>
-                <div style="font-weight:600;font-size:.83rem"><?= sanitize($appt['patient_name']) ?></div>
-                <div style="font-size:.72rem;color:var(--text-muted)"><?= sanitize($appt['phone']) ?></div>
+                <div class="dash-bea4d5"><?= sanitize($appt['patient_name']) ?></div>
+                <div class="dash-46d9fd"><?= sanitize($appt['phone']) ?></div>
               </td>
-              <td style="font-size:.83rem"><?= formatTime($appt['appointment_time']) ?></td>
-              <td style="font-size:.78rem"><?= ucwords(str_replace('_',' ',$appt['purpose'])) ?></td>
+              <td class="dash-9ee0bb"><?= formatTime($appt['appointment_time']) ?></td>
+              <td class="dash-bb0425"><?= ucwords(str_replace('_',' ',$appt['purpose'])) ?></td>
               <td><?= statusBadge($appt['status']) ?></td>
             </tr>
             <?php endforeach; ?>
@@ -203,7 +204,7 @@ include __DIR__ . '/../includes/header.php';
   <div class="col-6">
     <div class="card">
       <div class="card-header">
-        <h6><i class="fas fa-exclamation-triangle me-2" style="color:var(--clr-warning)"></i>Low Stock Alerts</h6>
+        <h6><i  class="fas fa-exclamation-triangle me-2 dash-e3e24c"></i>Low Stock Alerts</h6>
         <a href="../admin/inventory.php" class="btn btn-sm btn-outline-primary">View Inventory</a>
       </div>
       <div class="table-responsive">
@@ -214,22 +215,22 @@ include __DIR__ . '/../includes/header.php';
           <tbody>
             <?php if (empty($lowStockItems)): ?>
             <tr><td colspan="4">
-              <div class="empty-state" style="padding:30px;">
-                <div class="empty-icon" style="width:50px;height:50px;margin-bottom:12px;font-size:1.3rem;color:var(--clr-success)"><i class="fas fa-check-circle"></i></div>
-                <p style="margin:0;font-size:.82rem;">All stock levels are good!</p>
+              <div  class="empty-state dash-0a496d">
+                <div  class="empty-icon dash-8580bb"><i class="fas fa-check-circle"></i></div>
+                <p class="dash-15bedf">All stock levels are good!</p>
               </div>
             </td></tr>
             <?php else: ?>
             <?php foreach ($lowStockItems as $item): ?>
             <tr>
-              <td style="font-weight:600;font-size:.83rem"><?= sanitize($item['name']) ?></td>
-              <td style="font-size:.78rem;color:var(--text-muted)"><?= sanitize($item['category']) ?></td>
+              <td class="dash-bea4d5"><?= sanitize($item['name']) ?></td>
+              <td class="dash-67fd48"><?= sanitize($item['category']) ?></td>
               <td>
                 <span style="font-weight:700;font-size:.9rem;color:<?= $item['stock_quantity'] == 0 ? 'var(--clr-danger)' : 'var(--clr-warning)' ?>">
                   <?= $item['stock_quantity'] ?>
                 </span>
               </td>
-              <td style="font-size:.8rem;color:var(--text-muted)"><?= $item['low_stock_alert'] ?></td>
+              <td class="dash-00a7ed"><?= $item['low_stock_alert'] ?></td>
             </tr>
             <?php endforeach; ?>
             <?php endif; ?>
@@ -243,7 +244,7 @@ include __DIR__ . '/../includes/header.php';
 <!-- Recent Sales -->
 <div class="card">
   <div class="card-header">
-    <h6><i class="fas fa-receipt me-2" style="color:var(--clr-success)"></i>Recent Transactions</h6>
+    <h6><i  class="fas fa-receipt me-2 dash-5a5386"></i>Recent Transactions</h6>
     <a href="../admin/sales_reports.php" class="btn btn-sm btn-outline-primary">All Sales</a>
   </div>
   <div class="table-responsive">
@@ -254,20 +255,20 @@ include __DIR__ . '/../includes/header.php';
       <tbody>
         <?php if (empty($recentSales)): ?>
         <tr><td colspan="7">
-          <div class="empty-state" style="padding:30px;">
-            <div class="empty-icon" style="width:50px;height:50px;margin-bottom:12px;font-size:1.3rem"><i class="fas fa-receipt"></i></div>
-            <p style="margin:0;font-size:.82rem;">No sales recorded yet</p>
+          <div  class="empty-state dash-0a496d">
+            <div  class="empty-icon dash-5442a9"><i class="fas fa-receipt"></i></div>
+            <p class="dash-15bedf">No sales recorded yet</p>
           </div>
         </td></tr>
         <?php else: ?>
         <?php foreach ($recentSales as $sale): ?>
         <tr>
-          <td><span style="font-family:monospace;font-size:.78rem;font-weight:600;color:var(--clr-primary)"><?= sanitize($sale['invoice_no']) ?></span></td>
-          <td style="font-size:.83rem"><?= sanitize($sale['patient_name'] ?? 'Walk-in') ?></td>
-          <td style="font-size:.83rem"><?= sanitize($sale['cashier_name']) ?></td>
-          <td style="font-weight:700;color:var(--clr-success)"><?= formatCurrency($sale['total']) ?></td>
+          <td><span class="dash-40717a"><?= sanitize($sale['invoice_no']) ?></span></td>
+          <td class="dash-9ee0bb"><?= sanitize($sale['patient_name'] ?? 'Walk-in') ?></td>
+          <td class="dash-9ee0bb"><?= sanitize($sale['cashier_name']) ?></td>
+          <td class="dash-c0f652"><?= formatCurrency($sale['total']) ?></td>
           <td><span class="badge bg-info"><?= strtoupper($sale['payment_method']) ?></span></td>
-          <td style="font-size:.78rem;color:var(--text-muted)"><?= formatDateTime($sale['created_at']) ?></td>
+          <td class="dash-67fd48"><?= formatDateTime($sale['created_at']) ?></td>
           <td><?= statusBadge($sale['status']) ?></td>
         </tr>
         <?php endforeach; ?>

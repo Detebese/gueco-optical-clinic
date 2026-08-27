@@ -70,6 +70,7 @@ $whereStr = implode(' AND ', $where);
 $staff = $db->prepare("SELECT * FROM users WHERE $whereStr ORDER BY role, full_name ASC");
 $staff->execute($params); $staff = $staff->fetchAll();
 
+$extraHead = '<link rel="stylesheet" href="'.BASE_URL.'assets/css/pages/staff.css">';
 include __DIR__ . '/../includes/header.php';
 ?>
 
@@ -80,11 +81,11 @@ include __DIR__ . '/../includes/header.php';
 <?php endif; ?>
 
 <div class="section-header">
-  <h5><i class="fas fa-user-tie me-2" style="color:var(--clr-primary)"></i>Staff Management (<?= count($staff) ?>)</h5>
-  <div style="display:flex;gap:8px;flex-wrap:wrap;">
-    <form method="GET" style="display:flex;gap:8px;">
-      <input type="text" name="search" class="form-control" placeholder="Search staff..." value="<?= htmlspecialchars($search) ?>" style="width:180px;">
-      <select name="role" class="form-select" style="width:160px;">
+  <h5><i  class="fas fa-user-tie me-2 staff-b6b6a8"></i>Staff Management (<?= count($staff) ?>)</h5>
+  <div class="staff-96b971">
+    <form method="GET" class="staff-1952d6">
+      <input type="text" name="search" class="form-control" placeholder="Search staff..." value="<?= htmlspecialchars($search) ?>" class="staff-a2ad19">
+      <select name="role"  class="form-select staff-64fa8f">
         <option value="">All Roles</option>
         <option value="admin" <?= $roleFilter==='admin'?'selected':'' ?>>Administrator</option>
         <option value="doctor" <?= $roleFilter==='doctor'?'selected':'' ?>>Optometrist</option>
@@ -97,14 +98,14 @@ include __DIR__ . '/../includes/header.php';
 </div>
 
 <!-- Role summary cards -->
-<div style="display:flex;gap:12px;margin-bottom:20px;flex-wrap:wrap;">
+<div class="staff-8d05f7">
   <?php
   $roleSummary = $db->query("SELECT role, COUNT(*) as cnt FROM users GROUP BY role")->fetchAll(PDO::FETCH_KEY_PAIR);
   $roleInfo = ['admin'=>['shield-alt','blue','Administrators'],'doctor'=>['user-md','teal','Optometrists'],'saleslady'=>['user-tie','purple','Saleslady']];
   foreach ($roleInfo as $r => $cfg): ?>
-  <div style="background:var(--bg-card);border:1px solid var(--border-color);border-radius:12px;padding:14px 20px;display:flex;align-items:center;gap:12px;flex:1;min-width:150px;">
-    <div class="stat-icon <?= $cfg[1] ?>" style="width:40px;height:40px"><i class="fas fa-<?= $cfg[0] ?>"></i></div>
-    <div><div style="font-size:1.4rem;font-weight:800"><?= $roleSummary[$r] ?? 0 ?></div><div style="font-size:.72rem;color:var(--text-muted)"><?= $cfg[2] ?></div></div>
+  <div class="staff-01cc59">
+    <div class="stat-icon <?= $cfg[1] ?>" class="staff-233067"><i class="fas fa-<?= $cfg[0] ?>"></i></div>
+    <div><div class="staff-f9ed85"><?= $roleSummary[$r] ?? 0 ?></div><div class="staff-46d9fd"><?= $cfg[2] ?></div></div>
   </div>
   <?php endforeach; ?>
 </div>
@@ -119,32 +120,32 @@ include __DIR__ . '/../includes/header.php';
         <?php else: ?>
         <?php foreach ($staff as $i => $s): ?>
         <tr>
-          <td style="font-size:.78rem;color:var(--text-muted)"><?= $i+1 ?></td>
+          <td class="staff-67fd48"><?= $i+1 ?></td>
           <td>
-            <div style="display:flex;align-items:center;gap:10px;">
-              <div style="width:36px;height:36px;background:linear-gradient(135deg,var(--clr-primary),var(--clr-secondary));border-radius:50%;display:flex;align-items:center;justify-content:center;color:#fff;font-weight:700;font-size:.85rem;flex-shrink:0;">
+            <div class="staff-3b6fff">
+              <div class="staff-b9d0f2">
                 <?= strtoupper(substr($s['full_name'],0,1)) ?>
               </div>
               <div>
-                <div style="font-weight:600;font-size:.88rem"><?= sanitize($s['full_name']) ?></div>
+                <div class="staff-bac3c9"><?= sanitize($s['full_name']) ?></div>
                 <?php if ($s['id'] === (int)$_SESSION['user_id']): ?>
-                <span style="font-size:.65rem;color:var(--clr-primary);font-weight:600;"><i class="fas fa-user me-1"></i>You</span>
+                <span class="staff-6498a1"><i class="fas fa-user me-1"></i>You</span>
                 <?php endif; ?>
               </div>
             </div>
           </td>
-          <td style="font-size:.82rem"><?= sanitize($s['email']) ?></td>
-          <td style="font-size:.82rem"><?= sanitize($s['phone'] ?? '—') ?></td>
+          <td class="staff-0de4e7"><?= sanitize($s['email']) ?></td>
+          <td class="staff-0de4e7"><?= sanitize($s['phone'] ?? '—') ?></td>
           <td><?= roleBadge($s['role']) ?></td>
           <td><?= statusBadge($s['status']) ?></td>
-          <td style="font-size:.78rem;color:var(--text-muted)"><?= formatDate($s['created_at']) ?></td>
+          <td class="staff-67fd48"><?= formatDate($s['created_at']) ?></td>
           <td>
             <button class="btn btn-sm btn-outline-primary btn-icon" title="Edit"
               onclick="openEditStaff(<?= htmlspecialchars(json_encode(['id'=>$s['id'],'full_name'=>$s['full_name'],'email'=>$s['email'],'role'=>$s['role'],'phone'=>$s['phone'],'status'=>$s['status']])) ?>)">
               <i class="fas fa-edit"></i>
             </button>
             <?php if ($s['id'] !== (int)$_SESSION['user_id']): ?>
-            <form method="POST" style="display:inline">
+            <form method="POST" class="staff-5677b9">
               <input type="hidden" name="action" value="toggle_status">
               <input type="hidden" name="id" value="<?= $s['id'] ?>">
               <input type="hidden" name="current_status" value="<?= $s['status'] ?>">
@@ -172,9 +173,9 @@ include __DIR__ . '/../includes/header.php';
       <div class="modal-body">
         <input type="hidden" name="action" value="add">
         <div class="form-group"><label class="form-label">Full Name *</label><input type="text" name="full_name" class="form-control" required></div>
-        <div style="display:flex;gap:12px">
-          <div class="form-group" style="flex:1"><label class="form-label">Email *</label><input type="email" name="email" class="form-control" required></div>
-          <div class="form-group" style="flex:1"><label class="form-label">Phone</label><input type="text" name="phone" class="form-control"></div>
+        <div class="staff-b1eb0f">
+          <div  class="form-group staff-da5cd6"><label class="form-label">Email *</label><input type="email" name="email" class="form-control" required></div>
+          <div  class="form-group staff-da5cd6"><label class="form-label">Phone</label><input type="text" name="phone" class="form-control"></div>
         </div>
         <div class="form-group"><label class="form-label">Role *</label>
           <select name="role" class="form-select" required>
@@ -184,7 +185,7 @@ include __DIR__ . '/../includes/header.php';
             <option value="saleslady">Saleslady / Cashier</option>
           </select>
         </div>
-        <div class="form-group"><label class="form-label">Password * <span style="color:var(--text-muted);font-weight:400;font-size:.75rem">(min. 6 characters)</span></label>
+        <div class="form-group"><label class="form-label">Password * <span class="staff-15640c">(min. 6 characters)</span></label>
           <input type="password" name="password" class="form-control" required>
         </div>
       </div>
@@ -201,26 +202,26 @@ include __DIR__ . '/../includes/header.php';
       <div class="modal-body">
         <input type="hidden" name="action" value="edit"><input type="hidden" name="id" id="esId">
         <div class="form-group"><label class="form-label">Full Name *</label><input type="text" name="full_name" id="esName" class="form-control" required></div>
-        <div style="display:flex;gap:12px">
-          <div class="form-group" style="flex:1"><label class="form-label">Email *</label><input type="email" name="email" id="esEmail" class="form-control" required></div>
-          <div class="form-group" style="flex:1"><label class="form-label">Phone</label><input type="text" name="phone" id="esPhone" class="form-control"></div>
+        <div class="staff-b1eb0f">
+          <div  class="form-group staff-da5cd6"><label class="form-label">Email *</label><input type="email" name="email" id="esEmail" class="form-control" required></div>
+          <div  class="form-group staff-da5cd6"><label class="form-label">Phone</label><input type="text" name="phone" id="esPhone" class="form-control"></div>
         </div>
-        <div style="display:flex;gap:12px">
-          <div class="form-group" style="flex:1"><label class="form-label">Role *</label>
+        <div class="staff-b1eb0f">
+          <div  class="form-group staff-da5cd6"><label class="form-label">Role *</label>
             <select name="role" id="esRole" class="form-select">
               <option value="admin">Administrator</option>
               <option value="doctor">Optometrist</option>
               <option value="saleslady">Saleslady</option>
             </select>
           </div>
-          <div class="form-group" style="flex:1"><label class="form-label">Status</label>
+          <div  class="form-group staff-da5cd6"><label class="form-label">Status</label>
             <select name="status" id="esStatus" class="form-select">
               <option value="active">Active</option>
               <option value="inactive">Inactive</option>
             </select>
           </div>
         </div>
-        <div class="form-group"><label class="form-label">New Password <span style="color:var(--text-muted);font-weight:400;font-size:.75rem">(leave blank to keep current)</span></label>
+        <div class="form-group"><label class="form-label">New Password <span class="staff-15640c">(leave blank to keep current)</span></label>
           <input type="password" name="password" class="form-control" placeholder="Enter new password or leave blank">
         </div>
       </div>
