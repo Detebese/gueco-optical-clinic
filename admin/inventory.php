@@ -284,8 +284,46 @@ function openStockModal(id, name, action) {
   document.getElementById('stockSubmitBtn').innerHTML = `<i class="fas fa-${isIn?'plus':'minus'}"></i> ${isIn?'Add Stock':'Deduct Stock'}`;
   openModal('stockModal');
 }
+let currentEditProduct = null;
+
 function confirmEdit(e, form) {
   e.preventDefault();
+
+  // Check if anything actually changed
+  const p = currentEditProduct;
+  if (p) {
+      const name = document.getElementById('epName').value;
+      const cat = document.getElementById('epCat').value;
+      const supp = document.getElementById('epSupp').value || null;
+      const price = parseFloat(document.getElementById('epPrice').value);
+      const alert = parseInt(document.getElementById('epAlert').value);
+      const desc = document.getElementById('epDesc').value || null;
+      const stat = document.getElementById('epStatus').value;
+
+      const oldSupp = p.supplier_id ? String(p.supplier_id) : null;
+      const oldDesc = p.description ? p.description : null;
+
+      if (
+          name === p.name &&
+          cat === String(p.category_id) &&
+          supp === oldSupp &&
+          price === parseFloat(p.price) &&
+          alert === parseInt(p.low_stock_alert) &&
+          desc === oldDesc &&
+          stat === p.status
+      ) {
+          Swal.fire({
+              title: 'Notice',
+              text: 'No changes were made. Product is already up to date!',
+              icon: 'info',
+              background: 'var(--bg-card)',
+              color: 'var(--text-primary)',
+              confirmButtonColor: 'var(--clr-primary)'
+          });
+          return;
+      }
+  }
+
   Swal.fire({
       title: 'Save Changes?',
       text: 'Are you sure you want to update this product?',
@@ -304,6 +342,7 @@ function confirmEdit(e, form) {
 }
 
 function openEditProduct(p) {
+  currentEditProduct = p;
   document.getElementById('epId').value = p.id;
   document.getElementById('epName').value = p.name;
   document.getElementById('epCat').value = p.category_id;

@@ -1020,3 +1020,8 @@ hr { border: none; border-top: 1px solid var(--border-color); margin: 20px 0; }
 .swal2-success-fix {
     background-color: var(--bg-card) !important;
 }
+
+/* Ensure SweetAlert2 is always on top of custom modals */
+.swal2-container {
+    z-index: 99999 !important;
+}
