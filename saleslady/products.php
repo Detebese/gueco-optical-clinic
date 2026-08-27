@@ -9,7 +9,7 @@ $db = getDB();
 $search    = sanitize($_GET['search'] ?? '');
 $catFilter = (int)($_GET['cat'] ?? 0);
 $where = ["p.status='active'"]; $params = [];
-if ($search)    { $where[] = 'p.name LIKE ?'; $params[] = "%$search%"; }
+if ($search)    { $where[] = '(p.name LIKE ? OR p.product_code LIKE ?)'; $params[] = "%$search%"; $params[] = "%$search%"; }
 if ($catFilter) { $where[] = 'p.category_id=?'; $params[] = $catFilter; }
 $whereStr = implode(' AND ', $where);
 
@@ -48,6 +48,7 @@ include __DIR__ . '/../includes/header.php';
         <i class="fas fa-glasses" style="color:#fff;font-size:.9rem;"></i>
       </div>
     <?php endif; ?>
+    <div style="font-family:monospace; color:var(--text-muted); font-size:0.75rem; margin-bottom:2px;"><?= sanitize($p['product_code'] ?: '') ?></div>
     <div style="font-weight:700;font-size:.88rem;margin-bottom:4px;line-height:1.3"><?= sanitize($p['name']) ?></div>
     <div style="margin-bottom:10px;"><span class="badge bg-secondary" style="font-size:.65rem"><?= sanitize($p['cat_name']) ?></span></div>
     <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;">

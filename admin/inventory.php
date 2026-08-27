@@ -14,6 +14,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $action = $_POST['action'] ?? '';
 
     if ($action === 'add' || $action === 'edit') {
+        $productCode = sanitize(trim($_POST['product_code'] ?? ''));
         $name     = sanitize(trim($_POST['name'] ?? ''));
         $catId    = (int)($_POST['category_id'] ?? 0);
         $suppId   = (int)($_POST['supplier_id'] ?? 0) ?: null;
@@ -35,8 +36,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 }
 
                 if ($action === 'add') {
-                    $db->prepare("INSERT INTO products (name,category_id,supplier_id,price,stock_quantity,low_stock_alert,description,status,image) VALUES (?,?,?,?,?,?,?,?,?)")
-                       ->execute([$name,$catId,$suppId,$price,$stock,$alert,$desc,$stat,$imagePath]);
+                    $db->prepare("INSERT INTO products (product_code,name,category_id,supplier_id,price,stock_quantity,low_stock_alert,description,status,image) VALUES (?,?,?,?,?,?,?,?,?,?)")
+                       ->execute([$productCode,$name,$catId,$suppId,$price,$stock,$alert,$desc,$stat,$imagePath]);
                     // Log inventory
                     $newId = $db->lastInsertId();
                     if ($stock > 0) {
@@ -46,28 +47,28 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                     $msg = "Product \"$name\" added.";
                 } else {
                     $id = (int)$_POST['id'];
-                    $stmt = $db->prepare("SELECT name, category_id, supplier_id, price, low_stock_alert, description, status FROM products WHERE id=?");
+                    $stmt = $db->prepare("SELECT product_code, name, category_id, supplier_id, price, low_stock_alert, description, status FROM products WHERE id=?");
                     $stmt->execute([$id]);
                     $old = $stmt->fetch();
                     
-                    if ($old && $old['name'] === $name && (int)$old['category_id'] === $catId && (int)$old['supplier_id'] === $suppId && (float)$old['price'] === $price && (int)$old['low_stock_alert'] === $alert && $old['description'] === $desc && $old['status'] === $stat && !$imagePath) {
+                    if ($old && $old['product_code'] === $productCode && $old['name'] === $name && (int)$old['category_id'] === $catId && (int)$old['supplier_id'] === $suppId && (float)$old['price'] === $price && (int)$old['low_stock_alert'] === $alert && $old['description'] === $desc && $old['status'] === $stat && !$imagePath) {
                         $msg = "No changes were made. Product is already up to date!";
                         $msgType = "info";
                         $reopenData = ['id' => $id, 'name' => $name, 'category_id' => $catId, 'supplier_id' => $suppId, 'price' => $price, 'low_stock_alert' => $alert, 'description' => $desc, 'status' => $stat];
                     } else {
                         if ($imagePath) {
-                            $db->prepare("UPDATE products SET name=?,category_id=?,supplier_id=?,price=?,low_stock_alert=?,description=?,status=?,image=? WHERE id=?")
-                               ->execute([$name,$catId,$suppId,$price,$alert,$desc,$stat,$imagePath,$id]);
+                            $db->prepare("UPDATE products SET product_code=?,name=?,category_id=?,supplier_id=?,price=?,low_stock_alert=?,description=?,status=?,image=? WHERE id=?")
+                               ->execute([$productCode,$name,$catId,$suppId,$price,$alert,$desc,$stat,$imagePath,$id]);
                         } else {
-                            $db->prepare("UPDATE products SET name=?,category_id=?,supplier_id=?,price=?,low_stock_alert=?,description=?,status=? WHERE id=?")
-                               ->execute([$name,$catId,$suppId,$price,$alert,$desc,$stat,$id]);
+                            $db->prepare("UPDATE products SET product_code=?,name=?,category_id=?,supplier_id=?,price=?,low_stock_alert=?,description=?,status=? WHERE id=?")
+                               ->execute([$productCode,$name,$catId,$suppId,$price,$alert,$desc,$stat,$id]);
                         }
                         $msg = "Product updated successfully!";
                     }
                 }
             } catch (PDOException $e) {
                 if ($e->getCode() == 23000) {
-                    $msg = "Error: A product with this name already exists.";
+                    $msg = "Error: A product with this name or product code already exists.";
                     $msgType = "danger";
                 } else {
                     $msg = "An error occurred: " . $e->getMessage();
@@ -97,7 +98,7 @@ $search = sanitize($_GET['search'] ?? '');
 $catFilter = (int)($_GET['cat'] ?? 0);
 $stockFilter = $_GET['stock'] ?? '';
 $where = ['1=1']; $params = [];
-if ($search) { $where[] = 'p.name LIKE ?'; $params[] = "%$search%"; }
+if ($search) { $where[] = '(p.name LIKE ? OR p.product_code LIKE ?)'; $params[] = "%$search%"; $params[] = "%$search%"; }
 if ($catFilter) { $where[] = 'p.category_id=?'; $params[] = $catFilter; }
 if ($stockFilter === 'low') { $where[] = 'p.stock_quantity <= p.low_stock_alert'; }
 if ($stockFilter === 'out') { $where[] = 'p.stock_quantity = 0'; }
@@ -178,6 +179,7 @@ document.addEventListener("DOMContentLoaded", function() {
         <?php $isLow = $p['stock_quantity'] <= $p['low_stock_alert']; $isOut = $p['stock_quantity'] == 0; ?>
         <tr>
           <td class="inv-67fd48"><?= $i+1 ?></td>
+          <td style="font-family:monospace; color:var(--text-muted); font-size:0.85rem;"><?= sanitize($p['product_code'] ?: '—') ?></td>
           <td>
             <div style="display:flex; align-items:center; gap:10px;">
               <?php if($p['image']): ?>
@@ -236,6 +238,7 @@ document.addEventListener("DOMContentLoaded", function() {
       </div>
       
       <div style="flex-grow:1;">
+        <div style="font-family:monospace; color:var(--text-muted); font-size:0.75rem; margin-bottom:2px;"><?= sanitize($p['product_code'] ?: '—') ?></div>
         <div style="font-weight:700; font-size:1.05rem; line-height:1.2; margin-bottom:5px; color:var(--text-primary);"><?= sanitize($p['name']) ?></div>
         <div style="font-size:0.8rem; color:var(--text-muted); margin-bottom:12px;"><?= sanitize($p['cat_name']) ?></div>
       </div>
@@ -270,6 +273,7 @@ document.addEventListener("DOMContentLoaded", function() {
     <form method="POST" enctype="multipart/form-data">
       <div class="modal-body">
         <input type="hidden" name="action" value="add">
+        <div class="form-group"><label class="form-label">Product Code / SKU</label><input type="text" name="product_code" class="form-control" placeholder="Optional"></div>
         <div class="form-group"><label class="form-label">Product Name *</label><input type="text" name="name" class="form-control" required></div>
         <div class="inv-b1eb0f">
           <div  class="form-group inv-da5cd6"><label class="form-label">Category *</label>
@@ -301,6 +305,7 @@ document.addEventListener("DOMContentLoaded", function() {
     <form method="POST" enctype="multipart/form-data" onsubmit="return confirmEdit(event, this)">
       <div class="modal-body">
         <input type="hidden" name="action" value="edit"><input type="hidden" name="id" id="epId">
+        <div class="form-group"><label class="form-label">Product Code / SKU</label><input type="text" name="product_code" id="epCode" class="form-control" placeholder="Optional"></div>
         <div class="form-group"><label class="form-label">Product Name *</label><input type="text" name="name" id="epName" class="form-control" required></div>
         <div class="inv-b1eb0f">
           <div  class="form-group inv-da5cd6"><label class="form-label">Category *</label>
@@ -362,6 +367,7 @@ function confirmEdit(e, form) {
   // Check if anything actually changed
   const p = currentEditProduct;
   if (p) {
+      const code = document.getElementById('epCode').value;
       const name = document.getElementById('epName').value;
       const cat = document.getElementById('epCat').value;
       const supp = document.getElementById('epSupp').value || null;
@@ -376,6 +382,7 @@ function confirmEdit(e, form) {
 
       if (
           !hasImage &&
+          code === (p.product_code || '') &&
           name === p.name &&
           cat === String(p.category_id) &&
           supp === oldSupp &&
@@ -416,6 +423,7 @@ function confirmEdit(e, form) {
 function openEditProduct(p) {
   currentEditProduct = p;
   document.getElementById('epId').value = p.id;
+  document.getElementById('epCode').value = p.product_code || '';
   document.getElementById('epName').value = p.name;
   document.getElementById('epCat').value = p.category_id;
   document.getElementById('epSupp').value = p.supplier_id || '';

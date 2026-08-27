@@ -75,8 +75,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action'] ?? '') === 'proce
 // Search products AJAX
 if (isset($_GET['search_products'])) {
     $q = '%' . sanitize($_GET['search_products']) . '%';
-    $prods = $db->prepare("SELECT p.id, p.name, p.price, p.stock_quantity, p.image, c.name as category FROM products p JOIN categories c ON c.id=p.category_id WHERE (p.name LIKE ? OR c.name LIKE ?) AND p.status='active' AND p.stock_quantity>0 ORDER BY p.name LIMIT 20");
-    $prods->execute([$q,$q]);
+    $prods = $db->prepare("SELECT p.id, p.product_code, p.name, p.price, p.stock_quantity, p.image, c.name as category FROM products p JOIN categories c ON c.id=p.category_id WHERE (p.name LIKE ? OR p.product_code LIKE ? OR c.name LIKE ?) AND p.status='active' AND p.stock_quantity>0 ORDER BY p.name LIMIT 20");
+    $prods->execute([$q,$q,$q]);
     header('Content-Type: application/json');
     echo json_encode($prods->fetchAll());
     exit;
@@ -84,7 +84,7 @@ if (isset($_GET['search_products'])) {
 
 // Get all products by category for initial load
 $categories = $db->query("SELECT c.*, (SELECT COUNT(*) FROM products p WHERE p.category_id=c.id AND p.status='active' AND p.stock_quantity>0) as prod_count FROM categories c WHERE c.status='active' ORDER BY c.name")->fetchAll();
-$allProducts = $db->query("SELECT p.id,p.name,p.price,p.stock_quantity,p.image,c.name as category FROM products p JOIN categories c ON c.id=p.category_id WHERE p.status='active' AND p.stock_quantity>0 ORDER BY c.name,p.name")->fetchAll();
+$allProducts = $db->query("SELECT p.id,p.product_code,p.name,p.price,p.stock_quantity,p.image,c.name as category FROM products p JOIN categories c ON c.id=p.category_id WHERE p.status='active' AND p.stock_quantity>0 ORDER BY c.name,p.name")->fetchAll();
 
 $patients = $db->query("SELECT id, full_name, phone FROM patients WHERE status='active' ORDER BY full_name")->fetchAll();
 
@@ -109,7 +109,7 @@ include __DIR__ . '/../includes/header.php';
     <!-- Product Grid -->
     <div id="productGrid" style="flex:1;overflow-y:auto;display:grid;grid-template-columns:repeat(auto-fill,minmax(160px,1fr));gap:10px;align-content:start;padding-right:4px;">
       <?php foreach ($allProducts as $prod): ?>
-      <div class="prod-card" data-id="<?= $prod['id'] ?>" data-name="<?= addslashes($prod['name']) ?>" data-price="<?= $prod['price'] ?>" data-stock="<?= $prod['stock_quantity'] ?>" data-cat="<?= addslashes($prod['category']) ?>"
+      <div class="prod-card" data-id="<?= $prod['id'] ?>" data-code="<?= addslashes($prod['product_code'] ?: '') ?>" data-name="<?= addslashes($prod['name']) ?>" data-price="<?= $prod['price'] ?>" data-stock="<?= $prod['stock_quantity'] ?>" data-cat="<?= addslashes($prod['category']) ?>"
            onclick="addToCart(this)"
            style="background:var(--bg-card);border:1px solid var(--border-color);border-radius:12px;padding:14px;cursor:pointer;transition:all .2s ease;"
            onmouseover="this.style.borderColor='var(--clr-primary)';this.style.boxShadow='0 4px 20px rgba(37,99,235,.15)'"
@@ -121,7 +121,8 @@ include __DIR__ . '/../includes/header.php';
               <i class="fas fa-glasses" style="color:#fff;font-size:.85rem;"></i>
             </div>
           <?php endif; ?>
-        <div style="font-weight:700;font-size:.82rem;margin-bottom:4px;line-height:1.3"><?= sanitize($prod['name']) ?></div>
+        <div style="font-family:monospace; color:var(--text-muted); font-size:0.7rem; margin-bottom:2px;"><?= sanitize($prod['product_code'] ?: '') ?></div>
+          <div style="font-weight:700;font-size:.82rem;margin-bottom:4px;line-height:1.3"><?= sanitize($prod['name']) ?></div>
         <div style="font-size:.7rem;color:var(--text-muted);margin-bottom:8px"><?= sanitize($prod['category']) ?></div>
         <div style="display:flex;justify-content:space-between;align-items:center;">
           <div style="font-weight:800;color:var(--clr-primary);font-size:.9rem">₱<?= number_format($prod['price'],2) ?></div>
@@ -235,8 +236,9 @@ function filterProducts() {
   const cat = catFilter.value.toLowerCase();
   document.querySelectorAll('.prod-card').forEach(card => {
     const name = card.dataset.name.toLowerCase();
+      const code = card.dataset.code.toLowerCase();
     const c    = card.dataset.cat.toLowerCase();
-    const show = (!q || name.includes(q)) && (!cat || c === cat);
+    const show = (!q || name.includes(q) || code.includes(q)) && (!cat || c === cat);
     card.style.display = show ? '' : 'none';
   });
 }
