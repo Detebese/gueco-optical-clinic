@@ -28,6 +28,13 @@ $initials  = strtoupper(substr($user['full_name'] ?? 'U', 0, 1));
   <title><?= sanitize($pageTitle) ?> — Gueco Optical</title>
   <meta name="description" content="Gueco Optical Clinic Management System">
 
+  <!-- Prevent flash of light mode on page load -->
+  <script>
+    if (localStorage.getItem('theme') === 'dark' || (!localStorage.getItem('theme') && window.matchMedia('(prefers-color-scheme: dark)').matches)) {
+      document.documentElement.setAttribute('data-theme', 'dark');
+    }
+  </script>
+
   <!-- Bootstrap 5 -->
   <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
   <!-- Font Awesome -->

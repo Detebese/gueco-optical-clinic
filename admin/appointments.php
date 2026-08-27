@@ -116,8 +116,27 @@ include __DIR__ . '/../includes/header.php';
   </div>
 </div>
 
+<!-- View Toggles -->
+<div style="display:flex; justify-content:flex-end; margin-bottom: 20px;">
+  <div class="btn-group" role="group" aria-label="View Toggle">
+    <button type="button" class="btn btn-outline-primary active" id="btnListView">
+      <i class="fas fa-list me-1"></i> List View
+    </button>
+    <button type="button" class="btn btn-outline-primary" id="btnCalView">
+      <i class="fas fa-calendar-alt me-1"></i> Calendar View
+    </button>
+  </div>
+</div>
+
+<!-- Calendar View -->
+<div id="calendarView" class="card" style="display: none; margin-bottom:20px;">
+  <div class="card-body" style="padding: 20px;">
+    <div id="calendar"></div>
+  </div>
+</div>
+
 <!-- Appointments Table -->
-<div class="table-wrapper">
+<div id="listView" class="table-wrapper">
   <div style="padding:16px 20px;border-bottom:1px solid var(--border-light);display:flex;align-items:center;justify-content:space-between;">
     <span style="font-size:.85rem;font-weight:600;color:var(--text-primary)">
       <i class="fas fa-calendar-check me-2" style="color:var(--clr-primary)"></i>
@@ -168,27 +187,27 @@ include __DIR__ . '/../includes/header.php';
           <td>
             <div style="display:flex;gap:4px;">
               <?php if ($a['status'] === 'pending'): ?>
-              <form method="POST" style="margin:0">
+              <form method="POST" style="margin:0" onsubmit="return confirmAction(this, 'Confirm this appointment?');">
                 <input type="hidden" name="appt_id" value="<?= $a['id'] ?>">
                 <input type="hidden" name="action" value="confirm">
                 <button class="btn btn-sm btn-success btn-icon" title="Confirm"><i class="fas fa-check"></i></button>
               </form>
               <?php endif; ?>
               <?php if (in_array($a['status'],['pending','confirmed'])): ?>
-              <form method="POST" style="margin:0">
+              <form method="POST" style="margin:0" onsubmit="return confirmAction(this, 'Mark this appointment as Complete?');">
                 <input type="hidden" name="appt_id" value="<?= $a['id'] ?>">
                 <input type="hidden" name="action" value="complete">
                 <button class="btn btn-sm btn-primary btn-icon" title="Mark Complete"><i class="fas fa-check-double"></i></button>
               </form>
-              <form method="POST" style="margin:0">
+              <form method="POST" style="margin:0" onsubmit="return confirmAction(this, 'Mark patient as No Show?');">
                 <input type="hidden" name="appt_id" value="<?= $a['id'] ?>">
                 <input type="hidden" name="action" value="no_show">
                 <button class="btn btn-sm btn-secondary btn-icon" title="No Show"><i class="fas fa-user-times"></i></button>
               </form>
-              <form method="POST" style="margin:0">
+              <form method="POST" style="margin:0" onsubmit="return confirmAction(this, 'Cancel this appointment?');">
                 <input type="hidden" name="appt_id" value="<?= $a['id'] ?>">
                 <input type="hidden" name="action" value="cancel">
-                <button class="btn btn-sm btn-danger btn-icon" title="Cancel" data-confirm="Cancel this appointment?"><?php echo '<i class="fas fa-times"></i>'; ?></button>
+                <button class="btn btn-sm btn-danger btn-icon" title="Cancel"><?php echo '<i class="fas fa-times"></i>'; ?></button>
               </form>
               <?php endif; ?>
             </div>
@@ -218,4 +237,366 @@ include __DIR__ . '/../includes/header.php';
   <?php endif; ?>
 </div>
 
+<!-- Appointment Details Modal -->
+<div class="modal fade" id="apptDetailsModal" tabindex="-1" aria-hidden="true">
+  <div class="modal-dialog modal-dialog-centered" style="max-width: 550px;">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h5 class="modal-title"><i class="fas fa-calendar-check me-2 text-primary"></i>Appointment Details</h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+      </div>
+      <div class="modal-body">
+        <div class="mb-3">
+          <label class="text-muted small">Patient Name</label>
+          <div id="modalPatientName" class="fw-bold fs-5"></div>
+        </div>
+        <div class="row mb-3">
+          <div class="col-6">
+            <label class="text-muted small">Date & Time</label>
+            <div id="modalDateTime" class="fw-semibold"></div>
+          </div>
+          <div class="col-6">
+            <label class="text-muted small">Contact</label>
+            <div id="modalContact" class="fw-semibold"></div>
+          </div>
+        </div>
+        <div class="row mb-3">
+          <div class="col-6">
+            <label class="text-muted small">Purpose</label>
+            <div id="modalPurpose" class="fw-semibold"></div>
+          </div>
+          <div class="col-6">
+            <label class="text-muted small">Status</label>
+            <div id="modalStatusContainer"></div>
+          </div>
+        </div>
+        <div class="mb-3">
+          <label class="text-muted small">Notes</label>
+          <div id="modalNotes" class="bg-light p-2 rounded text-muted" style="min-height: 40px;"></div>
+        </div>
+
+        <hr>
+        <div id="modalActions" style="display:flex;gap:6px;justify-content:flex-end;flex-wrap:wrap;">
+          <!-- Action buttons will be injected here via JS -->
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
 <?php include __DIR__ . '/../includes/footer.php'; ?>
+
+<!-- FullCalendar Library -->
+<script src="https://cdn.jsdelivr.net/npm/fullcalendar@6.1.15/index.global.min.js"></script>
+<!-- SweetAlert2 -->
+<script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
+
+<style>
+/* Modern FullCalendar overrides for Dark and Light Mode */
+#calendar {
+  --fc-border-color: var(--border-light); /* Theme-aware grid lines */
+  --fc-button-bg-color: var(--bg-card);
+  --fc-button-border-color: var(--border-color);
+  --fc-button-text-color: var(--text-primary);
+  --fc-button-hover-bg-color: rgba(37, 99, 235, 0.1);
+  --fc-button-hover-border-color: var(--clr-primary);
+  --fc-button-active-bg-color: var(--clr-primary);
+  --fc-button-active-border-color: var(--clr-primary);
+  --fc-today-bg-color: rgba(37, 99, 235, 0.08); /* Soft blue for today */
+  font-family: 'Poppins', sans-serif;
+}
+
+/* Header & Title */
+.fc-toolbar-title {
+  color: var(--text-primary) !important;
+  font-weight: 700 !important;
+  letter-spacing: -0.5px;
+  font-size: 1.5rem !important;
+}
+
+/* Modern Pill Buttons */
+.fc .fc-button {
+  border-radius: 20px !important; /* Pill shape */
+  text-transform: capitalize;
+  font-weight: 500;
+  padding: 0.4em 1.2em;
+  transition: all 0.2s ease;
+  box-shadow: none !important;
+}
+.fc .fc-button-group > .fc-button {
+  border-radius: 0 !important;
+}
+.fc .fc-button-group > .fc-button:first-child {
+  border-top-left-radius: 20px !important;
+  border-bottom-left-radius: 20px !important;
+}
+.fc .fc-button-group > .fc-button:last-child {
+  border-top-right-radius: 20px !important;
+  border-bottom-right-radius: 20px !important;
+}
+
+/* Column Headers (Days) */
+.fc-col-header-cell {
+  background: var(--bg-hover);
+  border-bottom: 1px solid var(--fc-border-color) !important;
+  padding: 10px 0 !important;
+}
+.fc-col-header-cell-cushion {
+  color: var(--text-muted) !important;
+  text-transform: uppercase;
+  font-size: 0.75rem;
+  letter-spacing: 1.5px;
+  font-weight: 600;
+  text-decoration: none !important;
+}
+
+/* Day Number Links */
+.fc-daygrid-day-number {
+  color: var(--text-secondary) !important;
+  font-weight: 500;
+  font-size: 0.9rem;
+  padding: 8px 10px !important;
+  text-decoration: none !important;
+  transition: color 0.2s;
+}
+.fc-daygrid-day-number:hover {
+  color: var(--clr-primary) !important;
+}
+
+/* Today Cell Highlight */
+.fc-day-today .fc-daygrid-day-number {
+  color: var(--clr-primary) !important;
+  font-weight: 700;
+}
+
+/* Cell hover effect */
+.fc-daygrid-day:hover {
+  background-color: var(--bg-hover);
+}
+
+/* General text colors for TimeGrid */
+.fc-timegrid-slot-label-cushion,
+.fc-timegrid-axis-cushion,
+.fc-list-day-text,
+.fc-list-day-side-text {
+  color: var(--text-secondary) !important;
+  font-size: 0.8rem;
+  text-decoration: none;
+}
+
+/* Modern Event Card Wrapper */
+.fc-event {
+  cursor: pointer;
+  border: none !important;
+  background: transparent !important;
+  box-shadow: none !important;
+  padding: 0 !important;
+  margin: 0 !important;
+}
+
+.fc-event-main {
+  width: 100%;
+  height: 100%;
+}
+
+/* Our Custom Card rendered inside eventContent */
+.custom-event-card {
+  background-color: var(--bg-card);
+  border: 1px solid var(--border-color);
+  border-radius: 6px;
+  padding: 4px 6px;
+  box-shadow: var(--shadow-sm);
+  transition: transform 0.2s ease, box-shadow 0.2s ease;
+  height: 100%;
+  box-sizing: border-box;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+.fc-event:hover .custom-event-card {
+  transform: translateY(-1px);
+  box-shadow: var(--shadow-md);
+}
+.custom-event-top {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: space-between;
+  align-items: center;
+  gap: 2px;
+  margin-bottom: 2px;
+}
+
+/* Remove default blue outline on focus */
+.fc .fc-button:focus,
+.fc .fc-event:focus {
+  outline: none !important;
+  box-shadow: none !important;
+}
+</style>
+
+<script>
+// Custom confirmation popup using SweetAlert2
+function confirmAction(form, message) {
+  Swal.fire({
+    title: 'Are you sure?',
+    text: message,
+    icon: 'question',
+    showCancelButton: true,
+    confirmButtonColor: 'var(--clr-primary)',
+    cancelButtonColor: '#475569',
+    confirmButtonText: 'Yes, proceed',
+    background: 'var(--bg-card)',
+    color: 'var(--text-primary)',
+    customClass: {
+      popup: 'rounded-4'
+    }
+  }).then((result) => {
+    if (result.isConfirmed) {
+      form.submit();
+    }
+  });
+  return false; // Prevent default form submission
+}
+
+document.addEventListener('DOMContentLoaded', function() {
+  const btnListView = document.getElementById('btnListView');
+  const btnCalView = document.getElementById('btnCalView');
+  const listView = document.getElementById('listView');
+  const calendarView = document.getElementById('calendarView');
+  let calendar = null;
+
+  // Restore preferred view from localStorage
+  const activeView = localStorage.getItem('appointments_view') || 'list';
+  if (activeView === 'calendar') {
+    btnCalView.classList.add('active');
+    btnListView.classList.remove('active');
+    listView.style.display = 'none';
+    calendarView.style.display = 'block';
+    setTimeout(() => { initCalendar(); }, 100);
+  } else {
+    btnListView.classList.add('active');
+    btnCalView.classList.remove('active');
+    listView.style.display = 'block';
+    calendarView.style.display = 'none';
+  }
+
+  function buildModalActions(apptId, status) {
+    let html = '';
+    
+    if (status === 'pending') {
+      html += `<form method="POST" class="m-0" onsubmit="return confirmAction(this, 'Confirm this appointment?');"><input type="hidden" name="appt_id" value="${apptId}"><input type="hidden" name="action" value="confirm"><button class="btn btn-sm btn-success"><i class="fas fa-check me-1"></i> Confirm</button></form>`;
+    }
+    if (status === 'pending' || status === 'confirmed') {
+      html += `<form method="POST" class="m-0" onsubmit="return confirmAction(this, 'Mark this appointment as Complete?');"><input type="hidden" name="appt_id" value="${apptId}"><input type="hidden" name="action" value="complete"><button class="btn btn-sm btn-primary"><i class="fas fa-check-double me-1"></i> Complete</button></form>`;
+      html += `<form method="POST" class="m-0" onsubmit="return confirmAction(this, 'Mark patient as No Show?');"><input type="hidden" name="appt_id" value="${apptId}"><input type="hidden" name="action" value="no_show"><button class="btn btn-sm btn-secondary"><i class="fas fa-user-times me-1"></i> No Show</button></form>`;
+      html += `<form method="POST" class="m-0" onsubmit="return confirmAction(this, 'Cancel this appointment?');"><input type="hidden" name="appt_id" value="${apptId}"><input type="hidden" name="action" value="cancel"><button class="btn btn-sm btn-danger"><i class="fas fa-times me-1"></i> Cancel</button></form>`;
+    }
+    
+    return html;
+  }
+
+  function initCalendar() {
+    const calendarEl = document.getElementById('calendar');
+    calendar = new FullCalendar.Calendar(calendarEl, {
+      initialView: 'dayGridMonth',
+      headerToolbar: {
+        left: 'prev,next today',
+        center: 'title',
+        right: 'dayGridMonth,timeGridWeek,timeGridDay'
+      },
+      eventDisplay: 'block', // Force all events to be colored blocks (pills)
+      events: '../api/get_calendar_events.php',
+      
+      // Custom HTML Rendering for Events
+      eventContent: function(arg) {
+        const props = arg.event.extendedProps;
+        // In some views (like month), time might not be fully formatted by FullCalendar if all-day, 
+        // but we already have our formatted time from the API!
+        const timeStr = props.time_formatted || '';
+        const name = props.patient_name;
+        const statusRaw = props.status || '';
+        const statusStr = statusRaw.charAt(0).toUpperCase() + statusRaw.slice(1).replace('_', ' ');
+        
+        // FullCalendar sets this to our #HEX color from the DB
+        const color = arg.event.backgroundColor;
+
+        let html = `
+          <div class="custom-event-card" style="border-left-color: ${color}; border-left-width: 4px; border-left-style: solid;">
+            <div class="custom-event-top">
+                <div style="color: var(--clr-primary); font-size: 0.7rem; font-weight: 600;">
+                    <i class="far fa-clock"></i> ${timeStr}
+                </div>
+                <div style="background-color: ${color}20; color: ${color}; font-size: 0.65rem; font-weight: 700; padding: 2px 6px; border-radius: 10px; line-height: 1;">
+                    ${statusStr}
+                </div>
+            </div>
+            <div style="color: var(--text-primary); font-size: 0.8rem; font-weight: 600; text-overflow: ellipsis; overflow: hidden; white-space: nowrap;">
+                ${name}
+            </div>
+          </div>
+        `;
+        return { html: html };
+      },
+
+      eventClick: function(info) {
+        const props = info.event.extendedProps;
+        const apptId = info.event.id;
+        
+        // Populate Modal
+        document.getElementById('modalPatientName').textContent = props.patient_name;
+        document.getElementById('modalDateTime').textContent = props.date_formatted + ' at ' + props.time_formatted;
+        document.getElementById('modalContact').textContent = props.phone || '—';
+        
+        // Format purpose
+        const purpose = props.purpose.replace(/_/g, ' ');
+        document.getElementById('modalPurpose').textContent = purpose.charAt(0).toUpperCase() + purpose.slice(1);
+        
+        // Set Status Badge manually since we don't have the PHP function in JS
+        let badgeClass = 'secondary';
+        let icon = 'question-circle';
+        if(props.status==='pending'){ badgeClass='warning'; icon='clock'; }
+        else if(props.status==='confirmed'){ badgeClass='info'; icon='check-circle'; }
+        else if(props.status==='completed'){ badgeClass='success'; icon='check-double'; }
+        else if(props.status==='cancelled'){ badgeClass='danger'; icon='times-circle'; }
+        else if(props.status==='no_show'){ badgeClass='secondary'; icon='user-times'; }
+        
+        const statusLabel = props.status.replace(/_/g, ' ');
+        document.getElementById('modalStatusContainer').innerHTML = `<span class="badge bg-${badgeClass}"><i class="fas fa-${icon} me-1"></i>${statusLabel.charAt(0).toUpperCase() + statusLabel.slice(1)}</span>`;
+        
+        document.getElementById('modalNotes').textContent = props.notes || 'No notes provided.';
+        
+        // Inject Actions
+        document.getElementById('modalActions').innerHTML = buildModalActions(apptId, props.status);
+        
+        // Show Modal
+        const myModal = new bootstrap.Modal(document.getElementById('apptDetailsModal'));
+        myModal.show();
+      }
+    });
+    calendar.render();
+  }
+
+  btnListView.addEventListener('click', () => {
+    localStorage.setItem('appointments_view', 'list');
+    btnListView.classList.add('active');
+    btnCalView.classList.remove('active');
+    listView.style.display = 'block';
+    calendarView.style.display = 'none';
+  });
+
+  btnCalView.addEventListener('click', () => {
+    localStorage.setItem('appointments_view', 'calendar');
+    btnCalView.classList.add('active');
+    btnListView.classList.remove('active');
+    listView.style.display = 'none';
+    calendarView.style.display = 'block';
+    
+    if (!calendar) {
+      initCalendar();
+    } else {
+      calendar.render(); // Ensure it resizes correctly when unhidden
+    }
+  });
+
+});
+</script>

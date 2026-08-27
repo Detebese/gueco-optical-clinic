@@ -53,28 +53,28 @@
 }
 
 [data-theme="dark"] {
-  --bg-body:       #0B0F1A;
-  --bg-card:       #141927;
-  --bg-sidebar:    #0F1521;
-  --bg-header:     #141927;
+  --bg-body:       #0F172A;
+  --bg-sidebar:    #0B1121;
+  --bg-header:     #0F172A;
+  --bg-card:       #1E293B;
   --bg-input:      #1C2333;
   --bg-hover:      #1C2333;
   --bg-table-head: #1C2333;
   --bg-table-row:  #141927;
   --bg-table-alt:  #111827;
-
-  --text-primary:   #F1F5F9;
-  --text-secondary: #94A3B8;
-  --text-muted:     #64748B;
-
-  --border-color: #1E2D40;
-  --border-light: #1A2234;
-
-  --shadow-sm:  0 1px 3px rgba(0,0,0,.3);
-  --shadow-md:  0 4px 6px rgba(0,0,0,.35);
-  --shadow-lg:  0 10px 15px rgba(0,0,0,.4);
+  --border-color:  #334155;
+  --border-light:  #1E293B;
+  
+  --text-primary:  #F1F5F9;
+  --text-secondary:#94A3B8;
+  --text-muted:    #64748B;
+  --shadow-sm:     0 1px 2px rgba(0,0,0,.3);
+  --shadow-md:     0 4px 12px rgba(0,0,0,.25);
+  --shadow-lg:     0 12px 32px rgba(0,0,0,.4);
   --shadow-xl:  0 20px 25px rgba(0,0,0,.45);
 }
+
+[data-theme="dark"] .btn-close { filter: invert(1) grayscale(100%) brightness(200%); }
 
 /* ─── Reset & Base ───────────────────────────────────────── */
 *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
@@ -494,16 +494,24 @@ input[type="password"]::-ms-clear {
   white-space: nowrap;
 }
 
+.table {
+  --bs-table-bg: transparent;
+  --bs-table-color: var(--text-primary);
+  --bs-table-hover-color: var(--text-primary);
+  --bs-table-striped-color: var(--text-primary);
+}
+
 .table tbody td {
   padding: 13px 18px;
   border-bottom: 1px solid var(--border-light);
   color: var(--text-primary);
   vertical-align: middle;
+  background-color: transparent !important; /* Force transparent to reveal dark card bg */
 }
 
 .table tbody tr:last-child td { border-bottom: none; }
-.table tbody tr:nth-child(even) td { background: var(--bg-table-alt); }
-.table tbody tr:hover td { background: rgba(var(--clr-primary-rgb),.04); }
+.table tbody tr:nth-child(even) td { background-color: var(--bg-table-alt) !important; }
+.table tbody tr:hover td { background-color: rgba(var(--clr-primary-rgb),.04) !important; }
 .table-responsive { overflow-x: auto; }
 
 /* ─── Forms ──────────────────────────────────────────────── */
@@ -520,10 +528,10 @@ input[type="password"]::-ms-clear {
 .form-control, .form-select {
   width: 100%;
   padding: 10px 14px;
-  background: var(--bg-input);
-  border: 1px solid var(--border-color);
+  background: var(--bg-input) !important;
+  border: 1px solid var(--border-color) !important;
   border-radius: var(--radius-sm);
-  color: var(--text-primary);
+  color: var(--text-primary) !important;
   font-family: 'Poppins', sans-serif;
   font-size: .85rem;
   transition: var(--transition);
@@ -639,6 +647,21 @@ input[type="password"]::-ms-clear {
 
 .modal-overlay.active { opacity: 1; visibility: visible; }
 
+/* Bootstrap Modal overrides for custom dark mode */
+.modal-content {
+  background-color: var(--bg-card);
+  color: var(--text-primary);
+  border-color: var(--border-color);
+  box-shadow: var(--shadow-lg);
+}
+.modal-header, .modal-footer {
+  border-color: var(--border-light);
+}
+.bg-light { /* Override Bootstrap's bg-light inside modals (like notes) */
+  background-color: var(--bg-body) !important;
+}
+
+/* Custom Modals (used in other parts of app) */
 .modal-box {
   background: var(--bg-card);
   border-radius: var(--radius-xl);
