@@ -40,18 +40,14 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action'] ?? '') === 'edit'
         }
     }
 }
-// Delete
-if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action'] ?? '') === 'delete') {
+// Toggle Status
+if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action'] ?? '') === 'toggle_status') {
     $id = (int)$_POST['id'];
-    // Check if category has products
-    $cnt = $db->prepare("SELECT COUNT(*) as c FROM products WHERE category_id=? AND status='active'");
-    $cnt->execute([$id]); $cnt = $cnt->fetch()['c'];
-    if ($cnt > 0) {
-        $msg = "Cannot delete: $cnt active product(s) are using this category."; $msgType = 'danger';
-    } else {
-        $db->prepare("UPDATE categories SET status='inactive' WHERE id=?")->execute([$id]);
-        $msg = 'Category deactivated.';
-    }
+    $currentStatus = $_POST['current_status'] ?? 'active';
+    $newStatus = $currentStatus === 'active' ? 'inactive' : 'active';
+    $db->prepare("UPDATE categories SET status=? WHERE id=?")->execute([$newStatus, $id]);
+    $msg = "Category " . ($newStatus === 'active' ? 'activated' : 'deactivated') . " successfully.";
+    $msgType = "success";
 }
 
 $categories = $db->query("
