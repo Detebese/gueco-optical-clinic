@@ -73,7 +73,7 @@ include __DIR__ . '/../includes/header.php';
         <button type="submit" class="btn btn-primary"><i class="fas fa-filter"></i> Apply</button>
         <a href="?from=<?= date('Y-m-01') ?>&to=<?= date('Y-m-d') ?>" class="btn btn-secondary ms-1">This Month</a>
         <a href="?from=<?= date('Y-m-d') ?>&to=<?= date('Y-m-d') ?>" class="btn btn-outline-primary ms-1">Today</a>
-          <button type="button" class="btn btn-danger ms-2" onclick="window.print()"><i class="fas fa-file-pdf"></i> Export PDF</button>
+          <a href="print_sales_report.php?from=<?= $filterFrom ?>&to=<?= $filterTo ?>" target="_blank" class="btn btn-danger ms-2"><i class="fas fa-file-pdf"></i> Export PDF</a>
       </div>
     </form>
   </div>
@@ -264,3 +264,4 @@ const themeMode = document.documentElement.getAttribute("data-theme") === "dark"
 </script>';
 include __DIR__ . '/../includes/footer.php';
 ?>
+
