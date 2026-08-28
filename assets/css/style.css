@@ -621,6 +621,7 @@ input[type="password"]::-ms-clear {
 .bg-warning   { background: rgba(217,119,6,.12) !important;  color: #D97706 !important; }
 .bg-info      { background: rgba(8,145,178,.12) !important;  color: #0891B2 !important; }
 .bg-secondary { background: rgba(100,116,139,.12) !important; color: #475569 !important; }
+[data-theme="dark"] .bg-secondary { color: #E5E7EB !important; background: rgba(100,116,139,.4) !important; }
 
 /* ─── Alerts ─────────────────────────────────────────────── */
 .alert {
