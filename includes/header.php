@@ -28,11 +28,16 @@ $initials  = strtoupper(substr($user['full_name'] ?? 'U', 0, 1));
   <title><?= sanitize($pageTitle) ?> — Gueco Optical</title>
   <meta name="description" content="Gueco Optical Clinic Management System">
 
-  <!-- Prevent flash of light mode on page load -->
+  <!-- Immediate Theme Initialization (Prevents Theme Flash / FOUC) -->
   <script>
-    if (localStorage.getItem('theme') === 'dark' || (!localStorage.getItem('theme') && window.matchMedia('(prefers-color-scheme: dark)').matches)) {
-      document.documentElement.setAttribute('data-theme', 'dark');
-    }
+    (function() {
+      try {
+        var theme = localStorage.getItem('gueco_theme') || localStorage.getItem('theme') || 'light';
+        document.documentElement.setAttribute('data-theme', theme);
+      } catch (e) {
+        document.documentElement.setAttribute('data-theme', 'light');
+      }
+    })();
   </script>
 
   <!-- Bootstrap 5 -->

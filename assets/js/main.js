@@ -11,16 +11,19 @@ document.addEventListener('DOMContentLoaded', function () {
 
   function applyTheme(theme) {
     html.setAttribute('data-theme', theme);
-    localStorage.setItem(THEME_KEY, theme);
+    try {
+      localStorage.setItem(THEME_KEY, theme);
+      localStorage.setItem('theme', theme);
+    } catch(e) {}
     const icon = document.getElementById('themeIcon');
     if (icon) {
       icon.className = theme === 'dark' ? 'fas fa-sun' : 'fas fa-moon';
     }
   }
 
-  // Load saved theme
-  const savedTheme = localStorage.getItem(THEME_KEY) || 'light';
-  applyTheme(savedTheme);
+  // Sync icon and state with already initialized attribute
+  const activeTheme = html.getAttribute('data-theme') || localStorage.getItem(THEME_KEY) || localStorage.getItem('theme') || 'light';
+  applyTheme(activeTheme);
 
   // Toggle button
   const themeToggle = document.getElementById('themeToggle');
