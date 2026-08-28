@@ -1029,3 +1029,19 @@ hr { border: none; border-top: 1px solid var(--border-color); margin: 20px 0; }
 .swal2-container {
     z-index: 99999 !important;
 }
+
+/* 🖨️ Print / PDF Export */
+@media print {
+  @page { size: landscape; margin: 10mm; }
+  body { background: #fff !important; color: #000 !important; }
+  .sidebar, .top-header, .btn, form { display: none !important; }
+  .main-content { margin-left: 0 !important; padding: 0 !important; }
+  .card { box-shadow: none !important; border: 1px solid #ddd !important; break-inside: avoid; margin-bottom: 20px; }
+  .card-header { background: transparent !important; color: #000 !important; border-bottom: 2px solid #000; }
+  .badge { border: 1px solid #000; color: #000 !important; }
+  #salesChartContainer, #payChartContainer { background: transparent !important; }
+  table { width: 100% !important; border-collapse: collapse; }
+  th, td { border: 1px solid #ccc !important; color: #000 !important; }
+  /* Make sure background colors (for charts/badges) print if the user enables "Print Backgrounds" */
+  * { -webkit-print-color-adjust: exact !important; print-color-adjust: exact !important; }
+}
