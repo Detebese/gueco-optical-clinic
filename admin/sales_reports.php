@@ -105,7 +105,7 @@ include __DIR__ . '/../includes/header.php';
   <div class="col-8">
     <div class="card">
       <div class="card-header"><h6><i  class="fas fa-chart-area me-2 sales-b6b6a8"></i>Daily Sales — <?= formatDate($filterFrom) ?> to <?= formatDate($filterTo) ?></h6></div>
-      <div class="card-body"><div  class="chart-container sales-47f393"><canvas id="salesChart"></canvas></div></div>
+      <div class="card-body"><div id="salesChartContainer" style="min-height:280px; margin-top:10px;"></div></div>
     </div>
   </div>
   <div class="col-4">
@@ -118,7 +118,7 @@ include __DIR__ . '/../includes/header.php';
             <p style="font-size:0.95rem; margin:0; font-weight:500;">No transactions yet</p>
           </div>
           <?php else: ?>
-          <div class="chart-container sales-510716"><canvas id="payChart"></canvas></div>
+          <div id="payChartContainer" style="min-height:260px;"></div>
           <?php endif; ?>
       </div>
     </div>
