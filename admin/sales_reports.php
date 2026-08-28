@@ -195,10 +195,40 @@ include __DIR__ . '/../includes/header.php';
 $payLabels = array_map(fn($p) => strtoupper($p['payment_method']), $payBreak);
 $payData   = array_map(fn($p) => (float)$p['total'], $payBreak);
 $extraScripts = '<script>
-const sCtx = document.getElementById("salesChart");
-if(sCtx){ new Chart(sCtx,{ type:"line", data:{ labels:'.json_encode($chartLabels).', datasets:[{ label:"Sales (₱)", data:'.json_encode($chartData).', borderColor:"#2563EB", backgroundColor:"rgba(37,99,235,.08)", borderWidth:2.5, fill:true, tension:0.4, pointBackgroundColor:"#2563EB", pointRadius:4 }] }, options:{ responsive:true, maintainAspectRatio:false, plugins:{legend:{display:false}}, scales:{ y:{beginAtZero:true,ticks:{callback:v=>"₱"+v.toLocaleString(),font:{family:"Poppins",size:11}},grid:{color:"rgba(150,150,150,.15)"}}, x:{ticks:{font:{family:"Poppins",size:11}},grid:{display:false}} } } }); }
-const pCtx = document.getElementById("payChart");
-if(pCtx){ new Chart(pCtx,{ type:"doughnut", data:{ labels:'.json_encode($payLabels).', datasets:[{ data:'.json_encode($payData).', backgroundColor:["#2563EB","#059669","#7C3AED","#D97706"], borderWidth:0, hoverOffset:6 }] }, options:{ responsive:true, maintainAspectRatio:false, cutout:"68%", plugins:{legend:{position:"bottom",labels:{font:{family:"Poppins",size:11},padding:10,boxWidth:10}}} } }); }
+const themeMode = document.documentElement.getAttribute("data-theme") === "dark" ? "dark" : "light";
+  
+  const salesOptions = {
+    series: [{ name: "Sales (₱)", data: ' . json_encode($chartData) . ' }],
+    chart: { type: "area", height: 280, toolbar: { show: false }, fontFamily: "Poppins, sans-serif", background: "transparent" },
+    theme: { mode: themeMode },
+    colors: ["#2563EB"],
+    fill: { type: "gradient", gradient: { shadeIntensity: 1, opacityFrom: 0.4, opacityTo: 0.05, stops: [0, 90, 100] } },
+    dataLabels: { enabled: false },
+    stroke: { curve: "smooth", width: 3 },
+    xaxis: { categories: ' . json_encode($chartLabels) . ', axisBorder: { show: false }, axisTicks: { show: false } },
+    yaxis: { labels: { formatter: (value) => { return "₱" + value.toLocaleString() } } },
+    grid: { borderColor: "rgba(150, 150, 150, 0.15)", strokeDashArray: 4, padding: { left: 10, right: 10, bottom: 0 } },
+    tooltip: { theme: themeMode, y: { formatter: function (val) { return "₱" + val.toLocaleString() } } }
+  };
+  if (document.querySelector("#salesChartContainer")) {
+      new ApexCharts(document.querySelector("#salesChartContainer"), salesOptions).render();
+  }
+
+  const payOptions = {
+    series: ' . json_encode($payData) . ',
+    chart: { type: "donut", height: 270, fontFamily: "Poppins, sans-serif", background: "transparent" },
+    labels: ' . json_encode($payLabels) . ',
+    theme: { mode: themeMode },
+    colors: ["#2563EB", "#059669", "#7C3AED", "#D97706"],
+    plotOptions: { pie: { donut: { size: "72%" } } },
+    dataLabels: { enabled: false },
+    stroke: { show: false },
+    legend: { position: "bottom" },
+    tooltip: { theme: themeMode }
+  };
+  if (document.querySelector("#payChartContainer")) {
+      new ApexCharts(document.querySelector("#payChartContainer"), payOptions).render();
+  }
 </script>';
 include __DIR__ . '/../includes/footer.php';
 ?>
