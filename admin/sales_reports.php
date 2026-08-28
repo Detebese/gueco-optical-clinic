@@ -156,10 +156,10 @@ include __DIR__ . '/../includes/header.php';
       </div>
       <div class="table-responsive">
         <table class="table">
-          <thead><tr><th>Invoice</th><th>Patient</th><th>Cashier</th><th>Total</th><th>Discount</th><th>Method</th><th>Date</th><th>Status</th></tr></thead>
+          <thead><tr><th>Invoice</th><th>Patient</th><th>Cashier</th><th>Total</th><th>Discount</th><th>Method</th><th>Date</th><th>Status</th><th style="text-align:right;">Receipt</th></tr></thead>
           <tbody>
             <?php if (empty($sales)): ?>
-            <tr><td colspan="8"><div  class="empty-state sales-35a11d"><div class="empty-icon"><i class="fas fa-receipt"></i></div><h6>No transactions</h6></div></td></tr>
+            <tr><td colspan="9"><div  class="empty-state sales-35a11d"><div class="empty-icon"><i class="fas fa-receipt"></i></div><h6>No transactions</h6></div></td></tr>
             <?php else: ?>
             <?php foreach ($sales as $s): ?>
             <tr>
@@ -171,6 +171,11 @@ include __DIR__ . '/../includes/header.php';
               <td><span class="badge bg-info"><?= strtoupper($s['payment_method']) ?></span></td>
               <td class="sales-d44d31"><?= formatDateTime($s['created_at']) ?></td>
               <td><?= statusBadge($s['status']) ?></td>
+              <td style="text-align:right;">
+                <a href="../saleslady/receipt.php?id=<?= $s['id'] ?>" target="_blank" class="btn btn-outline-primary btn-sm py-1 px-2" title="Print Receipt">
+                  <i class="fas fa-print me-1"></i> Receipt
+                </a>
+              </td>
             </tr>
             <?php endforeach; ?>
             <?php endif; ?>

@@ -14,15 +14,15 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action'] ?? '') === 'proce
     $payMethod  = $_POST['payment_method'] ?? 'cash';
     $discount   = (float)($_POST['discount'] ?? 0);
     $amountPaid = (float)($_POST['amount_paid'] ?? 0);
-    $notes      = sanitize(trim($_POST['notes'] ?? ''));
 
     if (empty($items)) {
         echo json_encode(['success'=>false,'error'=>'Cart is empty.']);
         exit;
     }
 
-    // Calculate subtotal
+    // Calculate subtotal and build item details
     $subtotal = 0;
+    $itemsDetailed = [];
     foreach ($items as &$item) {
         $prod = $db->prepare("SELECT * FROM products WHERE id=? AND status='active'");
         $prod->execute([$item['id']]); $prod = $prod->fetch();
@@ -30,9 +30,18 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action'] ?? '') === 'proce
         if ($prod['stock_quantity'] < $item['qty']) {
             echo json_encode(['success'=>false,'error'=>"Insufficient stock for: {$prod['name']}. Available: {$prod['stock_quantity']}"]); exit;
         }
-        $item['price'] = $prod['price'];
-        $item['total'] = $prod['price'] * $item['qty'];
+        $item['price'] = (float)$prod['price'];
+        $item['total'] = (float)($prod['price'] * $item['qty']);
+        $item['name']  = $prod['name'];
         $subtotal += $item['total'];
+
+        $itemsDetailed[] = [
+            'id'    => $item['id'],
+            'name'  => $prod['name'],
+            'qty'   => (int)$item['qty'],
+            'price' => (float)$prod['price'],
+            'total' => (float)$item['total']
+        ];
     }
 
     $total = max(0, $subtotal - $discount);
@@ -43,28 +52,57 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action'] ?? '') === 'proce
     $lastInv = $db->query("SELECT MAX(id) as m FROM sales")->fetch()['m'] ?? 0;
     $invoiceNo = 'GOC-' . $invDate . '-' . str_pad($lastInv + 1, 4, '0', STR_PAD_LEFT);
 
+    $patientName = 'Walk-in Customer';
+    if ($patientId > 0) {
+        $ptRow = $db->prepare("SELECT full_name FROM patients WHERE id=?");
+        $ptRow->execute([$patientId]);
+        $ptRow = $ptRow->fetch();
+        if ($ptRow) {
+            $patientName = $ptRow['full_name'];
+        }
+    }
+
+    $dbPaymentMethod = in_array($payMethod, ['cash', 'gcash']) ? $payMethod : 'other';
+
     $db->beginTransaction();
     try {
         // Insert sale
-        $saleStmt = $db->prepare("INSERT INTO sales (invoice_no,patient_id,cashier_id,subtotal,discount,total,payment_method,amount_paid,change_amount,notes,status) VALUES (?,?,?,?,?,?,?,?,?,?,'completed')");
-        $saleStmt->execute([$invoiceNo,$patientId,$_SESSION['user_id'],$subtotal,$discount,$total,$payMethod,$amountPaid,$change,$notes]);
+        $saleStmt = $db->prepare("INSERT INTO sales (invoice_no,patient_id,cashier_id,subtotal,discount,total,payment_method,amount_paid,change_amount,status) VALUES (?,?,?,?,?,?,?,?,?,'completed')");
+        $saleStmt->execute([$invoiceNo,$patientId,$_SESSION['user_id'],$subtotal,$discount,$total,$dbPaymentMethod,$amountPaid,$change]);
         $saleId = $db->lastInsertId();
 
         // Insert items + deduct stock
         foreach ($items as $item) {
-            $db->prepare("INSERT INTO sale_items (sale_id,product_id,quantity,unit_price,total_price) VALUES (?,?,?,?,?)")
-               ->execute([$saleId,$item['id'],$item['qty'],$item['price'],$item['total']]);
+            $db->prepare("INSERT INTO sale_items (sale_id,product_id,item_name,item_type,quantity,unit_price,total_price) VALUES (?,?,?, 'product', ?,?,?)")
+               ->execute([$saleId,$item['id'],$item['name'],$item['qty'],$item['price'],$item['total']]);
 
             // Deduct stock
-            $prevStock = $db->prepare("SELECT stock_quantity FROM products WHERE id=?"); $prevStock->execute([$item['id']]); $prevStock = $prevStock->fetch()['stock_quantity'];
-            $newStock = $prevStock - $item['qty'];
+            $prevStock = $db->prepare("SELECT stock_quantity FROM products WHERE id=?"); 
+            $prevStock->execute([$item['id']]); 
+            $prevStock = (int)$prevStock->fetch()['stock_quantity'];
+            $newStock = max(0, $prevStock - $item['qty']);
+            
             $db->prepare("UPDATE products SET stock_quantity=? WHERE id=?")->execute([$newStock,$item['id']]);
-            $db->prepare("INSERT INTO inventory_logs (product_id,type,quantity,previous_stock,new_stock,reason,user_id) VALUES (?,?,?,?,?,?,?)")
-               ->execute([$item['id'],'stock_out',$item['qty'],$prevStock,$newStock,"Sale: $invoiceNo",$_SESSION['user_id']]);
+            $db->prepare("INSERT INTO inventory_logs (product_id,type,quantity,previous_stock,new_stock,reason,reference_id,user_id) VALUES (?,?,?,?,?,?,?,?)")
+               ->execute([$item['id'],'stock_out',$item['qty'],$prevStock,$newStock,"Sale: $invoiceNo",$saleId,$_SESSION['user_id']]);
         }
 
         $db->commit();
-        echo json_encode(['success'=>true,'invoice_no'=>$invoiceNo,'sale_id'=>$saleId,'change'=>$change,'total'=>$total]);
+        echo json_encode([
+            'success'        => true,
+            'invoice_no'     => $invoiceNo,
+            'sale_id'        => $saleId,
+            'date'           => date('M d, Y h:i A'),
+            'cashier'        => $_SESSION['user_name'] ?? 'Staff Cashier',
+            'patient'        => $patientName,
+            'items'          => $itemsDetailed,
+            'subtotal'       => $subtotal,
+            'discount'       => $discount,
+            'total'          => $total,
+            'payment_method' => strtoupper($payMethod),
+            'amount_paid'    => $amountPaid,
+            'change'         => $change
+        ]);
     } catch (Exception $e) {
         $db->rollBack();
         echo json_encode(['success'=>false,'error'=>'Transaction failed: '.$e->getMessage()]);
@@ -75,8 +113,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action'] ?? '') === 'proce
 // Search products AJAX
 if (isset($_GET['search_products'])) {
     $q = '%' . sanitize($_GET['search_products']) . '%';
-    $prods = $db->prepare("SELECT p.id, p.product_code, p.name, p.price, p.stock_quantity, p.image, c.name as category FROM products p JOIN categories c ON c.id=p.category_id WHERE (p.name LIKE ? OR p.product_code LIKE ? OR c.name LIKE ?) AND p.status='active' AND p.stock_quantity>0 ORDER BY p.name LIMIT 20");
-    $prods->execute([$q,$q,$q]);
+    $prods = $db->prepare("SELECT p.id, p.name, p.price, p.stock_quantity, c.name as category FROM products p JOIN categories c ON c.id=p.category_id WHERE (p.name LIKE ? OR c.name LIKE ?) AND p.status='active' AND p.stock_quantity>0 ORDER BY p.name LIMIT 20");
+    $prods->execute([$q,$q]);
     header('Content-Type: application/json');
     echo json_encode($prods->fetchAll());
     exit;
@@ -84,45 +122,134 @@ if (isset($_GET['search_products'])) {
 
 // Get all products by category for initial load
 $categories = $db->query("SELECT c.*, (SELECT COUNT(*) FROM products p WHERE p.category_id=c.id AND p.status='active' AND p.stock_quantity>0) as prod_count FROM categories c WHERE c.status='active' ORDER BY c.name")->fetchAll();
-$allProducts = $db->query("SELECT p.id,p.product_code,p.name,p.price,p.stock_quantity,p.image,c.name as category FROM products p JOIN categories c ON c.id=p.category_id WHERE p.status='active' AND p.stock_quantity>0 ORDER BY c.name,p.name")->fetchAll();
+$allProducts = $db->query("SELECT p.id,p.name,p.price,p.stock_quantity,c.name as category FROM products p JOIN categories c ON c.id=p.category_id WHERE p.status='active' AND p.stock_quantity>0 ORDER BY c.name,p.name")->fetchAll();
 
 $patients = $db->query("SELECT id, full_name, phone FROM patients WHERE status='active' ORDER BY full_name")->fetchAll();
+$selectedPatientId = (int)($_GET['patient_id'] ?? 0);
 
 include __DIR__ . '/../includes/header.php';
 ?>
 
-<div class="pos-layout" style="display:grid;grid-template-columns:1fr 380px;gap:20px;height:calc(100vh - 120px);">
+<style>
+.pos-layout {
+  display: grid;
+  grid-template-columns: 1fr 420px;
+  gap: 24px;
+  align-items: start;
+}
+@media (max-width: 1024px) {
+  .pos-layout {
+    grid-template-columns: 1fr;
+  }
+}
+.pos-cart-card {
+  background: var(--bg-card);
+  border: 1px solid var(--border-color);
+  border-radius: 16px;
+  overflow: hidden;
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.06);
+  position: sticky;
+  top: 15px;
+  display: flex;
+  flex-direction: column;
+}
+.pos-cart-list {
+  min-height: 100px;
+  max-height: 215px; /* Fits 4 items cleanly, 5+ scrolls */
+  overflow-y: auto;
+  padding: 6px 14px;
+  scrollbar-width: thin;
+  scrollbar-color: var(--clr-primary) rgba(0, 0, 0, 0.05);
+}
+.pos-cart-list::-webkit-scrollbar {
+  width: 6px;
+}
+.pos-cart-list::-webkit-scrollbar-track {
+  background: rgba(0, 0, 0, 0.04);
+  border-radius: 4px;
+}
+.pos-cart-list::-webkit-scrollbar-thumb {
+  background: var(--clr-primary);
+  border-radius: 4px;
+}
+.pos-cart-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 0;
+  border-bottom: 1px solid var(--border-light);
+  transition: background 0.15s ease;
+}
+.pos-cart-item:last-child {
+  border-bottom: none;
+}
+.pos-qty-btn {
+  width: 26px;
+  height: 26px;
+  border-radius: 6px;
+  border: 1px solid var(--border-color);
+  background: var(--bg-hover);
+  cursor: pointer;
+  font-size: 0.75rem;
+  font-weight: bold;
+  color: var(--text-primary);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  transition: all 0.15s ease;
+}
+.pos-qty-btn:hover {
+  background: var(--clr-primary);
+  color: #fff;
+  border-color: var(--clr-primary);
+}
+.pos-remove-btn {
+  background: none;
+  border: none;
+  color: var(--clr-danger);
+  cursor: pointer;
+  font-size: 0.85rem;
+  padding: 4px 6px;
+  border-radius: 4px;
+  transition: background 0.15s ease;
+}
+.pos-remove-btn:hover {
+  background: rgba(239, 68, 68, 0.12);
+}
+</style>
+
+<div class="pos-layout">
 
   <!-- LEFT: Products Panel -->
-  <div style="display:flex;flex-direction:column;gap:12px;overflow:hidden;">
-    <!-- Search + Filter -->
+  <div style="display:flex;flex-direction:column;gap:14px;">
+    <!-- Search + Filter Bar -->
     <div style="display:flex;gap:10px;flex-shrink:0;">
-      <input type="text" id="productSearch" class="form-control" placeholder="🔍 Search products..." style="flex:1;">
+      <input type="text" id="productSearch" class="form-control" placeholder="🔍 Search products by name..." style="flex:1;">
       <select id="catFilter" class="form-select" style="width:180px;">
         <option value="">All Categories</option>
         <?php foreach ($categories as $cat): ?>
-        <option value="<?= sanitize($cat['name']) ?>"><?= sanitize($cat['name']) ?> (<?= $cat['prod_count'] ?>)</option>
+        <option value="<?= htmlspecialchars($cat['name'], ENT_QUOTES, 'UTF-8') ?>"><?= htmlspecialchars($cat['name']) ?> (<?= $cat['prod_count'] ?>)</option>
         <?php endforeach; ?>
       </select>
     </div>
 
     <!-- Product Grid -->
-    <div id="productGrid" style="flex:1;overflow-y:auto;display:grid;grid-template-columns:repeat(auto-fill,minmax(160px,1fr));gap:10px;align-content:start;padding-right:4px;">
+    <div id="productGrid" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(160px,1fr));gap:12px;align-content:start;">
       <?php foreach ($allProducts as $prod): ?>
-      <div class="prod-card" data-id="<?= $prod['id'] ?>" data-code="<?= addslashes($prod['product_code'] ?: '') ?>" data-name="<?= addslashes($prod['name']) ?>" data-price="<?= $prod['price'] ?>" data-stock="<?= $prod['stock_quantity'] ?>" data-cat="<?= addslashes($prod['category']) ?>"
+      <div class="prod-card" 
+           data-id="<?= $prod['id'] ?>" 
+           data-name="<?= htmlspecialchars($prod['name'], ENT_QUOTES, 'UTF-8') ?>" 
+           data-price="<?= $prod['price'] ?>" 
+           data-stock="<?= $prod['stock_quantity'] ?>" 
+           data-cat="<?= htmlspecialchars($prod['category'], ENT_QUOTES, 'UTF-8') ?>"
            onclick="addToCart(this)"
            style="background:var(--bg-card);border:1px solid var(--border-color);border-radius:12px;padding:14px;cursor:pointer;transition:all .2s ease;"
            onmouseover="this.style.borderColor='var(--clr-primary)';this.style.boxShadow='0 4px 20px rgba(37,99,235,.15)'"
            onmouseout="this.style.borderColor='var(--border-color)';this.style.boxShadow='none'">
-          <?php if($prod['image']): ?>
-            <img src="<?= BASE_URL ?>assets/images/products/<?= $prod['image'] ?>" alt="Product" style="width:36px;height:36px;object-fit:cover;border-radius:10px;margin-bottom:10px;">
-          <?php else: ?>
-            <div style="width:36px;height:36px;background:linear-gradient(135deg,var(--clr-primary),var(--clr-secondary));border-radius:10px;display:flex;align-items:center;justify-content:center;margin-bottom:10px;">
-              <i class="fas fa-glasses" style="color:#fff;font-size:.85rem;"></i>
-            </div>
-          <?php endif; ?>
-        <div style="font-family:monospace; color:var(--text-primary); font-size:0.8rem; margin-bottom:2px; font-weight:600;"><?= sanitize($prod['product_code'] ?: '') ?></div>
-          <div style="font-weight:700;font-size:.82rem;margin-bottom:4px;line-height:1.3"><?= sanitize($prod['name']) ?></div>
+        <div style="width:36px;height:36px;background:linear-gradient(135deg,var(--clr-primary),var(--clr-secondary));border-radius:10px;display:flex;align-items:center;justify-content:center;margin-bottom:10px;">
+          <i class="fas fa-glasses" style="color:#fff;font-size:.85rem;"></i>
+        </div>
+        <div style="font-weight:700;font-size:.82rem;margin-bottom:4px;line-height:1.3"><?= sanitize($prod['name']) ?></div>
         <div style="font-size:.7rem;color:var(--text-muted);margin-bottom:8px"><?= sanitize($prod['category']) ?></div>
         <div style="display:flex;justify-content:space-between;align-items:center;">
           <div style="font-weight:800;color:var(--clr-primary);font-size:.9rem">₱<?= number_format($prod['price'],2) ?></div>
@@ -134,44 +261,47 @@ include __DIR__ . '/../includes/header.php';
   </div>
 
   <!-- RIGHT: Cart Panel -->
-  <div style="display:flex;flex-direction:column;gap:0;background:var(--bg-card);border:1px solid var(--border-color);border-radius:16px;overflow:hidden;">
+  <div class="pos-cart-card">
 
     <!-- Cart Header -->
-    <div style="padding:16px 20px;border-bottom:1px solid var(--border-light);display:flex;justify-content:space-between;align-items:center;background:linear-gradient(135deg,var(--clr-primary),var(--clr-secondary));color:#fff;">
-      <h6 style="margin:0;font-size:.95rem;font-weight:700;"><i class="fas fa-shopping-cart me-2"></i>Cart <span id="cartCount" style="background:rgba(255,255,255,.25);padding:2px 8px;border-radius:10px;font-size:.75rem;margin-left:4px">0</span></h6>
-      <button onclick="clearCart()" style="background:rgba(255,255,255,.15);border:1px solid rgba(255,255,255,.3);color:#fff;border-radius:8px;padding:4px 12px;font-size:.75rem;cursor:pointer;font-family:'Poppins',sans-serif;">Clear</button>
+    <div style="padding:14px 18px;border-bottom:1px solid var(--border-light);display:flex;justify-content:space-between;align-items:center;background:linear-gradient(135deg,var(--clr-primary),var(--clr-secondary));color:#fff;flex-shrink:0;">
+      <h6 style="margin:0;font-size:.95rem;font-weight:700;">
+        <i class="fas fa-shopping-cart me-2"></i>Cart 
+        <span id="cartCount" style="background:rgba(255,255,255,.25);padding:2px 8px;border-radius:10px;font-size:.75rem;margin-left:4px">0</span>
+      </h6>
+      <button type="button" onclick="clearCart()" style="background:rgba(255,255,255,.15);border:1px solid rgba(255,255,255,.3);color:#fff;border-radius:8px;padding:4px 12px;font-size:.75rem;cursor:pointer;font-family:'Poppins',sans-serif;">Clear</button>
     </div>
 
-    <!-- Cart Items -->
-    <div id="cartItems" style="flex:1;overflow-y:auto;padding:12px;">
-      <div id="emptyCart" style="text-align:center;padding:40px 20px;color:var(--text-muted);">
-        <i class="fas fa-shopping-cart" style="font-size:2rem;margin-bottom:12px;display:block;opacity:.3"></i>
+    <!-- Cart Items List (max 4 visible before scroll) -->
+    <div id="cartItems" class="pos-cart-list">
+      <div id="emptyCart" style="text-align:center;padding:40px 16px;color:var(--text-muted);">
+        <i class="fas fa-shopping-cart" style="font-size:2rem;margin-bottom:10px;display:block;opacity:.3"></i>
         <p style="font-size:.82rem;margin:0">Cart is empty.<br>Click products to add them.</p>
       </div>
     </div>
 
     <!-- Summary Panel -->
-    <div style="padding:16px;border-top:1px solid var(--border-light);background:var(--bg-hover);">
-      <!-- Patient -->
-      <div style="margin-bottom:12px;">
-        <label style="font-size:.75rem;font-weight:600;color:var(--text-muted);margin-bottom:5px;display:block;">PATIENT (Optional)</label>
-        <select id="patientSelect" class="form-select" style="font-size:.83rem;">
+    <div style="padding:14px 16px;border-top:1px solid var(--border-light);background:var(--bg-hover);flex-shrink:0;">
+      <!-- Patient Selection -->
+      <div style="margin-bottom:10px;">
+        <label style="font-size:.72rem;font-weight:600;color:var(--text-muted);margin-bottom:4px;display:block;">PATIENT (Optional)</label>
+        <select id="patientSelect" class="form-select form-select-sm" style="font-size:.82rem;">
           <option value="">Walk-in Customer</option>
           <?php foreach ($patients as $pt): ?>
-          <option value="<?= $pt['id'] ?>"><?= sanitize($pt['full_name']) ?> — <?= sanitize($pt['phone']??'') ?></option>
+          <option value="<?= $pt['id'] ?>" <?= $pt['id'] === $selectedPatientId ? 'selected' : '' ?>><?= sanitize($pt['full_name']) ?> — <?= sanitize($pt['phone']??'') ?></option>
           <?php endforeach; ?>
         </select>
       </div>
 
-      <!-- Discount -->
-      <div style="display:flex;gap:8px;margin-bottom:12px;align-items:flex-end;">
+      <!-- Discount & Payment Method -->
+      <div style="display:flex;gap:8px;margin-bottom:10px;align-items:flex-end;">
         <div style="flex:1">
-          <label style="font-size:.75rem;font-weight:600;color:var(--text-muted);margin-bottom:5px;display:block;">DISCOUNT (₱)</label>
-          <input type="number" id="discountInput" class="form-control" value="0" min="0" step="0.01" style="font-size:.88rem;" oninput="recalculate()">
+          <label style="font-size:.72rem;font-weight:600;color:var(--text-muted);margin-bottom:4px;display:block;">DISCOUNT (₱)</label>
+          <input type="number" id="discountInput" class="form-control form-control-sm" value="0" min="0" step="0.01" style="font-size:.85rem;" oninput="recalculate()">
         </div>
         <div style="flex:1">
-          <label style="font-size:.75rem;font-weight:600;color:var(--text-muted);margin-bottom:5px;display:block;">PAYMENT</label>
-          <select id="paymentMethod" class="form-select" style="font-size:.83rem;">
+          <label style="font-size:.72rem;font-weight:600;color:var(--text-muted);margin-bottom:4px;display:block;">PAYMENT</label>
+          <select id="paymentMethod" class="form-select form-select-sm" style="font-size:.82rem;">
             <option value="cash">Cash</option>
             <option value="gcash">GCash</option>
             <option value="card">Card</option>
@@ -179,43 +309,65 @@ include __DIR__ . '/../includes/header.php';
         </div>
       </div>
 
-      <!-- Totals -->
-      <div style="background:var(--bg-card);border-radius:10px;padding:12px;margin-bottom:12px;">
-        <div style="display:flex;justify-content:space-between;font-size:.82rem;margin-bottom:6px;"><span style="color:var(--text-muted)">Subtotal</span><span id="subtotalDisplay">₱0.00</span></div>
-        <div style="display:flex;justify-content:space-between;font-size:.82rem;margin-bottom:6px;"><span style="color:var(--clr-warning)">Discount</span><span id="discountDisplay" style="color:var(--clr-warning)">-₱0.00</span></div>
-        <div style="display:flex;justify-content:space-between;font-size:1rem;font-weight:800;border-top:1px solid var(--border-light);padding-top:8px;"><span>TOTAL</span><span id="totalDisplay" style="color:var(--clr-primary)">₱0.00</span></div>
+      <!-- Totals Card -->
+      <div style="background:var(--bg-card);border:1px solid var(--border-color);border-radius:10px;padding:10px 12px;margin-bottom:10px;">
+        <div style="display:flex;justify-content:space-between;font-size:.8rem;margin-bottom:4px;"><span style="color:var(--text-muted)">Subtotal</span><span id="subtotalDisplay" style="font-weight:600;">₱0.00</span></div>
+        <div style="display:flex;justify-content:space-between;font-size:.8rem;margin-bottom:4px;"><span style="color:var(--clr-warning)">Discount</span><span id="discountDisplay" style="color:var(--clr-warning);font-weight:600;">-₱0.00</span></div>
+        <div style="display:flex;justify-content:space-between;font-size:.95rem;font-weight:800;border-top:1px solid var(--border-light);padding-top:6px;"><span>TOTAL</span><span id="totalDisplay" style="color:var(--clr-primary)">₱0.00</span></div>
       </div>
 
       <!-- Amount Paid (cash only) -->
-      <div id="cashPanel" style="margin-bottom:12px;">
-        <label style="font-size:.75rem;font-weight:600;color:var(--text-muted);margin-bottom:5px;display:block;">AMOUNT RECEIVED (₱)</label>
-        <input type="number" id="amountPaid" class="form-control" placeholder="0.00" step="0.01" min="0" oninput="recalculate()" style="font-size:.95rem;font-weight:700;">
-        <div style="display:flex;justify-content:space-between;margin-top:6px;font-size:.85rem;">
+      <div id="cashPanel" style="margin-bottom:10px;">
+        <label style="font-size:.72rem;font-weight:600;color:var(--text-muted);margin-bottom:4px;display:block;">AMOUNT RECEIVED (₱)</label>
+        <input type="number" id="amountPaid" class="form-control form-control-sm" placeholder="0.00" step="0.01" min="0" oninput="recalculate()" style="font-size:.9rem;font-weight:700;">
+        <div style="display:flex;justify-content:space-between;margin-top:5px;font-size:.82rem;">
           <span style="color:var(--text-muted)">Change:</span>
           <span id="changeDisplay" style="font-weight:800;color:var(--clr-success)">₱0.00</span>
         </div>
       </div>
 
-      <button id="checkoutBtn" onclick="processCheckout()" class="btn btn-primary w-100" style="padding:14px;font-size:1rem;font-weight:700;" disabled>
-        <i class="fas fa-cash-register"></i> Process Sale
+      <button id="checkoutBtn" onclick="processCheckout()" class="btn btn-primary w-100" style="padding:10px;font-size:.92rem;font-weight:700;" disabled>
+        <i class="fas fa-cash-register me-1"></i> Process Sale
       </button>
     </div>
   </div>
 </div>
 
-<!-- Receipt Modal -->
-<div class="modal-overlay" id="receiptModal">
-  <div class="modal-box" style="max-width:440px;">
-    <div class="modal-header" style="background:linear-gradient(135deg,var(--clr-primary),var(--clr-secondary));color:#fff;border-radius:16px 16px 0 0;">
-      <h5 style="margin:0;"><i class="fas fa-receipt me-2"></i>Transaction Complete!</h5>
-      <button class="modal-close" onclick="closeModal('receiptModal')" style="color:#fff;opacity:.8"><i class="fas fa-times"></i></button>
-    </div>
-    <div class="modal-body" style="text-align:center;padding:28px;">
-      <div id="receiptContent"></div>
-    </div>
-    <div class="modal-footer">
-      <button onclick="window.print()" class="btn btn-outline-primary"><i class="fas fa-print"></i> Print</button>
-      <button onclick="closeModal('receiptModal');clearCart();" class="btn btn-primary"><i class="fas fa-plus"></i> New Sale</button>
+<!-- ============================================================ -->
+<!-- OFFICIAL PDF RECEIPT PREVIEW MODAL                          -->
+<!-- ============================================================ -->
+<div class="modal fade" id="receiptModal" tabindex="-1" aria-hidden="true" data-bs-backdrop="static">
+  <div class="modal-dialog modal-dialog-centered modal-lg">
+    <div class="modal-content" style="background:var(--bg-card); border-radius:16px; border:1px solid var(--border-color); overflow:hidden;">
+      <div class="modal-header" style="background:linear-gradient(135deg,var(--clr-primary),var(--clr-secondary)); color:#fff; padding:14px 20px;">
+        <div class="d-flex align-items-center gap-2">
+          <i class="fas fa-file-invoice fa-lg"></i>
+          <div>
+            <h5 class="modal-title fw-bold mb-0" style="font-size:1.05rem;" id="receiptModalTitle">Official Sales Receipt</h5>
+            <small style="opacity:0.85;" id="receiptModalSubtitle">Gueco Optical Clinic</small>
+          </div>
+        </div>
+        <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Close"></button>
+      </div>
+      
+      <!-- Embedded PDF-like Receipt Viewer -->
+      <div class="modal-body p-0" style="background:#525659;">
+        <iframe id="receiptIframe" src="" style="width:100%; height:520px; border:none; display:block; background:#525659;"></iframe>
+      </div>
+      
+      <div class="modal-footer" style="background:var(--bg-hover); padding:12px 20px; display:flex; justify-content:space-between; flex-wrap:wrap; gap:10px;">
+        <button type="button" onclick="printReceiptIframe()" class="btn btn-primary px-4">
+          <i class="fas fa-print me-1"></i> Print Receipt
+        </button>
+        <div class="d-flex gap-2">
+          <a href="#" id="btnOpenReceiptTab" target="_blank" class="btn btn-outline-primary">
+            <i class="fas fa-external-link-alt me-1"></i> Open PDF in Tab
+          </a>
+          <button type="button" class="btn btn-secondary px-4" data-bs-dismiss="modal">
+            <i class="fas fa-plus me-1"></i> New Sale
+          </button>
+        </div>
+      </div>
     </div>
   </div>
 </div>
@@ -225,6 +377,13 @@ include __DIR__ . '/../includes/header.php';
 let cart = [];
 const formatPeso = v => '₱' + parseFloat(v).toFixed(2).replace(/\B(?=(\d{3})+(?!\d))/g, ',');
 
+function escapeHtml(str) {
+  if (!str) return '';
+  const d = document.createElement('div');
+  d.textContent = str;
+  return d.innerHTML;
+}
+
 // Product search & filter
 const searchInput = document.getElementById('productSearch');
 const catFilter   = document.getElementById('catFilter');
@@ -232,83 +391,134 @@ searchInput.addEventListener('input', filterProducts);
 catFilter.addEventListener('change', filterProducts);
 
 function filterProducts() {
-  const q   = searchInput.value.toLowerCase();
-  const cat = catFilter.value.toLowerCase();
+  const q   = searchInput.value.toLowerCase().trim();
+  const cat = catFilter.value.toLowerCase().trim();
   document.querySelectorAll('.prod-card').forEach(card => {
-    const name = card.dataset.name.toLowerCase();
-      const code = card.dataset.code.toLowerCase();
-    const c    = card.dataset.cat.toLowerCase();
-    const show = (!q || name.includes(q) || code.includes(q)) && (!cat || c === cat);
+    const name = (card.dataset.name || '').toLowerCase();
+    const c    = (card.dataset.cat || '').toLowerCase();
+    const show = (!q || name.includes(q)) && (!cat || c === cat);
     card.style.display = show ? '' : 'none';
   });
 }
 
 // Add to cart
 function addToCart(el) {
-  const id    = parseInt(el.dataset.id);
+  const id    = parseInt(el.dataset.id, 10);
   const name  = el.dataset.name;
   const price = parseFloat(el.dataset.price);
-  const stock = parseInt(el.dataset.stock);
+  const stock = parseInt(el.dataset.stock, 10);
+
+  if (!id || isNaN(id)) return;
 
   const existing = cart.find(i => i.id === id);
   if (existing) {
-    if (existing.qty >= stock) { showToast('Maximum stock reached!', 'warning'); return; }
+    if (existing.qty >= stock) { 
+      showToast('Maximum stock reached for ' + name + '!', 'warning'); 
+      return; 
+    }
     existing.qty++;
   } else {
     cart.push({ id, name, price, stock, qty: 1 });
   }
+  
   renderCart();
-  // Visual feedback
-  el.style.background = 'rgba(37,99,235,.08)';
-  setTimeout(() => el.style.background = 'var(--bg-card)', 300);
+  
+  // Visual click pulse
+  el.style.transform = 'scale(0.97)';
+  el.style.background = 'rgba(37,99,235,.12)';
+  setTimeout(() => {
+    el.style.transform = '';
+    el.style.background = 'var(--bg-card)';
+  }, 180);
 }
 
 function removeFromCart(id) {
   cart = cart.filter(i => i.id !== id);
   renderCart();
 }
+
 function changeQty(id, delta) {
   const item = cart.find(i => i.id === id);
   if (!item) return;
-  item.qty = Math.max(1, Math.min(item.stock, item.qty + delta));
-  if (item.qty === 0) { removeFromCart(id); return; }
+  
+  const newQty = item.qty + delta;
+  if (newQty <= 0) {
+    removeFromCart(id);
+    return;
+  }
+  
+  if (newQty > item.stock) {
+    showToast('Only ' + item.stock + ' items in stock!', 'warning');
+    return;
+  }
+  
+  item.qty = newQty;
   renderCart();
 }
+
 function clearCart() {
-  cart = []; renderCart();
+  cart = []; 
+  renderCart();
 }
 
 function renderCart() {
   const container = document.getElementById('cartItems');
   const empty     = document.getElementById('emptyCart');
   const btn       = document.getElementById('checkoutBtn');
-  document.getElementById('cartCount').textContent = cart.reduce((s,i) => s+i.qty, 0);
+  
+  const totalCount = cart.reduce((s,i) => s + i.qty, 0);
+  document.getElementById('cartCount').textContent = totalCount;
 
   if (cart.length === 0) {
-    empty.style.display = '';
-    container.innerHTML = ''; container.appendChild(empty);
-    btn.disabled = true; recalculate(); return;
+    if (empty) empty.style.display = '';
+    container.innerHTML = ''; 
+    if (empty) container.appendChild(empty);
+    btn.disabled = true; 
+    recalculate(); 
+    return;
   }
-  empty.style.display = 'none';
+
+  // Clear container
   container.innerHTML = '';
 
+  // Render every unique product row
   cart.forEach(item => {
-    const div = document.createElement('div');
-    div.style.cssText = 'display:flex;align-items:center;gap:10px;padding:10px 0;border-bottom:1px solid var(--border-light);';
-    div.innerHTML = `
-      <div style="flex:1;overflow:hidden;">
-        <div style="font-weight:600;font-size:.83rem;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${item.name}</div>
-        <div style="font-size:.72rem;color:var(--text-muted)">${formatPeso(item.price)} each</div>
+    const itemRow = document.createElement('div');
+    itemRow.className = 'pos-cart-item';
+    
+    itemRow.innerHTML = `
+      <div style="flex:1;min-width:0;">
+        <div style="font-weight:600;font-size:.82rem;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;color:var(--text-primary);" title="${escapeHtml(item.name)}">${escapeHtml(item.name)}</div>
+        <div style="font-size:.7rem;color:var(--text-muted);">${formatPeso(item.price)} each</div>
       </div>
-      <div style="display:flex;align-items:center;gap:4px;">
-        <button onclick="changeQty(${item.id},-1)" style="width:24px;height:24px;border-radius:6px;border:1px solid var(--border-color);background:var(--bg-hover);cursor:pointer;font-size:.7rem;color:var(--text-primary)">−</button>
-        <span style="min-width:24px;text-align:center;font-weight:700;font-size:.85rem">${item.qty}</span>
-        <button onclick="changeQty(${item.id},1)" style="width:24px;height:24px;border-radius:6px;border:1px solid var(--border-color);background:var(--bg-hover);cursor:pointer;font-size:.7rem;color:var(--text-primary)">+</button>
+      <div style="display:flex;align-items:center;gap:5px;flex-shrink:0;">
+        <button type="button" class="pos-qty-btn btn-qty-minus" data-id="${item.id}">−</button>
+        <span style="min-width:22px;text-align:center;font-weight:700;font-size:.82rem;color:var(--text-primary);">${item.qty}</span>
+        <button type="button" class="pos-qty-btn btn-qty-plus" data-id="${item.id}">+</button>
       </div>
-      <div style="min-width:70px;text-align:right;font-weight:700;color:var(--clr-primary);font-size:.88rem">${formatPeso(item.price*item.qty)}</div>
-      <button onclick="removeFromCart(${item.id})" style="background:none;border:none;color:var(--clr-danger);cursor:pointer;font-size:.75rem;padding:4px;">✕</button>
+      <div style="min-width:68px;text-align:right;font-weight:700;color:var(--clr-primary);font-size:.85rem;flex-shrink:0;">
+        ${formatPeso(item.price * item.qty)}
+      </div>
+      <button type="button" class="pos-remove-btn btn-remove-item" data-id="${item.id}" title="Remove item">✕</button>
     `;
-    container.appendChild(div);
+    
+    // Add event listeners
+    itemRow.querySelector('.btn-qty-minus').addEventListener('click', (e) => {
+      e.stopPropagation();
+      changeQty(item.id, -1);
+    });
+    
+    itemRow.querySelector('.btn-qty-plus').addEventListener('click', (e) => {
+      e.stopPropagation();
+      changeQty(item.id, 1);
+    });
+    
+    itemRow.querySelector('.btn-remove-item').addEventListener('click', (e) => {
+      e.stopPropagation();
+      removeFromCart(item.id);
+    });
+
+    container.appendChild(itemRow);
   });
 
   btn.disabled = false;
@@ -316,7 +526,7 @@ function renderCart() {
 }
 
 function recalculate() {
-  const subtotal = cart.reduce((s,i) => s + i.price*i.qty, 0);
+  const subtotal = cart.reduce((s,i) => s + i.price * i.qty, 0);
   const discount = parseFloat(document.getElementById('discountInput').value) || 0;
   const total    = Math.max(0, subtotal - discount);
   const paid     = parseFloat(document.getElementById('amountPaid').value) || 0;
@@ -335,64 +545,99 @@ document.getElementById('paymentMethod').addEventListener('change', function() {
 
 async function processCheckout() {
   if (cart.length === 0) return;
-  const total    = parseFloat(document.getElementById('totalDisplay').textContent.replace(/[^0-9.]/g,''));
-  const paid     = parseFloat(document.getElementById('amountPaid').value) || 0;
-  const payMethod= document.getElementById('paymentMethod').value;
+  const subtotal  = cart.reduce((s,i) => s + i.price * i.qty, 0);
+  const discount  = parseFloat(document.getElementById('discountInput').value) || 0;
+  const total     = Math.max(0, subtotal - discount);
+  const paid      = parseFloat(document.getElementById('amountPaid').value) || 0;
+  const payMethod = document.getElementById('paymentMethod').value;
 
   if (payMethod === 'cash' && paid < total) {
-    showToast('Amount received is less than total!', 'danger'); return;
+    showToast('Amount received (₱' + paid.toFixed(2) + ') is less than total amount (₱' + total.toFixed(2) + ')!', 'danger'); 
+    return;
   }
 
   const btn = document.getElementById('checkoutBtn');
-  btn.disabled = true; btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Processing...';
+  btn.disabled = true; 
+  btn.innerHTML = '<i class="fas fa-spinner fa-spin me-1"></i> Processing...';
 
   const form = new FormData();
   form.append('action', 'process_sale');
-  form.append('items', JSON.stringify(cart.map(i => ({ id: i.id, qty: i.qty }))));
+  form.append('items', JSON.stringify(cart.map(i => ({ id: i.id, name: i.name, qty: i.qty }))));
   form.append('patient_id', document.getElementById('patientSelect').value);
   form.append('payment_method', payMethod);
-  form.append('discount', document.getElementById('discountInput').value || 0);
+  form.append('discount', discount);
   form.append('amount_paid', paid);
 
   try {
     const res = await fetch('pos.php', { method:'POST', body: form });
-    const data = await res.json();
+    const text = await res.text();
+    let data;
+    try {
+      data = JSON.parse(text);
+    } catch(err) {
+      console.error('Non-JSON response:', text);
+      showToast('Error processing sale: ' + text.substring(0, 100), 'danger');
+      btn.disabled = false; 
+      btn.innerHTML = '<i class="fas fa-cash-register me-1"></i> Process Sale';
+      return;
+    }
 
     if (data.success) {
-      showReceipt(data);
+      // 1. Reset inputs & clear cart
+      clearCart();
+      document.getElementById('amountPaid').value = '';
+      document.getElementById('discountInput').value = '0';
+      document.getElementById('patientSelect').value = '';
+      recalculate();
+      
+      btn.disabled = false;
+      btn.innerHTML = '<i class="fas fa-cash-register me-1"></i> Process Sale';
+
+      // 2. Open Receipt in Tab & in Embedded Viewer Modal
+      const receiptUrl = 'receipt.php?id=' + data.sale_id;
+      
+      // Auto open new tab with print trigger
+      try {
+        window.open(receiptUrl + '&auto_print=1', '_blank');
+      } catch(e) {
+        console.log('Popup blocked, falling back to modal');
+      }
+
+      // Load iframe in modal
+      document.getElementById('receiptModalTitle').textContent = `Official Receipt · ${data.invoice_no}`;
+      document.getElementById('receiptModalSubtitle').textContent = `Total: ${formatPeso(data.total)} · Customer: ${data.patient}`;
+      document.getElementById('receiptIframe').src = receiptUrl;
+      document.getElementById('btnOpenReceiptTab').href = receiptUrl;
+
+      const modalEl = document.getElementById('receiptModal');
+      const bsModal = bootstrap.Modal.getOrCreateInstance(modalEl);
+      bsModal.show();
+
+      showToast('Sale processed successfully! Invoice #' + data.invoice_no, 'success');
     } else {
       showToast(data.error || 'Sale failed!', 'danger');
-      btn.disabled = false; btn.innerHTML = '<i class="fas fa-cash-register"></i> Process Sale';
+      btn.disabled = false; 
+      btn.innerHTML = '<i class="fas fa-cash-register me-1"></i> Process Sale';
     }
   } catch(e) {
-    showToast('Network error!', 'danger');
-    btn.disabled = false; btn.innerHTML = '<i class="fas fa-cash-register"></i> Process Sale';
+    showToast('Network error while processing sale!', 'danger');
+    btn.disabled = false; 
+    btn.innerHTML = '<i class="fas fa-cash-register me-1"></i> Process Sale';
   }
 }
 
-function showReceipt(data) {
-  const html = `
-    <div style="text-align:center;margin-bottom:20px;">
-      <div style="width:60px;height:60px;background:linear-gradient(135deg,#059669,#0891B2);border-radius:50%;display:flex;align-items:center;justify-content:center;margin:0 auto 12px;"><i class="fas fa-check" style="color:#fff;font-size:1.4rem;"></i></div>
-      <h5 style="font-weight:800;color:var(--clr-success)">Payment Received!</h5>
-    </div>
-    <div style="background:var(--bg-hover);border-radius:12px;padding:16px;text-align:left;">
-      <div style="display:flex;justify-content:space-between;margin-bottom:8px;"><span style="color:var(--text-muted);font-size:.82rem">Invoice No:</span><span style="font-family:monospace;font-weight:700;color:var(--clr-primary)">${data.invoice_no}</span></div>
-      <div style="display:flex;justify-content:space-between;margin-bottom:8px;"><span style="color:var(--text-muted);font-size:.82rem">Total Amount:</span><span style="font-weight:800;color:var(--clr-primary);font-size:1.1rem">₱${parseFloat(data.total).toFixed(2)}</span></div>
-      <div style="display:flex;justify-content:space-between;"><span style="color:var(--text-muted);font-size:.82rem">Change:</span><span style="font-weight:700;color:var(--clr-success);font-size:1rem">₱${parseFloat(data.change).toFixed(2)}</span></div>
-    </div>
-    <p style="color:var(--text-muted);font-size:.78rem;margin-top:12px;margin-bottom:0">Thank you for your purchase! 🙏</p>
-  `;
-  document.getElementById('receiptContent').innerHTML = html;
-  openModal('receiptModal');
-  // Refresh product cards to update stock (reload silently)
-  setTimeout(() => location.reload(), 6000);
+function printReceiptIframe() {
+  const iframe = document.getElementById('receiptIframe');
+  if (iframe && iframe.contentWindow) {
+    iframe.contentWindow.focus();
+    iframe.contentWindow.print();
+  }
 }
 
 function showToast(msg, type='success') {
   const t = document.createElement('div');
   t.className = `alert alert-${type}`;
-  t.style.cssText = 'position:fixed;top:80px;right:20px;z-index:9999;min-width:280px;animation:slideIn .3s ease;';
+  t.style.cssText = 'position:fixed;top:80px;right:20px;z-index:9999;min-width:280px;animation:slideIn .3s ease;box-shadow:0 4px 16px rgba(0,0,0,0.15);';
   t.innerHTML = `<i class="fas fa-${type==='success'?'check-circle':'exclamation-circle'} me-2"></i>${msg}`;
   document.body.appendChild(t);
   setTimeout(() => t.remove(), 4000);
