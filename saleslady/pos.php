@@ -16,7 +16,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action'] ?? '') === 'proce
     $amountPaid = (float)($_POST['amount_paid'] ?? 0);
 
     if (empty($items)) {
-        echo json_encode(['success'=>false,'error'=>'Cart is empty.']);
+        echo json_encode(['success'=>false,'error'=>'Cart is empty. Please add items to proceed.']);
         exit;
     }
 
@@ -26,9 +26,13 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action'] ?? '') === 'proce
     foreach ($items as &$item) {
         $prod = $db->prepare("SELECT * FROM products WHERE id=? AND status='active'");
         $prod->execute([$item['id']]); $prod = $prod->fetch();
-        if (!$prod) { echo json_encode(['success'=>false,'error'=>'Product not found: '.$item['id']]); exit; }
+        if (!$prod) { 
+            echo json_encode(['success'=>false,'error'=>'Product not found or inactive: ID #'.$item['id']]); 
+            exit; 
+        }
         if ($prod['stock_quantity'] < $item['qty']) {
-            echo json_encode(['success'=>false,'error'=>"Insufficient stock for: {$prod['name']}. Available: {$prod['stock_quantity']}"]); exit;
+            echo json_encode(['success'=>false,'error'=>"Insufficient stock for: {$prod['name']}. Available stock: {$prod['stock_quantity']}"]); 
+            exit;
         }
         $item['price'] = (float)$prod['price'];
         $item['total'] = (float)($prod['price'] * $item['qty']);
@@ -45,6 +49,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action'] ?? '') === 'proce
     }
 
     $total = max(0, $subtotal - $discount);
+    if ($payMethod !== 'cash') {
+        $amountPaid = $total;
+    }
     $change = max(0, $amountPaid - $total);
 
     // Generate invoice number
@@ -216,6 +223,22 @@ include __DIR__ . '/../includes/header.php';
 .pos-remove-btn:hover {
   background: rgba(239, 68, 68, 0.12);
 }
+.quick-cash-btn {
+  background: var(--bg-hover);
+  border: 1px solid var(--border-color);
+  color: var(--text-primary);
+  font-size: 0.72rem;
+  font-weight: 600;
+  padding: 3px 8px;
+  border-radius: 6px;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+.quick-cash-btn:hover {
+  background: var(--clr-primary);
+  color: #fff;
+  border-color: var(--clr-primary);
+}
 </style>
 
 <div class="pos-layout">
@@ -318,8 +341,16 @@ include __DIR__ . '/../includes/header.php';
 
       <!-- Amount Paid (cash only) -->
       <div id="cashPanel" style="margin-bottom:10px;">
-        <label style="font-size:.72rem;font-weight:600;color:var(--text-muted);margin-bottom:4px;display:block;">AMOUNT RECEIVED (₱)</label>
-        <input type="number" id="amountPaid" class="form-control form-control-sm" placeholder="0.00" step="0.01" min="0" oninput="recalculate()" style="font-size:.9rem;font-weight:700;">
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:4px;">
+          <label style="font-size:.72rem;font-weight:600;color:var(--text-muted);margin-bottom:0;">AMOUNT RECEIVED (₱)</label>
+          <div style="display:flex;gap:4px;">
+            <button type="button" class="quick-cash-btn" onclick="setExactAmount()">Exact</button>
+            <button type="button" class="quick-cash-btn" onclick="setQuickCash(500)">500</button>
+            <button type="button" class="quick-cash-btn" onclick="setQuickCash(1000)">1k</button>
+            <button type="button" class="quick-cash-btn" onclick="setQuickCash(2000)">2k</button>
+          </div>
+        </div>
+        <input type="number" id="amountPaid" class="form-control form-control-sm" placeholder="0.00" step="0.01" min="0" oninput="recalculate()" style="font-size:.95rem;font-weight:700;">
         <div style="display:flex;justify-content:space-between;margin-top:5px;font-size:.82rem;">
           <span style="color:var(--text-muted)">Change:</span>
           <span id="changeDisplay" style="font-weight:800;color:var(--clr-success)">₱0.00</span>
@@ -529,30 +560,67 @@ function recalculate() {
   const subtotal = cart.reduce((s,i) => s + i.price * i.qty, 0);
   const discount = parseFloat(document.getElementById('discountInput').value) || 0;
   const total    = Math.max(0, subtotal - discount);
-  const paid     = parseFloat(document.getElementById('amountPaid').value) || 0;
+  const paidInput = document.getElementById('amountPaid');
+  const paid     = parseFloat(paidInput.value) || 0;
   const change   = Math.max(0, paid - total);
 
   document.getElementById('subtotalDisplay').textContent = formatPeso(subtotal);
   document.getElementById('discountDisplay').textContent = '-' + formatPeso(discount);
   document.getElementById('totalDisplay').textContent    = formatPeso(total);
   document.getElementById('changeDisplay').textContent   = formatPeso(change);
+
+  if (paid >= total && paidInput.style.borderColor) {
+    paidInput.style.borderColor = '';
+    paidInput.style.boxShadow = '';
+  }
+}
+
+function setExactAmount() {
+  const subtotal = cart.reduce((s,i) => s + i.price * i.qty, 0);
+  const discount = parseFloat(document.getElementById('discountInput').value) || 0;
+  const total    = Math.max(0, subtotal - discount);
+  const paidInput = document.getElementById('amountPaid');
+  paidInput.value = total.toFixed(2);
+  recalculate();
+}
+
+function setQuickCash(val) {
+  const paidInput = document.getElementById('amountPaid');
+  paidInput.value = parseFloat(val).toFixed(2);
+  recalculate();
 }
 
 // Payment method toggle
 document.getElementById('paymentMethod').addEventListener('change', function() {
-  document.getElementById('cashPanel').style.display = this.value === 'cash' ? '' : 'none';
+  const isCash = this.value === 'cash';
+  document.getElementById('cashPanel').style.display = isCash ? '' : 'none';
+  if (!isCash) {
+    setExactAmount();
+  }
 });
 
 async function processCheckout() {
-  if (cart.length === 0) return;
+  if (cart.length === 0) {
+    showToast('Your cart is empty. Please add items to sell.', 'warning');
+    return;
+  }
+  
   const subtotal  = cart.reduce((s,i) => s + i.price * i.qty, 0);
   const discount  = parseFloat(document.getElementById('discountInput').value) || 0;
   const total     = Math.max(0, subtotal - discount);
-  const paid      = parseFloat(document.getElementById('amountPaid').value) || 0;
   const payMethod = document.getElementById('paymentMethod').value;
+  const paidInput = document.getElementById('amountPaid');
+  
+  let paid = parseFloat(paidInput.value) || 0;
+  if (payMethod !== 'cash') {
+    paid = total;
+  }
 
   if (payMethod === 'cash' && paid < total) {
-    showToast('Amount received (₱' + paid.toFixed(2) + ') is less than total amount (₱' + total.toFixed(2) + ')!', 'danger'); 
+    paidInput.style.borderColor = '#ef4444';
+    paidInput.style.boxShadow = '0 0 0 3px rgba(239,68,68,0.25)';
+    paidInput.focus();
+    showToast(`Amount received (₱${paid.toFixed(2)}) is less than total amount (₱${total.toFixed(2)}). Click 'Exact' or enter the customer payment.`, 'warning'); 
     return;
   }
 
@@ -576,6 +644,11 @@ async function processCheckout() {
       data = JSON.parse(text);
     } catch(err) {
       console.error('Non-JSON response:', text);
+      if (text.includes('login') || text.includes('password')) {
+        showToast('Your session has expired. Redirecting to login...', 'danger');
+        setTimeout(() => location.href = '../login.php', 1500);
+        return;
+      }
       showToast('Error processing sale: ' + text.substring(0, 100), 'danger');
       btn.disabled = false; 
       btn.innerHTML = '<i class="fas fa-cash-register me-1"></i> Process Sale';
@@ -600,7 +673,7 @@ async function processCheckout() {
       try {
         window.open(receiptUrl + '&auto_print=1', '_blank');
       } catch(e) {
-        console.log('Popup blocked, falling back to modal');
+        console.log('Popup blocked, falling back to modal preview');
       }
 
       // Load iframe in modal
@@ -610,17 +683,22 @@ async function processCheckout() {
       document.getElementById('btnOpenReceiptTab').href = receiptUrl;
 
       const modalEl = document.getElementById('receiptModal');
-      const bsModal = bootstrap.Modal.getOrCreateInstance(modalEl);
-      bsModal.show();
+      if (window.bootstrap && bootstrap.Modal) {
+        const bsModal = bootstrap.Modal.getOrCreateInstance(modalEl);
+        bsModal.show();
+      } else {
+        modalEl.classList.add('show');
+        modalEl.style.display = 'block';
+      }
 
-      showToast('Sale processed successfully! Invoice #' + data.invoice_no, 'success');
+      showToast('Sale completed! Invoice #' + data.invoice_no, 'success');
     } else {
       showToast(data.error || 'Sale failed!', 'danger');
       btn.disabled = false; 
       btn.innerHTML = '<i class="fas fa-cash-register me-1"></i> Process Sale';
     }
   } catch(e) {
-    showToast('Network error while processing sale!', 'danger');
+    showToast('Network error while processing sale: ' + e.message, 'danger');
     btn.disabled = false; 
     btn.innerHTML = '<i class="fas fa-cash-register me-1"></i> Process Sale';
   }
@@ -635,12 +713,19 @@ function printReceiptIframe() {
 }
 
 function showToast(msg, type='success') {
+  const alertType = (type === 'error' || type === 'danger') ? 'danger' : (type === 'warning' ? 'warning' : (type === 'info' ? 'info' : 'success'));
+  const iconName  = alertType === 'success' ? 'check-circle' : (alertType === 'warning' ? 'exclamation-triangle' : 'exclamation-circle');
+
   const t = document.createElement('div');
-  t.className = `alert alert-${type}`;
-  t.style.cssText = 'position:fixed;top:80px;right:20px;z-index:9999;min-width:280px;animation:slideIn .3s ease;box-shadow:0 4px 16px rgba(0,0,0,0.15);';
-  t.innerHTML = `<i class="fas fa-${type==='success'?'check-circle':'exclamation-circle'} me-2"></i>${msg}`;
+  t.className = `alert alert-${alertType}`;
+  t.style.cssText = 'position:fixed;top:80px;right:20px;z-index:9999;min-width:280px;max-width:400px;animation:slideIn .3s ease;box-shadow:0 4px 16px rgba(0,0,0,0.18);';
+  t.innerHTML = `<i class="fas fa-${iconName} me-2"></i>${msg}`;
   document.body.appendChild(t);
-  setTimeout(() => t.remove(), 4000);
+  setTimeout(() => {
+    t.style.opacity = '0';
+    t.style.transition = 'opacity 0.4s ease';
+    setTimeout(() => t.remove(), 400);
+  }, 4000);
 }
 </script>
 
