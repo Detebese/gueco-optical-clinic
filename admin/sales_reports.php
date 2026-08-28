@@ -112,7 +112,14 @@ include __DIR__ . '/../includes/header.php';
     <div  class="card sales-0d61ee">
       <div class="card-header"><h6><i  class="fas fa-credit-card me-2 sales-0cac58"></i>Payment Methods</h6></div>
       <div  class="card-body sales-3543ea">
-        <div  class="chart-container sales-510716"><canvas id="payChart"></canvas></div>
+        <?php if (empty($payBreak)): ?>
+          <div style="height:250px; display:flex; flex-direction:column; justify-content:center; align-items:center; color:var(--text-muted); opacity:0.6;">
+            <i class="fas fa-chart-pie" style="font-size:3rem; margin-bottom:15px;"></i>
+            <p style="font-size:0.95rem; margin:0; font-weight:500;">No transactions yet</p>
+          </div>
+          <?php else: ?>
+          <div class="chart-container sales-510716"><canvas id="payChart"></canvas></div>
+          <?php endif; ?>
       </div>
     </div>
   </div>
@@ -189,7 +196,7 @@ $payLabels = array_map(fn($p) => strtoupper($p['payment_method']), $payBreak);
 $payData   = array_map(fn($p) => (float)$p['total'], $payBreak);
 $extraScripts = '<script>
 const sCtx = document.getElementById("salesChart");
-if(sCtx){ new Chart(sCtx,{ type:"line", data:{ labels:'.json_encode($chartLabels).', datasets:[{ label:"Sales (₱)", data:'.json_encode($chartData).', borderColor:"#2563EB", backgroundColor:"rgba(37,99,235,.08)", borderWidth:2.5, fill:true, tension:0.4, pointBackgroundColor:"#2563EB", pointRadius:4 }] }, options:{ responsive:true, maintainAspectRatio:false, plugins:{legend:{display:false}}, scales:{ y:{beginAtZero:true,ticks:{callback:v=>"₱"+v.toLocaleString(),font:{family:"Poppins",size:11}},grid:{color:"rgba(0,0,0,.05)"}}, x:{ticks:{font:{family:"Poppins",size:11}},grid:{display:false}} } } }); }
+if(sCtx){ new Chart(sCtx,{ type:"line", data:{ labels:'.json_encode($chartLabels).', datasets:[{ label:"Sales (₱)", data:'.json_encode($chartData).', borderColor:"#2563EB", backgroundColor:"rgba(37,99,235,.08)", borderWidth:2.5, fill:true, tension:0.4, pointBackgroundColor:"#2563EB", pointRadius:4 }] }, options:{ responsive:true, maintainAspectRatio:false, plugins:{legend:{display:false}}, scales:{ y:{beginAtZero:true,ticks:{callback:v=>"₱"+v.toLocaleString(),font:{family:"Poppins",size:11}},grid:{color:"rgba(150,150,150,.15)"}}, x:{ticks:{font:{family:"Poppins",size:11}},grid:{display:false}} } } }); }
 const pCtx = document.getElementById("payChart");
 if(pCtx){ new Chart(pCtx,{ type:"doughnut", data:{ labels:'.json_encode($payLabels).', datasets:[{ data:'.json_encode($payData).', backgroundColor:["#2563EB","#059669","#7C3AED","#D97706"], borderWidth:0, hoverOffset:6 }] }, options:{ responsive:true, maintainAspectRatio:false, cutout:"68%", plugins:{legend:{position:"bottom",labels:{font:{family:"Poppins",size:11},padding:10,boxWidth:10}}} } }); }
 </script>';
