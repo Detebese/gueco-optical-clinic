@@ -198,19 +198,45 @@ $extraScripts = '<script>
 const themeMode = document.documentElement.getAttribute("data-theme") === "dark" ? "dark" : "light";
   
   const salesOptions = {
-    series: [{ name: "Sales (₱)", data: ' . json_encode($chartData) . ' }],
-    chart: { type: "area", height: 280, toolbar: { show: false }, fontFamily: "Poppins, sans-serif", background: "transparent" },
-    theme: { mode: themeMode },
-    colors: ["#2563EB"],
-    fill: { type: "gradient", gradient: { shadeIntensity: 1, opacityFrom: 0.4, opacityTo: 0.05, stops: [0, 90, 100] } },
-    dataLabels: { enabled: false },
-    stroke: { curve: "smooth", width: 3 },
-    xaxis: { categories: ' . json_encode($chartLabels) . ', axisBorder: { show: false }, axisTicks: { show: false } },
-    yaxis: { labels: { formatter: (value) => { return "₱" + value.toLocaleString() } } },
-    grid: { borderColor: "rgba(150, 150, 150, 0.15)", strokeDashArray: 4, padding: { left: 10, right: 10, bottom: 0 } },
-    tooltip: { theme: themeMode, y: { formatter: function (val) { return "₱" + val.toLocaleString() } } }
-  };
-  if (document.querySelector("#salesChartContainer")) {
+      series: [{ name: "Sales (₱)", data: ' . json_encode($chartData) . ' }],
+      chart: { 
+          type: "area", 
+          height: 300, 
+          toolbar: { show: false }, 
+          fontFamily: "Poppins, sans-serif", 
+          background: "transparent",
+          dropShadow: { enabled: true, top: 2, left: 0, blur: 4, color: "#2563EB", opacity: 0.25 }
+      },
+      theme: { mode: themeMode },
+      colors: ["#2563EB"],
+      fill: { type: "gradient", gradient: { shadeIntensity: 1, opacityFrom: 0.45, opacityTo: 0.05, stops: [0, 90, 100] } },
+      dataLabels: { enabled: false },
+      stroke: { curve: "smooth", width: 3 },
+      xaxis: { 
+          categories: ' . json_encode($chartLabels) . ', 
+          tickAmount: 6,
+          labels: { 
+              rotate: 0,
+              trim: true,
+              style: { colors: "var(--text-muted)", fontSize: "11px", cssClass: "apexcharts-xaxis-label" } 
+          },
+          axisBorder: { show: false }, 
+          axisTicks: { show: false },
+          tooltip: { enabled: false }
+      },
+      yaxis: { 
+          min: 0,
+          forceNiceScale: true,
+          decimalsInFloat: 0,
+          labels: { 
+              formatter: (value) => { return "₱" + Math.round(value).toLocaleString() },
+              style: { colors: "var(--text-muted)", fontSize: "11px" }
+          } 
+      },
+      grid: { borderColor: "rgba(150, 150, 150, 0.15)", strokeDashArray: 4, padding: { left: 15, right: 15, bottom: 5, top: 10 } },
+      tooltip: { theme: themeMode, y: { formatter: function (val) { return "₱" + val.toLocaleString() } } }
+    };
+    if (document.querySelector("#salesChartContainer")) {
       new ApexCharts(document.querySelector("#salesChartContainer"), salesOptions).render();
   }
 
