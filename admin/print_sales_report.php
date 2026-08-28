@@ -63,18 +63,18 @@ foreach ($sales as $s) {
     <div class="header">
         <div class="header-left">
             <div style="height:40px;"></div> <!-- spacer to push text down like image -->
-            <div class="company-info">Your Company Name</div>
+            <div class="company-info">Gueco Optical Clinic</div>
             <div class="address-info">
-                Street Address<br>
-                City, State, Zip Code<br>
-                Phone Number, Website, Email Address etc
+                Capas, Tarlac<br>
+                2315<br>
+                Email: guecoopticalclinic
             </div>
         </div>
         <div class="header-center">
             <div class="header-title">Sale Report</div>
         </div>
         <div class="header-right">
-            <div class="logo-box">Company<br>Logo Here</div>
+            <div class="logo-box" style="border:none; padding:0; margin-bottom:15px; text-align:right;"><img src="../assets/images/logo.png" alt="Logo" style="max-height:80px; max-width:150px; object-fit:contain;"></div>
             <div class="date-info">
                 Date:<br>
                 From: <?= date('n/j/Y', strtotime($filterFrom)) ?><br>
@@ -176,6 +176,7 @@ foreach ($sales as $s) {
 
 </body>
 </html>
+
 
 
 
