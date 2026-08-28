@@ -170,10 +170,10 @@ document.addEventListener("DOMContentLoaded", function() {
 <div class="table-wrapper" id="tableView">
   <div class="table-responsive">
     <table class="table">
-      <thead><tr><th>#</th><th>Product</th><th>Category</th><th>Supplier</th><th>Price</th><th>Stock</th><th>Alert</th><th>Status</th><th>Actions</th></tr></thead>
+      <thead><tr><th>#</th><th>CODE</th><th>Product</th><th>Category</th><th>Supplier</th><th>Price</th><th>Stock</th><th>Alert</th><th>Status</th><th>Actions</th></tr></thead>
       <tbody>
         <?php if (empty($products)): ?>
-        <tr><td colspan="9"><div class="empty-state"><div class="empty-icon"><i class="fas fa-boxes"></i></div><h6>No products found</h6></div></td></tr>
+        <tr><td colspan="10"><div class="empty-state"><div class="empty-icon"><i class="fas fa-boxes"></i></div><h6>No products found</h6></div></td></tr>
         <?php else: ?>
         <?php foreach ($products as $i => $p): ?>
         <?php $isLow = $p['stock_quantity'] <= $p['low_stock_alert']; $isOut = $p['stock_quantity'] == 0; ?>
