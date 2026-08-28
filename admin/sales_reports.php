@@ -218,7 +218,7 @@ const themeMode = document.documentElement.getAttribute("data-theme") === "dark"
           labels: { 
               rotate: 0,
               trim: true,
-              style: { colors: "var(--text-muted)", fontSize: "11px", cssClass: "apexcharts-xaxis-label" } 
+              style: { colors: "var(--text-muted)", fontSize: "15px", cssClass: "apexcharts-xaxis-label" } 
           },
           axisBorder: { show: false }, 
           axisTicks: { show: false },
@@ -230,11 +230,11 @@ const themeMode = document.documentElement.getAttribute("data-theme") === "dark"
           decimalsInFloat: 0,
           labels: { 
               formatter: (value) => { return "₱" + Math.round(value).toLocaleString() },
-              style: { colors: "var(--text-muted)", fontSize: "11px" }
+              style: { colors: "var(--text-muted)", fontSize: "15px" }
           } 
       },
       grid: { borderColor: "rgba(150, 150, 150, 0.15)", strokeDashArray: 4, padding: { left: 15, right: 15, bottom: 5, top: 10 } },
-      tooltip: { theme: themeMode, y: { formatter: function (val) { return "₱" + val.toLocaleString() } } }
+      tooltip: { theme: themeMode, style: { fontSize: "15px" }, y: { formatter: function (val) { return "₱" + val.toLocaleString() } } }
     };
     if (document.querySelector("#salesChartContainer")) {
       new ApexCharts(document.querySelector("#salesChartContainer"), salesOptions).render();
@@ -249,8 +249,8 @@ const themeMode = document.documentElement.getAttribute("data-theme") === "dark"
     plotOptions: { pie: { donut: { size: "72%" } } },
     dataLabels: { enabled: false },
     stroke: { show: false },
-    legend: { position: "bottom" },
-    tooltip: { theme: themeMode }
+    legend: { position: "bottom", fontSize: "15px" },
+    tooltip: { theme: themeMode, style: { fontSize: "15px" } }
   };
   if (document.querySelector("#payChartContainer")) {
       new ApexCharts(document.querySelector("#payChartContainer"), payOptions).render();
