@@ -1,6 +1,7 @@
 <?php
 require_once __DIR__ . '/../config/functions.php';
 requireRole('admin');
+$db = getDB();
 
 $filterFrom = $_GET['from'] ?? date('Y-m-01');
 $filterTo   = $_GET['to'] ?? date('Y-m-d');
@@ -175,6 +176,7 @@ foreach ($sales as $s) {
 
 </body>
 </html>
+
 
 
 
