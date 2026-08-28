@@ -107,13 +107,16 @@ document.addEventListener("DOMContentLoaded", function() {
               onclick="openEdit(<?= $cat['id'] ?>, '<?= addslashes($cat['name']) ?>', '<?= addslashes($cat['description']) ?>', '<?= $cat['status'] ?>')">
               <i class="fas fa-edit"></i>
             </button>
-            <?php if ($cat['product_count'] == 0): ?>
-            <form method="POST" class="cat-delete-form">
-              <input type="hidden" name="action" value="delete">
-              <input type="hidden" name="id" value="<?= $cat['id'] ?>">
-              <button class="btn btn-sm btn-danger btn-icon" title="Deactivate" data-confirm="Deactivate this category?"><i class="fas fa-ban"></i></button>
-            </form>
-            <?php endif; ?>
+            <form method="POST" class="cat-delete-form" style="display:inline-block; margin-left:5px;">
+                <input type="hidden" name="action" value="toggle_status">
+                <input type="hidden" name="id" value="<?= $cat['id'] ?>">
+                <input type="hidden" name="current_status" value="<?= $cat['status'] ?>">
+                <button class="btn btn-sm <?= $cat['status']==='active'?'btn-warning':'btn-success' ?> btn-icon" 
+                        title="<?= $cat['status']==='active'?'Deactivate':'Activate' ?>" 
+                        data-confirm="<?= $cat['status']==='active'?'Deactivate':'Activate' ?> this category?">
+                  <i class="fas fa-<?= $cat['status']==='active'?'ban':'check' ?>"></i>
+                </button>
+              </form>
           </td>
         </tr>
         <?php endforeach; ?>
