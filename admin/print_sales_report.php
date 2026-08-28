@@ -1,5 +1,5 @@
 <?php
-require_once __DIR__ . '/../includes/config.php';
+require_once __DIR__ . '/../config/functions.php';
 if (!isLoggedIn() || $_SESSION['role'] !== 'admin') {
     die("Unauthorized access.");
 }
@@ -177,3 +177,4 @@ foreach ($sales as $s) {
 
 </body>
 </html>
+
