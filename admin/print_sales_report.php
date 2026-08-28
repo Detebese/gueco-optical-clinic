@@ -4,7 +4,14 @@ requireRole('admin');
 $db = getDB();
 
 $filterFrom = $_GET['from'] ?? date('Y-m-01');
-$filterTo   = $_GET['to'] ?? date('Y-m-d');
+$filterTo   = $_GET['to']   ?? date('Y-m-d');
+
+// Automatically fix backwards dates
+if (strtotime($filterFrom) > strtotime($filterTo)) {
+    $temp = $filterFrom;
+    $filterFrom = $filterTo;
+    $filterTo = $temp;
+}
 
 // Fetch all sales ordered by date
 $stmt = $db->prepare("
