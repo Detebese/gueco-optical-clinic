@@ -46,9 +46,21 @@ include __DIR__ . '/../includes/header.php';
 ?>
 
 <?php if ($msg): ?>
-<div class="alert alert-<?= $msgType ?>" data-auto-dismiss="4000">
-  <i class="fas fa-<?= $msgType==='success'?'check-circle':'exclamation-circle' ?>"></i> <?= $msg ?>
-</div>
+<script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
+<script>
+document.addEventListener("DOMContentLoaded", function() {
+    Swal.fire({
+        title: '<?= $msgType === "success" ? "Success!" : "Notice" ?>',
+        text: '<?= addslashes($msg) ?>',
+        icon: '<?= $msgType === "success" ? "success" : ($msgType === "info" ? "info" : "error") ?>',
+        confirmButtonColor: 'var(--clr-primary)',
+        background: 'var(--bg-card)',
+        color: 'var(--text-primary)',
+        timer: 3000,
+        timerProgressBar: true
+    });
+});
+</script>
 <?php endif; ?>
 
 <div class="section-header">
