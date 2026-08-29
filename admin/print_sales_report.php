@@ -129,7 +129,7 @@ foreach ($sales as $s) {
                 <td class="col-text"><?= $i === 0 ? $month : '-----' ?></td>
                 <td class="col-text"><?= date('n/j/Y', strtotime($s['created_at'])) ?></td>
                 <td><?= number_format($s['discount'], 2) ?></td>
-                <td class="col-text"><?= htmlspecialchars($s['invoice_number']) ?></td>
+                <td class="col-text"><?= htmlspecialchars($s['invoice_no']) ?></td>
                 <td class="col-text"><?= htmlspecialchars($s['cashier_name']) ?></td>
                 <td><?= number_format($s['total'], 2) ?></td>
                 <td><?= number_format($s['amount_paid'], 2) ?></td>
@@ -183,6 +183,7 @@ foreach ($sales as $s) {
 
 </body>
 </html>
+
 
 
 
