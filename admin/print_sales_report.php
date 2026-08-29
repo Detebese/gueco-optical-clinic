@@ -59,7 +59,10 @@ foreach ($sales as $s) {
   .signature-line { margin-left: 5px; width: 200px; border-bottom: 1px solid #000; }
   
   @media print {
-      body { padding: 0; }
+      @page { margin: 0; size: auto; }
+      body { padding: 1.5cm; }
+      .report-container { border: none; padding: 0; max-width: 100%; }
+  }
       .report-container { border: none; padding: 0; }
   }
 </style>
