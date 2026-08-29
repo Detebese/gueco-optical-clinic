@@ -35,7 +35,7 @@ foreach ($sales as $s) {
 <html lang="en">
 <head>
 <meta charset="UTF-8">
-<title>Sale Report</title>
+<title>Sales Report</title>
 <style>
   body { font-family: "Times New Roman", Times, serif; color: #000; background: #fff; margin: 0; padding: 20px; font-size: 14px; }
   .report-container { max-width: 800px; margin: 0 auto; border: 1px solid #000; padding: 20px; }
@@ -78,7 +78,7 @@ foreach ($sales as $s) {
             </div>
         </div>
         <div class="header-center">
-            <div class="header-title">Sale Report</div>
+            <div class="header-title">Sales Report</div>
         </div>
         <div class="header-right">
             <div class="logo-box" style="border:none; padding:0; margin-bottom:15px; text-align:right;"><img src="../assets/images/logo.png" alt="Logo" style="max-height:80px; max-width:150px; object-fit:contain;"></div>
