@@ -476,44 +476,39 @@ document.addEventListener("DOMContentLoaded", function() {
     catChart.render();
   }
 
-  // Dynamic Theme Switcher synchronization for charts
-  const themeToggleBtn = document.getElementById("themeToggle");
-  if (themeToggleBtn) {
-    themeToggleBtn.addEventListener("click", () => {
-      setTimeout(() => {
-        tc = getThemeColors();
+    // Dynamic Theme Switcher synchronization for charts
+  window.addEventListener("themeChanged", (e) => {
+    tc = getThemeColors();
 
-        if (salesChart) {
-          salesChart.updateOptions({
-            theme: { mode: tc.mode },
-            xaxis: { labels: { style: { colors: tc.textMuted } } },
-            yaxis: { labels: { style: { colors: tc.textMuted } } },
-            grid: { borderColor: tc.borderColor },
-            tooltip: { theme: tc.mode }
-          });
-        }
+    if (salesChart) {
+      salesChart.updateOptions({
+        theme: { mode: tc.mode },
+        xaxis: { labels: { style: { colors: tc.textMuted } } },
+        yaxis: { labels: { style: { colors: tc.textMuted } } },
+        grid: { borderColor: tc.borderColor },
+        tooltip: { theme: tc.mode }
+      });
+    }
 
-        if (catChart) {
-          catChart.updateOptions({
-            theme: { mode: tc.mode },
-            legend: { labels: { colors: tc.textSecondary } },
-            tooltip: { theme: tc.mode },
-            plotOptions: {
-              pie: {
-                donut: {
-                  labels: {
-                    name: { color: tc.textPrimary },
-                    value: { color: tc.valColor },
-                    total: { color: tc.textMuted }
-                  }
-                }
+    if (catChart) {
+      catChart.updateOptions({
+        theme: { mode: tc.mode },
+        legend: { labels: { colors: tc.textSecondary } },
+        tooltip: { theme: tc.mode },
+        plotOptions: {
+          pie: {
+            donut: {
+              labels: {
+                name: { color: tc.textPrimary },
+                value: { color: tc.valColor },
+                total: { color: tc.textMuted }
               }
             }
-          });
+          }
         }
-      }, 50);
-    });
-  }
+      });
+    }
+  });
 });
 </script>
 HTML;

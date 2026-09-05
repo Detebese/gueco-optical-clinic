@@ -5,32 +5,35 @@
 
 document.addEventListener('DOMContentLoaded', function () {
 
-  // ── Theme ──────────────────────────────────────────────
-  const THEME_KEY = 'gueco_theme';
+    // ── Theme ──────────────────────────────────────────────
   const html = document.documentElement;
 
   function applyTheme(theme) {
     html.setAttribute('data-theme', theme);
     try {
-      localStorage.setItem(THEME_KEY, theme);
+      localStorage.setItem('gueco_theme', theme);
+      localStorage.setItem('gueco-theme', theme);
       localStorage.setItem('theme', theme);
     } catch(e) {}
     const icon = document.getElementById('themeIcon');
     if (icon) {
       icon.className = theme === 'dark' ? 'fas fa-sun' : 'fas fa-moon';
     }
+    window.dispatchEvent(new CustomEvent('themeChanged', { detail: { theme: theme } }));
   }
 
   // Sync icon and state with already initialized attribute
-  const activeTheme = html.getAttribute('data-theme') || localStorage.getItem(THEME_KEY) || localStorage.getItem('theme') || 'light';
+  const activeTheme = html.getAttribute('data-theme') || localStorage.getItem('gueco_theme') || localStorage.getItem('gueco-theme') || localStorage.getItem('theme') || 'dark';
   applyTheme(activeTheme);
 
   // Toggle button
   const themeToggle = document.getElementById('themeToggle');
   if (themeToggle) {
-    themeToggle.addEventListener('click', () => {
-      const current = html.getAttribute('data-theme') || 'light';
-      applyTheme(current === 'dark' ? 'light' : 'dark');
+    themeToggle.addEventListener('click', (e) => {
+      e.preventDefault();
+      const current = html.getAttribute('data-theme') || 'dark';
+      const next = current === 'dark' ? 'light' : 'dark';
+      applyTheme(next);
     });
   }
 

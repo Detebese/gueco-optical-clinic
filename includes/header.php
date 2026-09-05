@@ -27,10 +27,10 @@ $initials    = strtoupper(substr($fullName, 0, 1));
   <script>
     (function() {
       try {
-        var theme = localStorage.getItem('gueco-theme') || localStorage.getItem('gueco_theme') || localStorage.getItem('theme') || 'dark';
-        document.documentElement.setAttribute('data-theme', theme);
+        var theme = localStorage.getItem("gueco_theme") || localStorage.getItem("gueco-theme") || localStorage.getItem("theme") || "dark";
+        document.documentElement.setAttribute("data-theme", theme);
       } catch (e) {
-        document.documentElement.setAttribute('data-theme', 'dark');
+        document.documentElement.setAttribute("data-theme", "dark");
       }
     })();
   </script>

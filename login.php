@@ -734,20 +734,22 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
   <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
   <script>
-    // Theme toggle
+        // Theme toggle
     const html = document.documentElement;
     const themeBtn  = document.getElementById('themeToggle');
     const themeIcon = document.getElementById('themeIcon');
-    const saved = localStorage.getItem('gueco-theme') || 'dark';
+    const saved = localStorage.getItem('gueco_theme') || localStorage.getItem('gueco-theme') || localStorage.getItem('theme') || 'dark';
     html.setAttribute('data-theme', saved);
-    themeIcon.className = saved === 'dark' ? 'fas fa-moon' : 'fas fa-sun';
+    themeIcon.className = saved === 'dark' ? 'fas fa-sun' : 'fas fa-moon';
 
     themeBtn.addEventListener('click', () => {
-      const cur = html.getAttribute('data-theme');
+      const cur = html.getAttribute('data-theme') || 'dark';
       const next = cur === 'dark' ? 'light' : 'dark';
       html.setAttribute('data-theme', next);
+      localStorage.setItem('gueco_theme', next);
       localStorage.setItem('gueco-theme', next);
-      themeIcon.className = next === 'dark' ? 'fas fa-moon' : 'fas fa-sun';
+      localStorage.setItem('theme', next);
+      themeIcon.className = next === 'dark' ? 'fas fa-sun' : 'fas fa-moon';
     });
 
     // Password toggle
