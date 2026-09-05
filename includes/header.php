@@ -12,8 +12,8 @@ $breadcrumb  = $breadcrumb  ?? [];
 $activeNav   = $activeNav   ?? '';
 $user        = getCurrentUser();
 
-$firstName   = explode(' ', $user['full_name'] ?? 'Admin')[0];
-$initials    = strtoupper(substr($user['full_name'] ?? 'U', 0, 1));
+$fullName    = $user['full_name'] ?? 'Admin';
+$initials    = strtoupper(substr($fullName, 0, 1));
 ?>
 <!DOCTYPE html>
 <html lang="en">
@@ -43,8 +43,8 @@ $initials    = strtoupper(substr($user['full_name'] ?? 'U', 0, 1));
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@300;400;500;600;700;800;900&family=Poppins:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
-  <!-- Custom CSS -->
-  <link rel="stylesheet" href="<?= BASE_URL ?>assets/css/style.css">
+  <!-- Custom CSS with Cache Buster -->
+  <link rel="stylesheet" href="<?= BASE_URL ?>assets/css/style.css?v=<?= time() ?>">
 
   <?php if (isset($extraHead)) echo $extraHead; ?>
 </head>
@@ -78,7 +78,7 @@ $initials    = strtoupper(substr($user['full_name'] ?? 'U', 0, 1));
         <span><?= $initials ?></span>
       </div>
       <div class="user-info">
-        <div class="user-name"><?= sanitize($user['full_name'] ?? 'User') ?></div>
+        <div class="user-name"><?= sanitize($fullName) ?></div>
         <div class="user-role"><?= getRoleLabel($user['role'] ?? '') ?></div>
       </div>
     </div>
@@ -103,11 +103,11 @@ $initials    = strtoupper(substr($user['full_name'] ?? 'U', 0, 1));
     <header class="app-header">
       <div class="header-left">
         <!-- Mobile menu toggle -->
-        <button id="sidebarToggle" class="theme-toggle d-lg-none me-2" onclick="document.getElementById('sidebar').classList.toggle('open')">
+        <button id="sidebarToggle" class="header-icon-btn d-lg-none me-2" onclick="document.getElementById('sidebar').classList.toggle('open')">
           <i class="fas fa-bars"></i>
         </button>
         <div class="header-greeting">
-          <h4>Hello, <?= sanitize($firstName) ?>!</h4>
+          <h4>Hello, <?= sanitize($fullName) ?>!</h4>
           <p>Explore information and activity about your clinic</p>
         </div>
       </div>
@@ -174,7 +174,7 @@ $initials    = strtoupper(substr($user['full_name'] ?? 'U', 0, 1));
         </div>
 
         <!-- User Initials / Profile Avatar -->
-        <div class="header-avatar" title="<?= sanitize($user['full_name'] ?? '') ?>">
+        <div class="header-avatar" title="<?= sanitize($fullName) ?>">
           <?= $initials ?>
         </div>
       </div>

@@ -68,10 +68,10 @@ $recentSales = $db->query("
 include __DIR__ . '/../includes/header.php';
 ?>
 
-<!-- ─── Bento Top Metric Cards Row ────────────────────────── -->
+<!-- ─── Bento Top Metric Cards Row (4 Responsive Cards) ─── -->
 <div class="row g-3 mb-4">
-  <!-- Card 1: Monthly Sales / Spent -->
-  <div class="col-xl-3 col-md-6">
+  <!-- Card 1: Spent this month -->
+  <div class="col-lg-3 col-sm-6">
     <div class="bento-stat">
       <div class="bento-stat-left">
         <div class="bento-label">Spent this month</div>
@@ -81,15 +81,19 @@ include __DIR__ . '/../includes/header.php';
         </div>
       </div>
       <div class="bento-stat-right">
-        <div class="bento-icon-circle bronze">
-          <i class="fas fa-chart-simple"></i>
-        </div>
+        <!-- Mini Bar Chart (Reference Mockup style) -->
+        <svg width="44" height="32" viewBox="0 0 44 32" fill="none">
+          <rect x="4" y="16" width="5" height="16" rx="2.5" fill="#E09A67" opacity="0.35"/>
+          <rect x="14" y="6" width="5" height="26" rx="2.5" fill="#E09A67" opacity="0.75"/>
+          <rect x="24" y="12" width="5" height="20" rx="2.5" fill="#E09A67" opacity="0.5"/>
+          <rect x="34" y="2" width="5" height="30" rx="2.5" fill="#E09A67"/>
+        </svg>
       </div>
     </div>
   </div>
 
-  <!-- Card 2: Total Patients / New Clients -->
-  <div class="col-xl-3 col-md-6">
+  <!-- Card 2: Total Patients -->
+  <div class="col-lg-3 col-sm-6">
     <div class="bento-stat">
       <div class="bento-stat-left">
         <div class="bento-label">Total Patients</div>
@@ -99,15 +103,16 @@ include __DIR__ . '/../includes/header.php';
         </div>
       </div>
       <div class="bento-stat-right">
-        <div class="bento-icon-circle gold">
-          <i class="fas fa-users"></i>
-        </div>
+        <!-- Mini Wave Sparkline (Reference Mockup style) -->
+        <svg width="48" height="28" viewBox="0 0 48 28" fill="none">
+          <path d="M2 20C10 20 12 6 24 14C34 22 36 4 46 4" stroke="#F59E0B" stroke-width="2.5" stroke-linecap="round"/>
+        </svg>
       </div>
     </div>
   </div>
 
   <!-- Card 3: Appointments Today -->
-  <div class="col-xl-3 col-md-6">
+  <div class="col-lg-3 col-sm-6">
     <div class="bento-stat">
       <div class="bento-stat-left">
         <div class="bento-label">Today's Appointments</div>
@@ -124,8 +129,8 @@ include __DIR__ . '/../includes/header.php';
     </div>
   </div>
 
-  <!-- Card 4: Inventory & Low Stock -->
-  <div class="col-xl-3 col-md-6">
+  <!-- Card 4: Low Stock Items -->
+  <div class="col-lg-3 col-sm-6">
     <div class="bento-stat">
       <div class="bento-stat-left">
         <div class="bento-label">Low Stock Items</div>
@@ -136,9 +141,10 @@ include __DIR__ . '/../includes/header.php';
         </div>
       </div>
       <div class="bento-stat-right">
-        <div class="bento-icon-circle <?= $stats['lowStock'] > 0 ? 'red' : 'green' ?>">
-          <i class="fas fa-boxes-stacked"></i>
-        </div>
+        <!-- Mini Status Wave -->
+        <svg width="48" height="28" viewBox="0 0 48 28" fill="none">
+          <path d="M2 14C10 6 16 22 24 12C32 2 40 18 46 8" stroke="<?= $stats['lowStock'] > 0 ? '#EF4444' : '#10B981' ?>" stroke-width="2.5" stroke-linecap="round"/>
+        </svg>
       </div>
     </div>
   </div>
