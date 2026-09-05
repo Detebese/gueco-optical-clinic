@@ -12,13 +12,8 @@ $breadcrumb  = $breadcrumb  ?? [];
 $activeNav   = $activeNav   ?? '';
 $user        = getCurrentUser();
 
-$roleBgMap = [
-  'admin'     => '#2563EB',
-  'doctor'    => '#0891B2',
-  'saleslady' => '#7C3AED',
-];
-$roleColor = $roleBgMap[$user['role'] ?? ''] ?? '#64748B';
-$initials  = strtoupper(substr($user['full_name'] ?? 'U', 0, 1));
+$firstName   = explode(' ', $user['full_name'] ?? 'Admin')[0];
+$initials    = strtoupper(substr($user['full_name'] ?? 'U', 0, 1));
 ?>
 <!DOCTYPE html>
 <html lang="en">
@@ -28,14 +23,14 @@ $initials  = strtoupper(substr($user['full_name'] ?? 'U', 0, 1));
   <title><?= sanitize($pageTitle) ?> — Gueco Optical</title>
   <meta name="description" content="Gueco Optical Clinic Management System">
 
-  <!-- Immediate Theme Initialization (Prevents Theme Flash / FOUC) -->
+  <!-- Immediate Theme Initialization -->
   <script>
     (function() {
       try {
-        var theme = localStorage.getItem('gueco_theme') || localStorage.getItem('theme') || 'light';
+        var theme = localStorage.getItem('gueco-theme') || localStorage.getItem('gueco_theme') || localStorage.getItem('theme') || 'dark';
         document.documentElement.setAttribute('data-theme', theme);
       } catch (e) {
-        document.documentElement.setAttribute('data-theme', 'light');
+        document.documentElement.setAttribute('data-theme', 'dark');
       }
     })();
   </script>
@@ -44,6 +39,10 @@ $initials  = strtoupper(substr($user['full_name'] ?? 'U', 0, 1));
   <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
   <!-- Font Awesome -->
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css">
+  <!-- Google Fonts -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@300;400;500;600;700;800;900&family=Poppins:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
   <!-- Custom CSS -->
   <link rel="stylesheet" href="<?= BASE_URL ?>assets/css/style.css">
 
@@ -60,11 +59,13 @@ $initials  = strtoupper(substr($user['full_name'] ?? 'U', 0, 1));
 
 <div class="app-wrapper">
 
-  <!-- SIDEBAR -->
+  <!-- SIDEBAR (Floating Modern Dock) -->
   <aside class="sidebar" id="sidebar">
     <!-- Logo -->
     <div class="sidebar-logo">
-      <div class="logo-icon" style="background:rgba(255,255,255,0.9); box-shadow:0 4px 12px rgba(37,99,235,0.2); border-radius:50%; padding:2px;"><img src="<?= BASE_URL ?>assets/images/logo.png?v=2" alt="Logo" style="width:100%; height:100%; object-fit:contain; border-radius:50%;"></div>
+      <div class="logo-icon">
+        <img src="<?= BASE_URL ?>assets/images/logo.png?v=2" alt="Logo" style="width:100%; height:100%; object-fit:contain;">
+      </div>
       <div class="logo-text">
         <h6>Gueco Optical</h6>
         <span>Clinic Management</span>
@@ -72,9 +73,9 @@ $initials  = strtoupper(substr($user['full_name'] ?? 'U', 0, 1));
     </div>
 
     <!-- User Info -->
-    <div class="sidebar-user" style="margin-top:12px;">
-      <div class="user-avatar" style="background:linear-gradient(135deg,<?= $roleColor ?>,#7C3AED)">
-        <span style="color:#fff;font-weight:700;font-size:.9rem"><?= $initials ?></span>
+    <div class="sidebar-user">
+      <div class="user-avatar">
+        <span><?= $initials ?></span>
       </div>
       <div class="user-info">
         <div class="user-name"><?= sanitize($user['full_name'] ?? 'User') ?></div>
@@ -102,32 +103,34 @@ $initials  = strtoupper(substr($user['full_name'] ?? 'U', 0, 1));
     <header class="app-header">
       <div class="header-left">
         <!-- Mobile menu toggle -->
-        <button id="sidebarToggle" class="theme-toggle d-lg-none" style="display:none!important">
+        <button id="sidebarToggle" class="theme-toggle d-lg-none me-2" onclick="document.getElementById('sidebar').classList.toggle('open')">
           <i class="fas fa-bars"></i>
         </button>
-        <div class="page-title">
-          <h5><?= sanitize($pageTitle) ?></h5>
-          <?php if ($breadcrumb): ?>
-          <nav class="breadcrumb">
-            <span class="breadcrumb-item">Home</span>
-            <?php foreach ($breadcrumb as $i => $b): ?>
-              <span class="breadcrumb-item <?= ($i === count($breadcrumb)-1) ? 'active' : '' ?>">
-                <?= sanitize($b) ?>
-              </span>
-            <?php endforeach; ?>
-          </nav>
-          <?php endif; ?>
+        <div class="header-greeting">
+          <h4>Hello, <?= sanitize($firstName) ?>!</h4>
+          <p>Explore information and activity about your clinic</p>
         </div>
       </div>
+
       <div class="header-right">
-        <button class="theme-toggle" id="themeToggle" title="Toggle Theme">
+        <!-- Search Pill -->
+        <div class="header-search-wrap">
+          <input type="text" placeholder="Search..." aria-label="Search">
+          <button type="button" class="header-search-btn" title="Search">
+            <i class="fas fa-search"></i>
+          </button>
+        </div>
+
+        <!-- Theme Toggle Button -->
+        <button class="header-icon-btn" id="themeToggle" title="Toggle Theme">
           <i class="fas fa-moon" id="themeIcon"></i>
         </button>
+
+        <!-- Notification Bell -->
         <div class="dropdown" id="notifDropdownWrap">
-          <button class="notif-btn" type="button" data-bs-toggle="dropdown" aria-expanded="false" title="Notifications">
+          <button class="header-icon-btn" type="button" data-bs-toggle="dropdown" aria-expanded="false" title="Notifications">
             <i class="fas fa-bell"></i>
             <?php
-            // Count pending appointments and fetch latest 5
             try {
               $db = getDB();
               $stmtCount = $db->prepare("SELECT COUNT(*) as c FROM appointments WHERE status = 'pending' AND appointment_date >= CURDATE()");
@@ -146,14 +149,14 @@ $initials  = strtoupper(substr($user['full_name'] ?? 'U', 0, 1));
             <span class="notif-badge" id="notifBadgeEl"><?= min($notifCount, 99) ?></span>
             <?php endif; ?>
           </button>
-          <ul class="dropdown-menu dropdown-menu-end shadow" style="min-width: 300px;">
-            <li><h6 class="dropdown-header">Notifications</h6></li>
+          <ul class="dropdown-menu dropdown-menu-end shadow" style="min-width: 300px; border-radius: 16px; border: 1px solid var(--border-color); background: var(--bg-card);">
+            <li><h6 class="dropdown-header fw-bold">Notifications</h6></li>
             <?php if (empty($recentAppts)): ?>
               <li><span class="dropdown-item text-muted">No new notifications</span></li>
             <?php else: ?>
               <?php foreach($recentAppts as $appt): ?>
                 <li>
-                  <a class="dropdown-item py-2" href="appointments.php">
+                  <a class="dropdown-item py-2" href="<?= BASE_URL ?>admin/appointments.php">
                     <div class="fw-bold text-truncate" style="max-width: 260px;">
                       <?= sanitize($appt['patient_name']) ?>
                     </div>
@@ -166,14 +169,16 @@ $initials  = strtoupper(substr($user['full_name'] ?? 'U', 0, 1));
               <?php endforeach; ?>
             <?php endif; ?>
             <li><hr class="dropdown-divider"></li>
-            <li><a class="dropdown-item text-center text-primary fw-semibold" href="appointments.php">View All Appointments</a></li>
+            <li><a class="dropdown-item text-center fw-bold" style="color:var(--clr-bronze)" href="<?= BASE_URL ?>admin/appointments.php">View All Appointments</a></li>
           </ul>
         </div>
+
+        <!-- User Initials / Profile Avatar -->
         <div class="header-avatar" title="<?= sanitize($user['full_name'] ?? '') ?>">
           <?= $initials ?>
         </div>
       </div>
     </header>
 
-    <!-- PAGE CONTENT starts here (footer.php closes it) -->
+    <!-- PAGE CONTENT starts here -->
     <div class="page-content">
