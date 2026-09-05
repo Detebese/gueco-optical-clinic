@@ -29,9 +29,15 @@ $catSales = $db->query("
     LEFT JOIN sale_items si ON si.product_id = p.id
     LEFT JOIN sales s ON s.id = si.sale_id AND s.status = 'completed'
     GROUP BY c.id
+    HAVING total > 0
     ORDER BY total DESC
-    LIMIT 5
+    LIMIT 6
 ")->fetchAll();
+
+// If no categories have sales yet, fetch all categories for display
+if (empty($catSales)) {
+    $catSales = $db->query("SELECT name, 0 as total FROM categories WHERE status='active' LIMIT 5")->fetchAll();
+}
 
 // Today's appointments
 $todayAppts = $db->prepare("
@@ -70,11 +76,11 @@ include __DIR__ . '/../includes/header.php';
 
 <!-- ─── Bento Top Metric Cards Row (4 Responsive Cards) ─── -->
 <div class="row g-3 mb-4">
-  <!-- Card 1: Spent this month -->
+  <!-- Card 1: Sales this month -->
   <div class="col-lg-3 col-sm-6">
     <div class="bento-stat">
       <div class="bento-stat-left">
-        <div class="bento-label">Spent this month</div>
+        <div class="bento-label">Sales this month</div>
         <div class="bento-value"><?= formatCurrency($stats['monthlySales']) ?></div>
         <div class="bento-change up">
           <i class="fas fa-arrow-trend-up"></i> <?= formatCurrency($stats['todaySales']) ?> today
@@ -177,7 +183,7 @@ include __DIR__ . '/../includes/header.php';
       <div class="card-header">
         <h6><i class="fas fa-chart-pie me-2" style="color:var(--clr-gold)"></i>Sales by Category</h6>
       </div>
-      <div class="card-body d-flex flex-column align-items-center justify-content-center">
+      <div class="card-body d-flex flex-column align-items-center justify-content-center p-3">
         <div id="dashCatApex" style="width: 100%; min-height: 280px;"></div>
       </div>
     </div>
@@ -316,30 +322,46 @@ include __DIR__ . '/../includes/header.php';
 </div>
 
 <?php
-$catNames = array_column($catSales, 'name');
+$catNames  = array_column($catSales, 'name');
 $catTotals = array_map('floatval', array_column($catSales, 'total'));
-$totalMonthStr = formatCurrency($stats['monthlySales']);
+$sales7Json = json_encode($sales7);
+$labels7Json = json_encode($labels7);
+$catNamesJson = json_encode($catNames);
+$catTotalsJson = json_encode($catTotals);
 
-$extraScripts = '<script>
+$extraScripts = <<<HTML
+<script>
 document.addEventListener("DOMContentLoaded", function() {
-  const isDark = document.documentElement.getAttribute("data-theme") === "dark";
-  const themeMode = isDark ? "dark" : "light";
+  function getThemeColors() {
+    const isDark = document.documentElement.getAttribute("data-theme") === "dark";
+    return {
+      isDark: isDark,
+      mode: isDark ? "dark" : "light",
+      textPrimary: isDark ? "#F9FAFB" : "#18181B",
+      textSecondary: isDark ? "#E5E7EB" : "#374151",
+      textMuted: isDark ? "#9CA3AF" : "#52525B",
+      borderColor: isDark ? "rgba(255, 255, 255, 0.08)" : "rgba(0, 0, 0, 0.06)",
+      valColor: isDark ? "#FDBA74" : "#B86B35"
+    };
+  }
 
-  // 1. Sales Line / Area Chart (ApexCharts)
+  let tc = getThemeColors();
+
+  // 1. Sales Line / Area Chart
   const salesOptions = {
     series: [{
       name: "Sales (₱)",
-      data: ' . json_encode($sales7) . '
+      data: {$sales7Json}
     }],
     chart: {
       type: "area",
-      height: 270,
+      height: 280,
       toolbar: { show: false },
       fontFamily: "Plus Jakarta Sans, Poppins, sans-serif",
       background: "transparent",
       dropShadow: { enabled: true, top: 3, left: 0, blur: 5, color: "#E09A67", opacity: 0.25 }
     },
-    theme: { mode: themeMode },
+    theme: { mode: tc.mode },
     colors: ["#E09A67"],
     fill: {
       type: "gradient",
@@ -348,61 +370,85 @@ document.addEventListener("DOMContentLoaded", function() {
     dataLabels: { enabled: false },
     stroke: { curve: "smooth", width: 3 },
     xaxis: {
-      categories: ' . json_encode($labels7) . ',
+      categories: {$labels7Json},
       axisBorder: { show: false },
       axisTicks: { show: false },
-      labels: { style: { colors: "var(--text-muted)", fontSize: "12px" } }
+      labels: { style: { colors: tc.textMuted, fontSize: "12px", fontWeight: 500 } }
     },
     yaxis: {
       min: 0,
       forceNiceScale: true,
       labels: {
         formatter: (val) => "₱" + Math.round(val).toLocaleString(),
-        style: { colors: "var(--text-muted)", fontSize: "12px" }
+        style: { colors: tc.textMuted, fontSize: "12px", fontWeight: 500 }
       }
     },
     grid: {
-      borderColor: "rgba(150, 150, 150, 0.12)",
+      borderColor: tc.borderColor,
       strokeDashArray: 4,
       padding: { left: 10, right: 10, top: 0, bottom: 0 }
     },
     tooltip: {
-      theme: themeMode,
+      theme: tc.mode,
+      style: { fontSize: "12px" },
       y: { formatter: (val) => "₱" + val.toLocaleString() }
     }
   };
 
   const salesEl = document.querySelector("#dashSalesApex");
+  let salesChart = null;
   if (salesEl) {
-    new ApexCharts(salesEl, salesOptions).render();
+    salesChart = new ApexCharts(salesEl, salesOptions);
+    salesChart.render();
   }
 
-  // 2. Category Donut Chart (ApexCharts)
-  const catNames = ' . json_encode($catNames) . ';
-  const catTotals = ' . json_encode($catTotals) . ';
+  // 2. Category Donut Chart
+  const rawNames = {$catNamesJson};
+  const rawTotals = {$catTotalsJson};
+  const hasData = rawTotals.some(t => t > 0);
 
   const catOptions = {
-    series: catTotals.length ? catTotals : [1],
-    labels: catNames.length ? catNames : ["No Sales Yet"],
+    series: hasData ? rawTotals : [1],
+    labels: hasData ? rawNames : ["No Sales Recorded"],
     chart: {
       type: "donut",
-      height: 260,
+      height: 280,
       fontFamily: "Plus Jakarta Sans, Poppins, sans-serif",
-      background: "transparent"
+      background: "transparent",
+      toolbar: { show: false }
     },
-    theme: { mode: themeMode },
-    colors: ["#E09A67", "#F59E0B", "#10B981", "#06B6D4", "#B86B35"],
+    theme: { mode: tc.mode },
+    colors: ["#E09A67", "#F59E0B", "#10B981", "#06B6D4", "#B86B35", "#8B5CF6"],
     plotOptions: {
       pie: {
         donut: {
           size: "72%",
           labels: {
             show: true,
+            name: {
+              show: true,
+              fontSize: "13px",
+              fontWeight: 600,
+              color: tc.textPrimary
+            },
+            value: {
+              show: true,
+              fontSize: "18px",
+              fontWeight: 800,
+              color: tc.valColor,
+              formatter: (val) => hasData ? "₱" + parseFloat(val).toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2}) : "₱0.00"
+            },
             total: {
               show: true,
-              label: "Total Sales",
-              color: "var(--text-muted)",
-              formatter: () => ' . json_encode($totalMonthStr) . '
+              label: "Category Total",
+              fontSize: "12px",
+              fontWeight: 600,
+              color: tc.textMuted,
+              formatter: (w) => {
+                if (!hasData) return "₱0.00";
+                const total = w.globals.seriesTotals.reduce((a, b) => a + b, 0);
+                return "₱" + total.toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2});
+              }
             }
           }
         }
@@ -413,19 +459,63 @@ document.addEventListener("DOMContentLoaded", function() {
     legend: {
       position: "bottom",
       fontSize: "12px",
-      labels: { colors: "var(--text-muted)" }
+      fontWeight: 500,
+      labels: { colors: tc.textSecondary }
     },
     tooltip: {
-      theme: themeMode,
-      y: { formatter: (val) => "₱" + val.toLocaleString() }
+      theme: tc.mode,
+      style: { fontSize: "12px" },
+      y: { formatter: (val) => hasData ? "₱" + parseFloat(val).toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2}) : "₱0.00" }
     }
   };
 
   const catEl = document.querySelector("#dashCatApex");
+  let catChart = null;
   if (catEl) {
-    new ApexCharts(catEl, catOptions).render();
+    catChart = new ApexCharts(catEl, catOptions);
+    catChart.render();
+  }
+
+  // Dynamic Theme Switcher synchronization for charts
+  const themeToggleBtn = document.getElementById("themeToggle");
+  if (themeToggleBtn) {
+    themeToggleBtn.addEventListener("click", () => {
+      setTimeout(() => {
+        tc = getThemeColors();
+
+        if (salesChart) {
+          salesChart.updateOptions({
+            theme: { mode: tc.mode },
+            xaxis: { labels: { style: { colors: tc.textMuted } } },
+            yaxis: { labels: { style: { colors: tc.textMuted } } },
+            grid: { borderColor: tc.borderColor },
+            tooltip: { theme: tc.mode }
+          });
+        }
+
+        if (catChart) {
+          catChart.updateOptions({
+            theme: { mode: tc.mode },
+            legend: { labels: { colors: tc.textSecondary } },
+            tooltip: { theme: tc.mode },
+            plotOptions: {
+              pie: {
+                donut: {
+                  labels: {
+                    name: { color: tc.textPrimary },
+                    value: { color: tc.valColor },
+                    total: { color: tc.textMuted }
+                  }
+                }
+              }
+            }
+          });
+        }
+      }, 50);
+    });
   }
 });
-</script>';
+</script>
+HTML;
 
 include __DIR__ . '/../includes/footer.php';
