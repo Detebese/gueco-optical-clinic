@@ -166,7 +166,7 @@ include __DIR__ . '/../includes/header.php';
         </div>
       </div>
       <div class="card-body">
-        <div id="dashSalesApex" style="min-height: 270px;"></div>
+        <div id="dashSalesApex" style="min-height: 280px; width: 100%;"></div>
       </div>
     </div>
   </div>
@@ -178,7 +178,7 @@ include __DIR__ . '/../includes/header.php';
         <h6><i class="fas fa-chart-pie me-2" style="color:var(--clr-gold)"></i>Sales by Category</h6>
       </div>
       <div class="card-body d-flex flex-column align-items-center justify-content-center">
-        <div id="dashCatApex" style="width: 100%; min-height: 250px;"></div>
+        <div id="dashCatApex" style="width: 100%; min-height: 280px;"></div>
       </div>
     </div>
   </div>

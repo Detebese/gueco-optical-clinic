@@ -546,7 +546,7 @@ input[type="password"]::-ms-clear {
 .bento-icon-circle.green  { background: rgba(16, 185, 129, 0.15); color: var(--clr-success); }
 .bento-icon-circle.red    { background: rgba(239, 68, 68, 0.15); color: var(--clr-danger); }
 
-/* ─── Tables ─────────────────────────────────────────────── */
+/* ─── Tables (Bootstrap 5 Full Theme Override) ─────────────── */
 .table-wrapper {
   background: var(--bg-card);
   border: 1px solid var(--border-color);
@@ -555,36 +555,64 @@ input[type="password"]::-ms-clear {
   box-shadow: var(--shadow-sm);
 }
 
+.table-responsive {
+  background: transparent !important;
+  border-radius: 0 0 var(--radius-xl) var(--radius-xl);
+}
+
 .table {
-  width: 100%; border-collapse: collapse; margin: 0;
+  --bs-table-bg: transparent !important;
+  --bs-table-accent-bg: transparent !important;
+  --bs-table-striped-bg: transparent !important;
+  --bs-table-hover-bg: var(--bg-hover) !important;
+  background-color: transparent !important;
+  color: var(--text-primary) !important;
+  width: 100%;
+  border-collapse: collapse;
+  margin: 0;
   font-size: .84rem;
 }
 
+.table > :not(caption) > * > * {
+  background-color: transparent !important;
+  color: var(--text-primary) !important;
+  border-bottom: 1px solid var(--border-light) !important;
+  box-shadow: none !important;
+  padding: 14px 18px;
+  vertical-align: middle;
+}
+
 .table thead th {
-  background: var(--bg-table-head);
-  color: var(--text-secondary);
-  font-weight: 700;
-  font-size: .72rem;
+  background-color: var(--bg-table-head) !important;
+  color: var(--text-secondary) !important;
+  font-weight: 700 !important;
+  font-size: .72rem !important;
   text-transform: uppercase;
   letter-spacing: .06em;
-  padding: 15px 20px;
-  border-bottom: 1px solid var(--border-color);
+  padding: 14px 18px !important;
+  border-bottom: 1px solid var(--border-color) !important;
   white-space: nowrap;
 }
 
 .table tbody tr {
-  background: var(--bg-table-row);
-  border-bottom: 1px solid var(--border-light);
+  background-color: transparent !important;
   transition: var(--transition);
 }
 
-.table tbody tr:last-child { border-bottom: none; }
-.table tbody tr:hover { background: var(--bg-hover); }
+.table tbody tr:last-child > td {
+  border-bottom: none !important;
+}
 
-.table tbody td {
-  padding: 15px 20px;
-  color: var(--text-primary);
-  vertical-align: middle;
+.table tbody tr:hover > * {
+  background-color: var(--bg-hover) !important;
+}
+
+[data-theme="dark"] .text-muted {
+  color: #9CA3AF !important;
+}
+
+[data-theme="dark"] .table-responsive .text-muted {
+  color: #9CA3AF !important;
 }
 
 /* ─── Buttons (Pill Luxury Style) ─────────────────────────── */
