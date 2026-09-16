@@ -452,7 +452,10 @@ input[type="password"]::-ms-clear {
 
 /* ─── Bento Grid Cards ────────────────────────────────────── */
 .card {
+  --bs-card-color: var(--text-primary) !important;
+  --bs-card-bg: var(--bg-card) !important;
   background: var(--bg-card) !important;
+  color: var(--text-primary) !important;
   border: 1px solid var(--border-color) !important;
   border-radius: var(--radius-xl) !important;
   box-shadow: var(--shadow-sm);
@@ -479,72 +482,164 @@ input[type="password"]::-ms-clear {
   letter-spacing: -0.01em;
 }
 
-.card-body { padding: 24px; }
+.card-body {
+  color: var(--text-primary) !important;
+  padding: 24px;
+}
 
 /* Bento Stat Cards (Mockup Top Row) */
 .bento-stat {
+  position: relative;
   background: var(--bg-card) !important;
   border: 1px solid var(--border-color) !important;
-  border-radius: var(--radius-xl);
+  border-radius: 20px;
   padding: 22px 24px;
   display: flex;
   justify-content: space-between;
   align-items: center;
-  box-shadow: var(--shadow-sm);
-  transition: var(--transition);
-  position: relative;
+  gap: 16px;
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.03), 0 1px 3px rgba(0, 0, 0, 0.02);
+  transition: all 0.25s cubic-bezier(0.16, 1, 0.3, 1);
   overflow: hidden;
   height: 100%;
 }
 
+[data-theme="dark"] .bento-stat {
+  background: #17161D !important;
+  border-color: rgba(255, 255, 255, 0.08) !important;
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.4);
+}
+
+.bento-stat-glow {
+  position: absolute;
+  top: -24px;
+  right: -24px;
+  width: 80px;
+  height: 80px;
+  border-radius: 50%;
+  background: radial-gradient(circle, rgba(var(--stat-rgb, 224, 154, 103), 0.2) 0%, transparent 70%);
+  pointer-events: none;
+  transition: all 0.35s ease;
+}
+
 .bento-stat:hover {
-  transform: translateY(-3px);
-  box-shadow: var(--shadow-md);
-  border-color: rgba(224, 154, 103, 0.4) !important;
+  transform: translateY(-4px);
+  box-shadow: 0 14px 30px -4px rgba(var(--stat-rgb, 224, 154, 103), 0.18), 0 4px 12px -2px rgba(0, 0, 0, 0.04);
+  border-color: rgba(var(--stat-rgb, 224, 154, 103), 0.45) !important;
+}
+
+[data-theme="dark"] .bento-stat:hover {
+  box-shadow: 0 14px 32px -4px rgba(0, 0, 0, 0.7), 0 0 22px rgba(var(--stat-rgb, 224, 154, 103), 0.25);
+}
+
+.bento-stat:hover .bento-stat-glow {
+  width: 120px;
+  height: 120px;
+  background: radial-gradient(circle, rgba(var(--stat-rgb, 224, 154, 103), 0.35) 0%, transparent 70%);
+}
+
+.bento-stat-left {
+  display: flex;
+  flex-direction: column;
+  position: relative;
+  z-index: 1;
+  min-width: 0;
 }
 
 .bento-stat-left .bento-label {
-  font-size: .8rem;
-  font-weight: 600;
+  font-size: 0.76rem;
+  font-weight: 700;
   color: var(--text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.65px;
   margin-bottom: 6px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 .bento-stat-left .bento-value {
-  font-size: 1.75rem;
+  font-family: 'Plus Jakarta Sans', 'Poppins', sans-serif;
+  font-size: 1.85rem;
   font-weight: 800;
   color: var(--text-primary);
-  line-height: 1.15;
-  letter-spacing: -0.02em;
+  line-height: 1.1;
+  letter-spacing: -0.03em;
 }
 
-.bento-stat-left .bento-change {
-  font-size: .74rem;
-  font-weight: 600;
-  margin-top: 6px;
-  display: flex; align-items: center; gap: 5px;
+/* Modern Pill Badges */
+.bento-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 10px;
+  border-radius: 9999px;
+  font-size: 0.72rem;
+  font-weight: 700;
+  margin-top: 8px;
+  width: fit-content;
+  white-space: nowrap;
 }
-.bento-stat-left .bento-change.up { color: var(--clr-success); }
-.bento-stat-left .bento-change.down { color: var(--clr-danger); }
-.bento-stat-left .bento-change.neutral { color: var(--clr-bronze); }
+
+.bento-badge.up,
+.bento-badge.green {
+  background: rgba(16, 185, 129, 0.12);
+  color: #10B981;
+}
+
+.bento-badge.blue {
+  background: rgba(14, 165, 233, 0.12);
+  color: #0EA5E9;
+}
+
+.bento-badge.warning {
+  background: rgba(245, 158, 11, 0.12);
+  color: #F59E0B;
+}
+
+.bento-badge.danger,
+.bento-badge.down {
+  background: rgba(239, 68, 68, 0.12);
+  color: #EF4444;
+}
+
+.bento-badge.purple {
+  background: rgba(139, 92, 246, 0.12);
+  color: #8B5CF6;
+}
+
+.bento-badge.neutral {
+  background: rgba(224, 154, 103, 0.12);
+  color: var(--clr-bronze);
+}
 
 .bento-stat-right {
   display: flex;
   align-items: center;
   justify-content: center;
   flex-shrink: 0;
+  position: relative;
+  z-index: 1;
 }
 
-.bento-icon-circle {
-  width: 48px; height: 48px;
-  border-radius: 50%;
-  display: flex; align-items: center; justify-content: center;
-  font-size: 1.15rem;
+.bento-stat-icon {
+  width: 50px;
+  height: 50px;
+  border-radius: 15px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 1.3rem;
+  color: var(--stat-color, var(--clr-primary));
+  background: rgba(var(--stat-rgb, 224, 154, 103), 0.1);
+  border: 1px solid rgba(var(--stat-rgb, 224, 154, 103), 0.2);
+  transition: transform 0.25s cubic-bezier(0.16, 1, 0.3, 1), background 0.25s ease;
 }
-.bento-icon-circle.bronze { background: rgba(224, 154, 103, 0.15); color: var(--clr-bronze); }
-.bento-icon-circle.gold   { background: rgba(245, 158, 11, 0.15); color: var(--clr-gold); }
-.bento-icon-circle.green  { background: rgba(16, 185, 129, 0.15); color: var(--clr-success); }
-.bento-icon-circle.red    { background: rgba(239, 68, 68, 0.15); color: var(--clr-danger); }
+
+.bento-stat:hover .bento-stat-icon {
+  transform: scale(1.08);
+  background: rgba(var(--stat-rgb, 224, 154, 103), 0.18);
+}
 
 /* ─── Tables (Bootstrap 5 Full Theme Override) ─────────────── */
 .table-wrapper {
@@ -677,6 +772,49 @@ input[type="password"]::-ms-clear {
   color: var(--text-primary);
 }
 
+/* ─── Segmented Switch Control ────────────────────────────── */
+.segmented-control {
+  display: inline-flex;
+  align-items: center;
+  background: var(--bg-hover);
+  padding: 3px;
+  border-radius: 9999px;
+  border: 1px solid var(--border-color);
+  gap: 2px;
+}
+
+.segmented-btn {
+  border: none;
+  background: transparent;
+  color: var(--text-muted);
+  font-size: 0.72rem;
+  font-weight: 700;
+  padding: 4px 12px;
+  border-radius: 9999px;
+  cursor: pointer;
+  transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  line-height: 1.2;
+}
+
+.segmented-btn:hover {
+  color: var(--text-primary);
+}
+
+.segmented-btn.active {
+  background: #18181B;
+  color: #FFFFFF;
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.15);
+}
+
+[data-theme="dark"] .segmented-btn.active {
+  background: var(--clr-bronze);
+  color: #0A0A0D;
+  box-shadow: 0 2px 8px rgba(224, 154, 103, 0.35);
+}
+
 /* ─── Badges (Sleek Pills) ────────────────────────────────── */
 .badge {
   display: inline-flex; align-items: center; gap: 5px;
@@ -713,7 +851,38 @@ input[type="password"]::-ms-clear {
   .header-search-wrap { display: none; }
 }
 
-/* ─── Form Inputs ────────────────────────────────────────── */
+/* ─── Section Header ─────────────────────────────────────── */
+.section-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 22px;
+  flex-wrap: wrap;
+  gap: 14px;
+}
+.section-header h5 {
+  font-size: 1.15rem;
+  font-weight: 800;
+  color: var(--text-primary);
+  margin: 0;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+/* ─── Form Controls & Labels ─────────────────────────────── */
+.form-group {
+  margin-bottom: 16px;
+}
+.form-label {
+  display: block;
+  font-size: .76rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: .06em;
+  color: var(--text-muted);
+  margin-bottom: 6px;
+}
 .form-control, .form-select {
   background: var(--bg-input);
   border: 1px solid var(--border-color);
@@ -723,12 +892,289 @@ input[type="password"]::-ms-clear {
   color: var(--text-primary);
   font-family: inherit;
   transition: var(--transition);
+  width: 100%;
+}
+.form-control::placeholder,
+input::placeholder,
+textarea::placeholder {
+  color: var(--text-muted) !important;
+  opacity: 0.8 !important;
 }
 .form-control:focus, .form-select:focus {
   background: var(--bg-card);
   border-color: var(--clr-bronze);
   box-shadow: 0 0 0 3px rgba(224, 154, 103, 0.18);
   color: var(--text-primary);
+  outline: none;
+}
+textarea.form-control {
+  resize: vertical;
+  min-height: 80px;
+}
+
+/* ─── Dark Mode Form Inputs & Placeholders ────────────────── */
+[data-theme="dark"] .form-control,
+[data-theme="dark"] .form-select,
+[data-theme="dark"] input:not([type="checkbox"]):not([type="radio"]):not([type="submit"]):not([type="button"]),
+[data-theme="dark"] textarea {
+  background-color: #1E1C24 !important;
+  color: #F9FAFB !important;
+  border-color: rgba(255, 255, 255, 0.14) !important;
+}
+
+[data-theme="dark"] .form-control::placeholder,
+[data-theme="dark"] input::placeholder,
+[data-theme="dark"] textarea::placeholder {
+  color: rgba(255, 255, 255, 0.5) !important;
+  opacity: 1 !important;
+}
+
+[data-theme="dark"] .form-control:focus,
+[data-theme="dark"] .form-select:focus,
+[data-theme="dark"] input:focus,
+[data-theme="dark"] textarea:focus {
+  background-color: #262430 !important;
+  color: #FFFFFF !important;
+  border-color: var(--clr-bronze) !important;
+  box-shadow: 0 0 0 3px rgba(224, 154, 103, 0.25) !important;
+}
+
+/* Modal Form Controls in Dark Mode */
+[data-theme="dark"] .modal-box .form-control,
+[data-theme="dark"] .modal-box textarea,
+[data-theme="dark"] .modal-box .form-select {
+  background-color: #1A1922 !important;
+  border-color: rgba(255, 255, 255, 0.15) !important;
+  color: #F9FAFB !important;
+}
+
+[data-theme="dark"] .modal-box .form-control::placeholder,
+[data-theme="dark"] .modal-box textarea::placeholder {
+  color: rgba(255, 255, 255, 0.55) !important;
+  opacity: 1 !important;
+}
+
+[data-theme="dark"] .modal-box .form-control:focus,
+[data-theme="dark"] .modal-box textarea:focus,
+[data-theme="dark"] .modal-box .form-select:focus {
+  background-color: #23212C !important;
+  border-color: var(--clr-bronze) !important;
+  color: #FFFFFF !important;
+}
+
+/* ─── Button Extensions & Icons ──────────────────────────── */
+.btn-icon {
+  width: 34px;
+  height: 34px;
+  padding: 0 !important;
+  border-radius: 10px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+.btn-icon.btn-sm {
+  width: 32px;
+  height: 32px;
+  border-radius: 9px;
+  font-size: .82rem;
+}
+.btn-warning {
+  background: rgba(245, 158, 11, 0.15);
+  color: #F59E0B;
+  border-color: rgba(245, 158, 11, 0.3);
+}
+.btn-warning:hover {
+  background: #F59E0B;
+  color: #0A0A0D;
+  border-color: #F59E0B;
+  transform: translateY(-1px);
+}
+.btn-success {
+  background: rgba(16, 185, 129, 0.15);
+  color: #10B981;
+  border-color: rgba(16, 185, 129, 0.3);
+}
+.btn-success:hover {
+  background: #10B981;
+  color: #FFFFFF;
+  border-color: #10B981;
+  transform: translateY(-1px);
+}
+.btn-danger {
+  background: rgba(239, 68, 68, 0.15);
+  color: #EF4444;
+  border-color: rgba(239, 68, 68, 0.3);
+}
+.btn-danger:hover {
+  background: #EF4444;
+  color: #FFFFFF;
+  border-color: #EF4444;
+  transform: translateY(-1px);
+}
+
+/* ─── SweetAlert2 Modern Layering & Overrides ─────────────────── */
+.swal2-container {
+  z-index: 100000 !important;
+}
+
+.swal2-popup {
+  border-radius: var(--radius-xl) !important;
+  border: 1px solid var(--border-color) !important;
+  box-shadow: 0 25px 60px rgba(0, 0, 0, 0.5) !important;
+  font-family: inherit !important;
+}
+
+[data-theme="dark"] .swal2-popup {
+  border-color: rgba(255, 255, 255, 0.15) !important;
+  box-shadow: 0 30px 70px rgba(0, 0, 0, 0.85), 0 0 35px rgba(224, 154, 103, 0.15) !important;
+}
+
+/* ─── Modern Global Modals ───────────────────────────────── */
+.modal-overlay {
+  display: none !important;
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.65);
+  backdrop-filter: blur(10px);
+  -webkit-backdrop-filter: blur(10px);
+  z-index: 9999;
+  align-items: center;
+  justify-content: center;
+  padding: 20px;
+  opacity: 0;
+  visibility: hidden;
+  transition: opacity 0.25s cubic-bezier(0.16, 1, 0.3, 1), visibility 0.25s ease;
+}
+
+.modal-overlay.active,
+.modal-overlay.open {
+  display: flex !important;
+  opacity: 1;
+  visibility: visible;
+}
+
+.modal-box {
+  background: var(--bg-card);
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-xl);
+  width: 100%;
+  max-width: 520px;
+  box-shadow: 0 25px 60px rgba(0, 0, 0, 0.45);
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+  max-height: 85vh;
+  animation: modalScaleIn 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+  position: relative;
+}
+
+[data-theme="dark"] .modal-box {
+  border-color: rgba(255, 255, 255, 0.12);
+  box-shadow: 0 30px 70px rgba(0, 0, 0, 0.8), 0 0 30px rgba(224, 154, 103, 0.12);
+}
+
+.modal-box > form {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  min-height: 0;
+  overflow: hidden;
+  margin: 0;
+}
+
+@keyframes modalScaleIn {
+  from {
+    opacity: 0;
+    transform: scale(0.94) translateY(12px);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1) translateY(0);
+  }
+}
+
+.modal-header {
+  padding: 20px 24px;
+  border-bottom: 1px solid var(--border-light);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  background: var(--bg-table-head);
+  flex-shrink: 0;
+}
+
+.modal-header h5 {
+  font-size: 1.05rem;
+  font-weight: 700;
+  color: var(--text-primary);
+  margin: 0;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.modal-close {
+  background: var(--bg-hover);
+  border: 1px solid var(--border-color);
+  color: var(--text-muted);
+  width: 34px;
+  height: 34px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  transition: var(--transition);
+  font-size: 0.85rem;
+  flex-shrink: 0;
+}
+
+.modal-close:hover {
+  background: var(--clr-danger);
+  border-color: var(--clr-danger);
+  color: #fff;
+  transform: rotate(90deg);
+}
+
+.modal-body {
+  padding: 24px;
+  overflow-y: auto;
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  scrollbar-width: thin;
+  scrollbar-color: var(--clr-bronze) transparent;
+}
+
+.modal-body::-webkit-scrollbar {
+  width: 6px;
+}
+
+.modal-body::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.modal-body::-webkit-scrollbar-thumb {
+  background: rgba(224, 154, 103, 0.35);
+  border-radius: 10px;
+}
+
+.modal-body::-webkit-scrollbar-thumb:hover {
+  background: var(--clr-bronze);
+}
+
+.modal-footer {
+  padding: 16px 24px;
+  border-top: 1px solid var(--border-light);
+  background: var(--bg-table-head);
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 12px;
+  flex-shrink: 0;
 }
 
 /* 🖨️ Print / PDF Export */
@@ -744,4 +1190,47 @@ input[type="password"]::-ms-clear {
   table { width: 100% !important; border-collapse: collapse; }
   th, td { border: 1px solid #ccc !important; color: #000 !important; }
   * { -webkit-print-color-adjust: exact !important; print-color-adjust: exact !important; }
+}
+
+/* ─── Modern ApexCharts Tooltip Overrides ───────────────────────── */
+.apexcharts-tooltip {
+  background: var(--bg-card) !important;
+  color: var(--text-primary) !important;
+  border: 1px solid var(--border-color) !important;
+  border-radius: 12px !important;
+  box-shadow: 0 10px 25px rgba(0, 0, 0, 0.25) !important;
+  padding: 8px 12px !important;
+  backdrop-filter: blur(8px);
+}
+
+.apexcharts-tooltip-title {
+  background: var(--bg-hover) !important;
+  border-bottom: 1px solid var(--border-light) !important;
+  color: var(--text-primary) !important;
+  font-weight: 700 !important;
+  font-family: inherit !important;
+  border-radius: 10px 10px 0 0 !important;
+  padding: 6px 10px !important;
+}
+
+.apexcharts-tooltip-text,
+.apexcharts-tooltip-text-label,
+.apexcharts-tooltip-text-value {
+  color: var(--text-primary) !important;
+  font-family: inherit !important;
+  font-weight: 600 !important;
+}
+
+.apexcharts-tooltip-series-group {
+  padding: 4px 8px !important;
+}
+
+.apexcharts-tooltip-marker {
+  border-radius: 50% !important;
+}
+
+.apexcharts-legend-text {
+  color: var(--text-secondary) !important;
+  font-family: inherit !important;
+  font-weight: 600 !important;
 }

@@ -51,3 +51,313 @@
 .dash-40717a { font-family:monospace;font-size:.78rem;font-weight:600;color:var(--clr-primary) }
 
 .dash-c0f652 { font-weight:700;color:var(--clr-success) }
+
+/* ─── Modern Luxury Month Picker Modal / Popover ───────────────── */
+.dash-mp-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100vw;
+  height: 100vh;
+  background: rgba(0, 0, 0, 0.6);
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+  z-index: 10050;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 16px;
+  opacity: 0;
+  visibility: hidden;
+  transition: opacity 0.25s cubic-bezier(0.16, 1, 0.3, 1), visibility 0.25s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.dash-mp-overlay.active {
+  opacity: 1;
+  visibility: visible;
+}
+
+.dash-mp-card {
+  width: 100%;
+  max-width: 440px;
+  background: #17161D;
+  border: 1px solid rgba(224, 154, 103, 0.35);
+  border-radius: 22px;
+  box-shadow: 0 24px 60px -10px rgba(0, 0, 0, 0.75), 0 0 30px rgba(224, 154, 103, 0.15);
+  overflow: hidden;
+  transform: scale(0.92) translateY(16px);
+  transition: transform 0.28s cubic-bezier(0.16, 1, 0.3, 1);
+  font-family: 'Plus Jakarta Sans', 'Poppins', sans-serif;
+}
+
+[data-theme="light"] .dash-mp-card,
+html:not([data-theme="dark"]) .dash-mp-card {
+  background: #FFFFFF;
+  border: 1px solid rgba(224, 154, 103, 0.3);
+  box-shadow: 0 24px 60px -10px rgba(0, 0, 0, 0.18), 0 0 25px rgba(224, 154, 103, 0.12);
+}
+
+.dash-mp-overlay.active .dash-mp-card {
+  transform: scale(1) translateY(0);
+}
+
+/* Header */
+.dash-mp-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 18px 22px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+  background: rgba(224, 154, 103, 0.06);
+}
+
+[data-theme="light"] .dash-mp-header,
+html:not([data-theme="dark"]) .dash-mp-header {
+  border-bottom: 1px solid rgba(0, 0, 0, 0.06);
+  background: rgba(224, 154, 103, 0.08);
+}
+
+.dash-mp-title-group {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.dash-mp-icon {
+  width: 40px;
+  height: 40px;
+  border-radius: 12px;
+  background: rgba(224, 154, 103, 0.16);
+  color: #E09A67;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 1.15rem;
+  border: 1px solid rgba(224, 154, 103, 0.3);
+  flex-shrink: 0;
+}
+
+.dash-mp-heading {
+  font-size: 1.05rem;
+  font-weight: 700;
+  color: var(--text-primary);
+  margin: 0;
+  line-height: 1.2;
+}
+
+.dash-mp-subheading {
+  font-size: 0.74rem;
+  color: var(--text-muted);
+  margin: 3px 0 0;
+}
+
+.dash-mp-close {
+  background: transparent;
+  border: none;
+  color: var(--text-muted);
+  width: 34px;
+  height: 34px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 1.15rem;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.dash-mp-close:hover {
+  background: rgba(255, 255, 255, 0.1);
+  color: var(--text-primary);
+  transform: rotate(90deg);
+}
+
+[data-theme="light"] .dash-mp-close:hover,
+html:not([data-theme="dark"]) .dash-mp-close:hover {
+  background: rgba(0, 0, 0, 0.06);
+}
+
+/* Body */
+.dash-mp-body {
+  padding: 20px 22px;
+}
+
+/* Year Stepper Bar */
+.dash-mp-year-bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  background: rgba(255, 255, 255, 0.04);
+  border: 1px solid var(--border-color);
+  border-radius: 14px;
+  padding: 6px 10px;
+  margin-bottom: 18px;
+}
+
+[data-theme="light"] .dash-mp-year-bar,
+html:not([data-theme="dark"]) .dash-mp-year-bar {
+  background: #F8FAFC;
+  border: 1px solid #E2E8F0;
+}
+
+.dash-mp-year-btn {
+  background: transparent;
+  border: 1px solid transparent;
+  color: var(--text-secondary);
+  width: 36px;
+  height: 36px;
+  border-radius: 10px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  font-size: 0.85rem;
+  transition: all 0.2s ease;
+}
+
+.dash-mp-year-btn:hover {
+  background: rgba(224, 154, 103, 0.16);
+  border-color: rgba(224, 154, 103, 0.35);
+  color: #E09A67;
+  transform: scale(1.06);
+}
+
+.dash-mp-year-display {
+  font-size: 1.2rem;
+  font-weight: 800;
+  color: var(--text-primary);
+  letter-spacing: 0.5px;
+}
+
+/* Month Grid (4 columns x 3 rows) */
+.dash-mp-grid {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 10px;
+}
+
+.dash-mp-month-btn {
+  position: relative;
+  background: rgba(255, 255, 255, 0.03);
+  border: 1px solid var(--border-color);
+  border-radius: 14px;
+  padding: 12px 6px;
+  text-align: center;
+  cursor: pointer;
+  transition: all 0.22s cubic-bezier(0.16, 1, 0.3, 1);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 2px;
+  color: var(--text-secondary);
+  outline: none;
+}
+
+[data-theme="light"] .dash-mp-month-btn,
+html:not([data-theme="dark"]) .dash-mp-month-btn {
+  background: #F8FAFC;
+  border-color: #E2E8F0;
+}
+
+.dash-mp-month-btn:hover {
+  background: rgba(224, 154, 103, 0.12);
+  border-color: rgba(224, 154, 103, 0.45);
+  color: #E09A67;
+  transform: translateY(-2px);
+  box-shadow: 0 4px 14px rgba(224, 154, 103, 0.18);
+}
+
+.dash-mp-mcode {
+  font-size: 0.98rem;
+  font-weight: 700;
+  line-height: 1.1;
+}
+
+.dash-mp-mname {
+  font-size: 0.66rem;
+  font-weight: 500;
+  opacity: 0.75;
+}
+
+/* Selected Month Active State */
+.dash-mp-month-btn.is-selected {
+  background: linear-gradient(135deg, #E09A67 0%, #C26325 100%) !important;
+  border-color: #E09A67 !important;
+  color: #FFFFFF !important;
+  font-weight: 700;
+  box-shadow: 0 6px 18px rgba(224, 154, 103, 0.45) !important;
+  transform: translateY(-2px) scale(1.02);
+}
+
+.dash-mp-month-btn.is-selected .dash-mp-mname {
+  opacity: 0.95;
+  color: #FFFFFF;
+}
+
+/* Current Month indicator badge */
+.dash-mp-current-tag {
+  position: absolute;
+  top: 5px;
+  right: 5px;
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: #10B981;
+  box-shadow: 0 0 6px #10B981;
+}
+
+.dash-mp-month-btn.is-selected .dash-mp-current-tag {
+  background: #FFFFFF;
+  box-shadow: 0 0 6px rgba(255, 255, 255, 0.9);
+}
+
+/* Footer / Quick Shortcuts */
+.dash-mp-footer {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 14px 22px;
+  background: rgba(255, 255, 255, 0.02);
+  border-top: 1px solid var(--border-color);
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+[data-theme="light"] .dash-mp-footer,
+html:not([data-theme="dark"]) .dash-mp-footer {
+  background: #FAFAFA;
+  border-top: 1px solid #E2E8F0;
+}
+
+.dash-mp-quick-btn {
+  background: transparent;
+  border: 1px solid var(--border-color);
+  color: var(--text-secondary);
+  border-radius: 10px;
+  padding: 8px 14px;
+  font-size: 0.8rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.dash-mp-quick-btn:hover {
+  background: rgba(224, 154, 103, 0.15);
+  border-color: rgba(224, 154, 103, 0.4);
+  color: #E09A67;
+}
+
+.dash-mp-quick-btn.primary {
+  background: rgba(224, 154, 103, 0.15);
+  border-color: rgba(224, 154, 103, 0.45);
+  color: #E09A67;
+}
+
+.dash-mp-quick-btn.primary:hover {
+  background: #E09A67;
+  color: #FFFFFF;
+}

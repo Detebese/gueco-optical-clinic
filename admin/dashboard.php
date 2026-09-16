@@ -10,6 +10,25 @@ $activeNav  = 'dashboard';
 $stats = getDashboardStats();
 $db    = getDB();
 
+// Selected month for Sales and Category metrics
+$selectedMonth = $_GET['month'] ?? date('Y-m');
+if (!preg_match('/^\d{4}-\d{2}$/', $selectedMonth)) {
+    $selectedMonth = date('Y-m');
+}
+$isCurrentMonth = ($selectedMonth === date('Y-m'));
+$monthName = date('F Y', strtotime($selectedMonth . '-01'));
+
+// Monthly Sales for the selected month
+$monthSalesStmt = $db->prepare("
+    SELECT COALESCE(SUM(total),0) as total, COUNT(*) as count 
+    FROM sales 
+    WHERE DATE_FORMAT(created_at, '%Y-%m') = ? AND status = 'completed'
+");
+$monthSalesStmt->execute([$selectedMonth]);
+$monthSalesData = $monthSalesStmt->fetch();
+$monthlySalesTotal = (float)$monthSalesData['total'];
+$monthSalesCount   = (int)$monthSalesData['count'];
+
 // Sales chart data — last 7 days
 $sales7 = [];
 $labels7 = [];
@@ -21,22 +40,54 @@ for ($i = 6; $i >= 0; $i--) {
     $labels7[] = date('M d', strtotime($date));
 }
 
-// Category sales breakdown
-$catSales = $db->query("
-    SELECT c.name, COALESCE(SUM(si.total_price),0) as total
-    FROM categories c
-    LEFT JOIN products p ON p.category_id = c.id
-    LEFT JOIN sale_items si ON si.product_id = p.id
-    LEFT JOIN sales s ON s.id = si.sale_id AND s.status = 'completed'
+// Category sales breakdown for the selected month (net revenue after discounts)
+$catStmt = $db->prepare("
+    SELECT c.name, 
+           ROUND(COALESCE(SUM(
+               CASE 
+                   WHEN s.subtotal > 0 THEN (si.total_price * (s.total / s.subtotal)) 
+                   ELSE si.total_price 
+               END
+           ), 0), 2) as total
+    FROM sale_items si
+    JOIN sales s ON s.id = si.sale_id AND s.status = 'completed' AND DATE_FORMAT(s.created_at, '%Y-%m') = ?
+    JOIN products p ON p.id = si.product_id
+    JOIN categories c ON c.id = p.category_id
     GROUP BY c.id
     HAVING total > 0
     ORDER BY total DESC
     LIMIT 6
-")->fetchAll();
+");
+$catStmt->execute([$selectedMonth]);
+$catSales = $catStmt->fetchAll();
 
-// If no categories have sales yet, fetch all categories for display
 if (empty($catSales)) {
-    $catSales = $db->query("SELECT name, 0 as total FROM categories WHERE status='active' LIMIT 5")->fetchAll();
+    $catSales = [];
+}
+
+// Product sales breakdown for the selected month (net revenue after discounts)
+$prodStmt = $db->prepare("
+    SELECT p.name, 
+           SUM(si.quantity) as units_sold,
+           ROUND(COALESCE(SUM(
+               CASE 
+                   WHEN s.subtotal > 0 THEN (si.total_price * (s.total / s.subtotal)) 
+                   ELSE si.total_price 
+               END
+           ), 0), 2) as total
+    FROM sale_items si
+    JOIN sales s ON s.id = si.sale_id AND s.status = 'completed' AND DATE_FORMAT(s.created_at, '%Y-%m') = ?
+    JOIN products p ON p.id = si.product_id
+    GROUP BY p.id
+    HAVING total > 0
+    ORDER BY total DESC
+    LIMIT 6
+");
+$prodStmt->execute([$selectedMonth]);
+$prodSales = $prodStmt->fetchAll();
+
+if (empty($prodSales)) {
+    $prodSales = [];
 }
 
 // Today's appointments
@@ -59,7 +110,8 @@ $lowStockItems = $db->query("
     WHERE p.stock_quantity <= p.low_stock_alert AND p.status = 'active'
     ORDER BY p.stock_quantity ASC
     LIMIT 5
-")->fetchAll();
+");
+$lowStockItems = $lowStockItems->fetchAll();
 
 // Recent sales
 $recentSales = $db->query("
@@ -71,64 +123,70 @@ $recentSales = $db->query("
     LIMIT 5
 ")->fetchAll();
 
+$extraHead = '<link rel="stylesheet" href="'.BASE_URL.'assets/css/pages/dashboard.css?v='.time().'">';
 include __DIR__ . '/../includes/header.php';
 ?>
 
 <!-- ─── Bento Top Metric Cards Row (4 Responsive Cards) ─── -->
 <div class="row g-3 mb-4">
-  <!-- Card 1: Sales this month -->
+  <!-- Card 1: Sales this month (Clickable Month Filter) -->
   <div class="col-lg-3 col-sm-6">
-    <div class="bento-stat">
+    <div class="bento-stat" style="--stat-color:#E09A67; --stat-rgb:224, 154, 103; cursor: pointer;" onclick="openDashMonthPicker()" title="Click to change month">
+      <div class="bento-stat-glow"></div>
       <div class="bento-stat-left">
-        <div class="bento-label">Sales this month</div>
-        <div class="bento-value"><?= formatCurrency($stats['monthlySales']) ?></div>
-        <div class="bento-change up">
-          <i class="fas fa-arrow-trend-up"></i> <?= formatCurrency($stats['todaySales']) ?> today
+        <div class="bento-label d-flex align-items-center gap-1">
+          <span><?= $isCurrentMonth ? 'Sales this month' : 'Sales (' . $monthName . ')' ?></span>
+          <i class="fas fa-chevron-down fa-2xs opacity-75"></i>
+        </div>
+        <div class="bento-value"><?= formatCurrency($monthlySalesTotal) ?></div>
+        <div class="bento-badge <?= $monthlySalesTotal > 0 ? 'up' : 'neutral' ?>">
+          <?php if ($isCurrentMonth): ?>
+            <i class="fas fa-arrow-trend-up"></i> <?= formatCurrency($stats['todaySales']) ?> today
+          <?php else: ?>
+            <i class="fas fa-receipt"></i> <?= $monthSalesCount ?> transaction<?= $monthSalesCount !== 1 ? 's' : '' ?>
+          <?php endif; ?>
         </div>
       </div>
       <div class="bento-stat-right">
-        <!-- Mini Bar Chart (Reference Mockup style) -->
-        <svg width="44" height="32" viewBox="0 0 44 32" fill="none">
-          <rect x="4" y="16" width="5" height="16" rx="2.5" fill="#E09A67" opacity="0.35"/>
-          <rect x="14" y="6" width="5" height="26" rx="2.5" fill="#E09A67" opacity="0.75"/>
-          <rect x="24" y="12" width="5" height="20" rx="2.5" fill="#E09A67" opacity="0.5"/>
-          <rect x="34" y="2" width="5" height="30" rx="2.5" fill="#E09A67"/>
-        </svg>
+        <div class="bento-stat-icon" title="Choose Month">
+          <i class="fas fa-calendar-alt"></i>
+        </div>
       </div>
     </div>
   </div>
 
   <!-- Card 2: Total Patients -->
   <div class="col-lg-3 col-sm-6">
-    <div class="bento-stat">
+    <div class="bento-stat" style="--stat-color:#0EA5E9; --stat-rgb:14, 165, 233;">
+      <div class="bento-stat-glow"></div>
       <div class="bento-stat-left">
         <div class="bento-label">Total Patients</div>
         <div class="bento-value"><?= number_format($stats['totalPatients']) ?></div>
-        <div class="bento-change neutral">
+        <div class="bento-badge blue">
           <i class="fas fa-user-check"></i> Active records
         </div>
       </div>
       <div class="bento-stat-right">
-        <!-- Mini Wave Sparkline (Reference Mockup style) -->
-        <svg width="48" height="28" viewBox="0 0 48 28" fill="none">
-          <path d="M2 20C10 20 12 6 24 14C34 22 36 4 46 4" stroke="#F59E0B" stroke-width="2.5" stroke-linecap="round"/>
-        </svg>
+        <div class="bento-stat-icon">
+          <i class="fas fa-user-group"></i>
+        </div>
       </div>
     </div>
   </div>
 
-  <!-- Card 3: Appointments Today -->
+  <!-- Card 3: Today's Appointments -->
   <div class="col-lg-3 col-sm-6">
-    <div class="bento-stat">
+    <div class="bento-stat" style="--stat-color:#10B981; --stat-rgb:16, 185, 129;">
+      <div class="bento-stat-glow"></div>
       <div class="bento-stat-left">
         <div class="bento-label">Today's Appointments</div>
         <div class="bento-value"><?= number_format($stats['todayAppointments']) ?></div>
-        <div class="bento-change <?= $stats['pendingAppts'] > 0 ? 'neutral' : 'up' ?>">
+        <div class="bento-badge <?= $stats['pendingAppts'] > 0 ? 'warning' : 'green' ?>">
           <i class="fas fa-clock"></i> <?= number_format($stats['pendingAppts']) ?> pending
         </div>
       </div>
       <div class="bento-stat-right">
-        <div class="bento-icon-circle green">
+        <div class="bento-stat-icon">
           <i class="fas fa-calendar-check"></i>
         </div>
       </div>
@@ -136,22 +194,88 @@ include __DIR__ . '/../includes/header.php';
   </div>
 
   <!-- Card 4: Low Stock Items -->
+  <?php
+  $isLowStock = ($stats['lowStock'] > 0);
+  $stockColor = $isLowStock ? '#EF4444' : '#8B5CF6';
+  $stockRgb   = $isLowStock ? '239, 68, 68' : '139, 92, 246';
+  ?>
   <div class="col-lg-3 col-sm-6">
-    <div class="bento-stat">
+    <div class="bento-stat" style="--stat-color:<?= $stockColor ?>; --stat-rgb:<?= $stockRgb ?>;">
+      <div class="bento-stat-glow"></div>
       <div class="bento-stat-left">
         <div class="bento-label">Low Stock Items</div>
         <div class="bento-value"><?= number_format($stats['lowStock']) ?></div>
-        <div class="bento-change <?= $stats['lowStock'] > 0 ? 'down' : 'up' ?>">
-          <i class="fas fa-<?= $stats['lowStock'] > 0 ? 'triangle-exclamation' : 'circle-check' ?>"></i>
-          <?= $stats['lowStock'] > 0 ? 'Needs restocking' : 'Stock levels optimal' ?>
+        <div class="bento-badge <?= $isLowStock ? 'danger' : 'purple' ?>">
+          <i class="fas fa-<?= $isLowStock ? 'triangle-exclamation' : 'boxes-stacked' ?>"></i>
+          <?= $isLowStock ? 'Needs restocking' : 'Stock levels optimal' ?>
         </div>
       </div>
       <div class="bento-stat-right">
-        <!-- Mini Status Wave -->
-        <svg width="48" height="28" viewBox="0 0 48 28" fill="none">
-          <path d="M2 14C10 6 16 22 24 12C32 2 40 18 46 8" stroke="<?= $stats['lowStock'] > 0 ? '#EF4444' : '#10B981' ?>" stroke-width="2.5" stroke-linecap="round"/>
-        </svg>
+        <div class="bento-stat-icon">
+          <i class="fas fa-box-open"></i>
+        </div>
       </div>
+    </div>
+  </div>
+</div>
+
+<!-- ─── Modern Glassmorphic Month Picker Modal ───────────────── -->
+<div id="dashMonthPickerOverlay" class="dash-mp-overlay" onclick="handleDashMpOverlayClick(event)">
+  <div class="dash-mp-card" role="dialog" aria-modal="true" aria-labelledby="dashMpTitle">
+    <!-- Header -->
+    <div class="dash-mp-header">
+      <div class="dash-mp-title-group">
+        <div class="dash-mp-icon">
+          <i class="fas fa-calendar-days"></i>
+        </div>
+        <div>
+          <h5 class="dash-mp-heading" id="dashMpTitle">Select Sales Month</h5>
+          <p class="dash-mp-subheading">Choose a month to view sales &amp; category analytics</p>
+        </div>
+      </div>
+      <button type="button" class="dash-mp-close" onclick="closeDashMonthPicker()" title="Close picker" aria-label="Close">
+        <i class="fas fa-times"></i>
+      </button>
+    </div>
+
+    <!-- Body -->
+    <div class="dash-mp-body">
+      <!-- Year Stepper Bar -->
+      <div class="dash-mp-year-bar">
+        <button type="button" class="dash-mp-year-btn" id="dashMpPrevYear" onclick="changeDashMpYear(-1)" title="Previous Year">
+          <i class="fas fa-chevron-left"></i>
+        </button>
+        <div class="dash-mp-year-display">
+          <span id="dashMpYearText"><?= date('Y', strtotime($selectedMonth . '-01')) ?></span>
+        </div>
+        <button type="button" class="dash-mp-year-btn" id="dashMpNextYear" onclick="changeDashMpYear(1)" title="Next Year">
+          <i class="fas fa-chevron-right"></i>
+        </button>
+      </div>
+
+      <!-- 12-Month Interactive Grid -->
+      <div class="dash-mp-grid" id="dashMpGrid">
+        <!-- Rendered dynamically by JavaScript -->
+      </div>
+    </div>
+
+    <!-- Footer Shortcuts -->
+    <div class="dash-mp-footer">
+      <div class="d-flex align-items-center gap-2">
+        <button type="button" class="dash-mp-quick-btn primary" onclick="goToDashMonth('<?= date('Y-m') ?>')" title="Jump to Current Month">
+          <i class="fas fa-sparkles"></i> This Month
+        </button>
+        <?php
+        $prevMonthVal = date('Y-m', strtotime('first day of last month'));
+        $prevMonthName = date('M Y', strtotime('first day of last month'));
+        ?>
+        <button type="button" class="dash-mp-quick-btn" onclick="goToDashMonth('<?= $prevMonthVal ?>')" title="Jump to <?= $prevMonthName ?>">
+          <i class="fas fa-arrow-rotate-left"></i> Last Month
+        </button>
+      </div>
+      <button type="button" class="dash-mp-quick-btn" onclick="closeDashMonthPicker()">
+        Cancel
+      </button>
     </div>
   </div>
 </div>
@@ -177,11 +301,19 @@ include __DIR__ . '/../includes/header.php';
     </div>
   </div>
 
-  <!-- Category Breakdown Donut Chart -->
+  <!-- Sales Breakdown Donut Chart (Category & Product) -->
   <div class="col-xl-4 col-lg-5">
     <div class="card h-100">
-      <div class="card-header">
-        <h6><i class="fas fa-chart-pie me-2" style="color:var(--clr-gold)"></i>Sales by Category</h6>
+      <div class="card-header d-flex align-items-center justify-content-between flex-wrap gap-2">
+        <div class="d-flex align-items-center gap-2">
+          <h6 class="mb-0" id="breakdownHeading"><i class="fas fa-chart-pie me-2" style="color:var(--clr-gold)"></i>Sales by <span id="breakdownModeText">Category</span></h6>
+        </div>
+        <div class="d-flex align-items-center gap-2">
+          <div class="segmented-control" role="tablist" aria-label="Sales breakdown filter">
+            <button type="button" class="segmented-btn active" id="btnBreakdownCat" role="tab" aria-selected="true" title="View Sales by Category">Category</button>
+            <button type="button" class="segmented-btn" id="btnBreakdownProd" role="tab" aria-selected="false" title="View Sales by Product">Product</button>
+          </div>
+        </div>
       </div>
       <div class="card-body d-flex flex-column align-items-center justify-content-center p-3">
         <div id="dashCatApex" style="width: 100%; min-height: 280px;"></div>
@@ -322,12 +454,21 @@ include __DIR__ . '/../includes/header.php';
 </div>
 
 <?php
-$catNames  = array_column($catSales, 'name');
-$catTotals = array_map('floatval', array_column($catSales, 'total'));
-$sales7Json = json_encode($sales7);
-$labels7Json = json_encode($labels7);
-$catNamesJson = json_encode($catNames);
+$catNames   = array_column($catSales, 'name');
+$catTotals  = array_map('floatval', array_column($catSales, 'total'));
+$prodNames  = array_column($prodSales, 'name');
+$prodTotals = array_map('floatval', array_column($prodSales, 'total'));
+$prodUnits  = array_map('intval', array_column($prodSales, 'units_sold'));
+
+$sales7Json    = json_encode($sales7);
+$labels7Json   = json_encode($labels7);
+$catNamesJson  = json_encode($catNames);
 $catTotalsJson = json_encode($catTotals);
+$prodNamesJson = json_encode($prodNames);
+$prodTotalsJson= json_encode($prodTotals);
+$prodUnitsJson = json_encode($prodUnits);
+$currRealMonthJson = json_encode(date('Y-m'));
+$activeMonthJson   = json_encode($selectedMonth);
 
 $extraScripts = <<<HTML
 <script>
@@ -337,11 +478,12 @@ document.addEventListener("DOMContentLoaded", function() {
     return {
       isDark: isDark,
       mode: isDark ? "dark" : "light",
+      bgCard: isDark ? "#17161D" : "#FFFFFF",
       textPrimary: isDark ? "#F9FAFB" : "#18181B",
       textSecondary: isDark ? "#E5E7EB" : "#374151",
-      textMuted: isDark ? "#9CA3AF" : "#52525B",
+      textMuted: isDark ? "#9CA3AF" : "#64748B",
       borderColor: isDark ? "rgba(255, 255, 255, 0.08)" : "rgba(0, 0, 0, 0.06)",
-      valColor: isDark ? "#FDBA74" : "#B86B35"
+      valColor: isDark ? "#FFFFFF" : "#18181B"
     };
   }
 
@@ -402,50 +544,96 @@ document.addEventListener("DOMContentLoaded", function() {
     salesChart.render();
   }
 
-  // 2. Category Donut Chart
-  const rawNames = {$catNamesJson};
-  const rawTotals = {$catTotalsJson};
-  const hasData = rawTotals.some(t => t > 0);
+  // 2. Sales Breakdown Donut Chart (Category / Product)
+  let currentBreakdown = "category";
+  const catNames = {$catNamesJson};
+  const catTotals = {$catTotalsJson};
+  const prodNames = {$prodNamesJson};
+  const prodTotals = {$prodTotalsJson};
+  const prodUnits = {$prodUnitsJson};
+
+  // Vibrant modern palette for categories and products
+  const modernPalette = [
+    "#3B82F6", // Royal Blue
+    "#10B981", // Emerald Green
+    "#F59E0B", // Radiant Amber Gold
+    "#8B5CF6", // Electric Purple
+    "#F43F5E", // Rose Coral
+    "#06B6D4", // Luminous Cyan
+    "#E09A67", // Warm Bronze
+    "#EC4899"  // Pink
+  ];
+
+  function getBreakdownConfig(mode) {
+    const isCat = (mode === "category");
+    const names = isCat ? catNames : prodNames;
+    const totals = isCat ? catTotals : prodTotals;
+    const hasData = totals.some(t => t > 0);
+    const labelTitle = isCat ? "Category Total" : "Product Total";
+
+    return {
+      hasData: hasData,
+      series: hasData ? totals : [1],
+      labels: hasData ? names : ["No Sales Recorded"],
+      colors: hasData ? modernPalette.slice(0, Math.max(names.length, 1)) : [tc.isDark ? "#27272A" : "#E2E8F0"],
+      totalLabel: labelTitle
+    };
+  }
+
+  let currentConfig = getBreakdownConfig(currentBreakdown);
 
   const catOptions = {
-    series: hasData ? rawTotals : [1],
-    labels: hasData ? rawNames : ["No Sales Recorded"],
+    series: currentConfig.series,
+    labels: currentConfig.labels,
     chart: {
       type: "donut",
       height: 280,
       fontFamily: "Plus Jakarta Sans, Poppins, sans-serif",
       background: "transparent",
-      toolbar: { show: false }
+      toolbar: { show: false },
+      animations: {
+        enabled: true,
+        easing: "easeinout",
+        speed: 400,
+        dynamicAnimation: { enabled: true, speed: 350 }
+      }
     },
     theme: { mode: tc.mode },
-    colors: ["#E09A67", "#F59E0B", "#10B981", "#06B6D4", "#B86B35", "#8B5CF6"],
+    colors: currentConfig.colors,
+    stroke: {
+      show: true,
+      width: 3,
+      colors: [tc.bgCard]
+    },
     plotOptions: {
       pie: {
         donut: {
-          size: "72%",
+          size: "74%",
           labels: {
             show: true,
             name: {
               show: true,
               fontSize: "13px",
               fontWeight: 600,
-              color: tc.textPrimary
+              color: tc.textPrimary,
+              offsetY: -4
             },
             value: {
               show: true,
-              fontSize: "18px",
+              fontSize: "20px",
               fontWeight: 800,
               color: tc.valColor,
-              formatter: (val) => hasData ? "₱" + parseFloat(val).toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2}) : "₱0.00"
+              offsetY: 6,
+              formatter: (val) => currentConfig.hasData ? "₱" + parseFloat(val).toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2}) : "₱0.00"
             },
             total: {
               show: true,
-              label: "Category Total",
+              label: currentConfig.totalLabel,
               fontSize: "12px",
               fontWeight: 600,
               color: tc.textMuted,
               formatter: (w) => {
-                if (!hasData) return "₱0.00";
+                if (!currentConfig.hasData) return "₱0.00";
                 const total = w.globals.seriesTotals.reduce((a, b) => a + b, 0);
                 return "₱" + total.toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2});
               }
@@ -455,17 +643,27 @@ document.addEventListener("DOMContentLoaded", function() {
       }
     },
     dataLabels: { enabled: false },
-    stroke: { show: false },
     legend: {
       position: "bottom",
       fontSize: "12px",
-      fontWeight: 500,
-      labels: { colors: tc.textSecondary }
+      fontWeight: 600,
+      itemMargin: { horizontal: 8, vertical: 4 },
+      labels: { colors: tc.textSecondary },
+      markers: { width: 10, height: 10, radius: 10 }
     },
     tooltip: {
       theme: tc.mode,
-      style: { fontSize: "12px" },
-      y: { formatter: (val) => hasData ? "₱" + parseFloat(val).toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2}) : "₱0.00" }
+      style: { fontSize: "12px", fontFamily: "inherit" },
+      y: {
+        formatter: (val, opt) => {
+          if (!currentConfig.hasData) return "₱0.00";
+          let formatted = "₱" + parseFloat(val).toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2});
+          if (currentBreakdown === "product" && opt && typeof opt.dataPointIndex === "number" && prodUnits[opt.dataPointIndex] !== undefined) {
+            formatted += " (" + prodUnits[opt.dataPointIndex] + " sold)";
+          }
+          return formatted;
+        }
+      }
     }
   };
 
@@ -476,9 +674,57 @@ document.addEventListener("DOMContentLoaded", function() {
     catChart.render();
   }
 
-    // Dynamic Theme Switcher synchronization for charts
+  function switchBreakdown(mode) {
+    currentBreakdown = mode;
+    currentConfig = getBreakdownConfig(mode);
+
+    const btnCat = document.getElementById("btnBreakdownCat");
+    const btnProd = document.getElementById("btnBreakdownProd");
+    const modeText = document.getElementById("breakdownModeText");
+
+    if (mode === "category") {
+      btnCat.classList.add("active");
+      btnCat.setAttribute("aria-selected", "true");
+      btnProd.classList.remove("active");
+      btnProd.setAttribute("aria-selected", "false");
+      if (modeText) modeText.textContent = "Category";
+    } else {
+      btnProd.classList.add("active");
+      btnProd.setAttribute("aria-selected", "true");
+      btnCat.classList.remove("active");
+      btnCat.setAttribute("aria-selected", "false");
+      if (modeText) modeText.textContent = "Product";
+    }
+
+    if (catChart) {
+      catChart.updateOptions({
+        series: currentConfig.series,
+        labels: currentConfig.labels,
+        colors: currentConfig.colors,
+        plotOptions: {
+          pie: {
+            donut: {
+              labels: {
+                total: {
+                  label: currentConfig.totalLabel
+                }
+              }
+            }
+          }
+        }
+      });
+    }
+  }
+
+  const btnCat = document.getElementById("btnBreakdownCat");
+  const btnProd = document.getElementById("btnBreakdownProd");
+  if (btnCat) btnCat.addEventListener("click", () => switchBreakdown("category"));
+  if (btnProd) btnProd.addEventListener("click", () => switchBreakdown("product"));
+
+  // Dynamic Theme Switcher synchronization for charts
   window.addEventListener("themeChanged", (e) => {
     tc = getThemeColors();
+    currentConfig = getBreakdownConfig(currentBreakdown);
 
     if (salesChart) {
       salesChart.updateOptions({
@@ -493,6 +739,8 @@ document.addEventListener("DOMContentLoaded", function() {
     if (catChart) {
       catChart.updateOptions({
         theme: { mode: tc.mode },
+        colors: currentConfig.colors,
+        stroke: { colors: [tc.bgCard] },
         legend: { labels: { colors: tc.textSecondary } },
         tooltip: { theme: tc.mode },
         plotOptions: {
@@ -501,7 +749,10 @@ document.addEventListener("DOMContentLoaded", function() {
               labels: {
                 name: { color: tc.textPrimary },
                 value: { color: tc.valColor },
-                total: { color: tc.textMuted }
+                total: { 
+                  color: tc.textMuted,
+                  label: currentConfig.totalLabel
+                }
               }
             }
           }
@@ -509,6 +760,97 @@ document.addEventListener("DOMContentLoaded", function() {
       });
     }
   });
+
+  // ─── Modern Luxury Month Picker Controller ────────────────
+  const currentRealMonth = {$currRealMonthJson};
+  const activeSelectedMonth = {$activeMonthJson};
+  let displayedMpYear = parseInt(activeSelectedMonth.split('-')[0], 10) || new Date().getFullYear();
+
+  const mpMonthList = [
+    { code: 'Jan', full: 'January', num: '01' },
+    { code: 'Feb', full: 'February', num: '02' },
+    { code: 'Mar', full: 'March', num: '03' },
+    { code: 'Apr', full: 'April', num: '04' },
+    { code: 'May', full: 'May', num: '05' },
+    { code: 'Jun', full: 'June', num: '06' },
+    { code: 'Jul', full: 'July', num: '07' },
+    { code: 'Aug', full: 'August', num: '08' },
+    { code: 'Sep', full: 'September', num: '09' },
+    { code: 'Oct', full: 'October', num: '10' },
+    { code: 'Nov', full: 'November', num: '11' },
+    { code: 'Dec', full: 'December', num: '12' }
+  ];
+
+  function renderDashMonthPicker() {
+    const yearText = document.getElementById('dashMpYearText');
+    const grid = document.getElementById('dashMpGrid');
+    if (!yearText || !grid) return;
+
+    yearText.textContent = displayedMpYear;
+
+    let html = '';
+    mpMonthList.forEach(function(m) {
+      const monthKey = displayedMpYear + '-' + m.num;
+      const isSelected = (monthKey === activeSelectedMonth);
+      const isCurrent = (monthKey === currentRealMonth);
+
+      let classes = 'dash-mp-month-btn' + (isSelected ? ' is-selected' : '');
+      let currentTag = isCurrent ? '<span class="dash-mp-current-tag" title="Current Month"></span>' : '';
+
+      html += '<button type="button" class="' + classes + '" onclick="goToDashMonth(\'' + monthKey + '\')" title="' + m.full + ' ' + displayedMpYear + '">' +
+                currentTag +
+                '<span class="dash-mp-mcode">' + m.code + '</span>' +
+                '<span class="dash-mp-mname">' + m.full + '</span>' +
+              '</button>';
+    });
+    grid.innerHTML = html;
+  }
+
+  window.openDashMonthPicker = function() {
+    displayedMpYear = parseInt(activeSelectedMonth.split('-')[0], 10) || new Date().getFullYear();
+    renderDashMonthPicker();
+    const overlay = document.getElementById('dashMonthPickerOverlay');
+    if (overlay) {
+      overlay.classList.add('active');
+      document.body.style.overflow = 'hidden';
+    }
+  };
+
+  window.closeDashMonthPicker = function() {
+    const overlay = document.getElementById('dashMonthPickerOverlay');
+    if (overlay) {
+      overlay.classList.remove('active');
+      document.body.style.overflow = '';
+    }
+  };
+
+  window.handleDashMpOverlayClick = function(e) {
+    if (e.target && e.target.id === 'dashMonthPickerOverlay') {
+      closeDashMonthPicker();
+    }
+  };
+
+  window.changeDashMpYear = function(delta) {
+    displayedMpYear += delta;
+    renderDashMonthPicker();
+  };
+
+  window.goToDashMonth = function(monthKey) {
+    if (monthKey === activeSelectedMonth) {
+      closeDashMonthPicker();
+      return;
+    }
+    window.location.href = 'dashboard.php?month=' + encodeURIComponent(monthKey);
+  };
+
+  document.addEventListener('keydown', function(e) {
+    if (e.key === 'Escape') {
+      closeDashMonthPicker();
+    }
+  });
+
+  // Initial render
+  renderDashMonthPicker();
 });
 </script>
 HTML;

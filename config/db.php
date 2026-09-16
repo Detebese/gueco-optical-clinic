@@ -23,7 +23,9 @@ function getDB(): PDO {
         try {
             $pdo = new PDO($dsn, DB_USER, DB_PASS, $options);
         } catch (PDOException $e) {
-            die(json_encode(['error' => 'Database connection failed: ' . $e->getMessage()]));
+            error_log("Database connection error: " . $e->getMessage());
+            http_response_code(500);
+            die('A database connection error occurred. Please contact the clinic administrator.');
         }
     }
     return $pdo;

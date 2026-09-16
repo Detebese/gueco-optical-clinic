@@ -11,31 +11,42 @@ $today = date('Y-m-d');
 
 // Handle status updates
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
+    requireCsrfToken();
     $apptId = (int)($_POST['appt_id'] ?? 0);
     $action = $_POST['action'] ?? '';
     
     if ($apptId > 0) {
+        $ptStmt = $db->prepare("SELECT p.full_name, a.appointment_date, a.appointment_time FROM appointments a JOIN patients p ON p.id=a.patient_id WHERE a.id=?");
+        $ptStmt->execute([$apptId]);
+        $ptData = $ptStmt->fetch();
+        $ptName = $ptData['full_name'] ?? ('Appointment #' . $apptId);
+
         if ($action === 'complete') {
             $db->prepare("UPDATE appointments SET status='completed' WHERE id=?")->execute([$apptId]);
             $_SESSION['flash_msg'] = 'Appointment marked as completed.';
             $_SESSION['flash_type'] = 'success';
+            logActivity("Marked appointment #$apptId as completed for patient: $ptName", "Appointments", $_SESSION['user_id'], 'staff');
         } elseif ($action === 'no_show') {
             $db->prepare("UPDATE appointments SET status='no_show' WHERE id=?")->execute([$apptId]);
             $_SESSION['flash_msg'] = 'Appointment marked as No-Show.';
             $_SESSION['flash_type'] = 'warning';
+            logActivity("Marked appointment #$apptId as No-Show for patient: $ptName", "Appointments", $_SESSION['user_id'], 'staff');
         } elseif ($action === 'confirm') {
             $db->prepare("UPDATE appointments SET status='confirmed', verified_by=? WHERE id=?")->execute([$_SESSION['user_id'], $apptId]);
             $_SESSION['flash_msg'] = 'Appointment confirmed.';
             $_SESSION['flash_type'] = 'success';
+            logActivity("Confirmed appointment #$apptId for patient: $ptName", "Appointments", $_SESSION['user_id'], 'staff');
         } elseif ($action === 'cancel') {
             $db->prepare("UPDATE appointments SET status='cancelled' WHERE id=?")->execute([$apptId]);
             $_SESSION['flash_msg'] = 'Appointment cancelled.';
             $_SESSION['flash_type'] = 'danger';
+            logActivity("Cancelled appointment #$apptId for patient: $ptName", "Appointments", $_SESSION['user_id'], 'staff');
         } elseif ($action === 'update_notes') {
             $notes = sanitize($_POST['notes'] ?? '');
             $db->prepare("UPDATE appointments SET notes=? WHERE id=?")->execute([$notes, $apptId]);
             $_SESSION['flash_msg'] = 'Appointment notes updated.';
             $_SESSION['flash_type'] = 'info';
+            logActivity("Updated clinical notes on appointment #$apptId for patient: $ptName", "Appointments", $_SESSION['user_id'], 'staff');
         }
     }
     
@@ -292,6 +303,7 @@ include __DIR__ . '/../includes/header.php';
         <!-- Quick Status Update Forms -->
         <div class="d-flex gap-2" id="modalStatusButtons">
           <form method="POST" id="formCompleteAppt" style="display:inline;">
+            <input type="hidden" name="csrf_token" value="<?= generateCsrfToken() ?>">
             <input type="hidden" name="appt_id" id="postApptIdComplete">
             <input type="hidden" name="action" value="complete">
             <input type="hidden" name="current_view_date" id="postDateComplete">
@@ -299,6 +311,7 @@ include __DIR__ . '/../includes/header.php';
           </form>
 
           <form method="POST" id="formConfirmAppt" style="display:inline;">
+            <input type="hidden" name="csrf_token" value="<?= generateCsrfToken() ?>">
             <input type="hidden" name="appt_id" id="postApptIdConfirm">
             <input type="hidden" name="action" value="confirm">
             <input type="hidden" name="current_view_date" id="postDateConfirm">
@@ -306,6 +319,7 @@ include __DIR__ . '/../includes/header.php';
           </form>
 
           <form method="POST" id="formNoShowAppt" style="display:inline;">
+            <input type="hidden" name="csrf_token" value="<?= generateCsrfToken() ?>">
             <input type="hidden" name="appt_id" id="postApptIdNoShow">
             <input type="hidden" name="action" value="no_show">
             <input type="hidden" name="current_view_date" id="postDateNoShow">
@@ -313,6 +327,7 @@ include __DIR__ . '/../includes/header.php';
           </form>
 
           <form method="POST" id="formCancelAppt" style="display:inline;" onsubmit="return confirm('Are you sure you want to cancel this appointment?');">
+            <input type="hidden" name="csrf_token" value="<?= generateCsrfToken() ?>">
             <input type="hidden" name="appt_id" id="postApptIdCancel">
             <input type="hidden" name="action" value="cancel">
             <input type="hidden" name="current_view_date" id="postDateCancel">

@@ -1,11 +1,11 @@
 // ============================================================
 // GUECO OPTICAL — Main JavaScript
-// Theme Toggle, Sidebar, Toasts, Utilities
+// Theme Toggle, Sidebar, Toasts, Modals, Utilities
 // ============================================================
 
 document.addEventListener('DOMContentLoaded', function () {
 
-    // ── Theme ──────────────────────────────────────────────
+  // ── Theme ──────────────────────────────────────────────
   const html = document.documentElement;
 
   function applyTheme(theme) {
@@ -96,66 +96,204 @@ document.addEventListener('DOMContentLoaded', function () {
     }, duration);
   };
 
-  // Show PHP-passed flash messages as toasts
+  // Show PHP-passed flash messages as SweetAlert Modal Popup
   const flashMsg = document.getElementById('flashMsg');
   if (flashMsg) {
     const msg = flashMsg.dataset.msg;
     const type = flashMsg.dataset.type || 'info';
-    if (msg) showToast(msg, type);
+    if (msg) {
+      if (typeof Swal !== 'undefined') {
+        const iconType = type === 'success' ? 'success' : (type === 'danger' || type === 'error' ? 'error' : (type === 'warning' ? 'warning' : 'info'));
+        const titleText = type === 'success' ? 'Success!' : (type === 'danger' || type === 'error' ? 'Error' : 'Notice');
+        Swal.fire({
+          title: titleText,
+          text: msg,
+          icon: iconType,
+          confirmButtonColor: 'var(--clr-primary)',
+          background: 'var(--bg-card)',
+          color: 'var(--text-primary)',
+          timer: 3000,
+          timerProgressBar: true
+        });
+      } else {
+        showToast(msg, type);
+      }
+    }
   }
 
-  // ── Modal Helpers ──────────────────────────────────────
+  // ── Modal Helpers & Unsaved Changes Confirmation ───────
+  function getModalFormState(form) {
+    if (!form) return {};
+    const state = {};
+    const elements = form.querySelectorAll('input, select, textarea');
+    elements.forEach((el, idx) => {
+      // Exclude hidden tokens/actions
+      if (el.type === 'hidden' && (el.name === 'csrf_token' || el.name === 'action')) return;
+      const key = el.name || el.id || `field_${idx}`;
+      if (el.type === 'checkbox' || el.type === 'radio') {
+        state[key] = el.checked;
+      } else {
+        state[key] = (el.value || '').trim();
+      }
+    });
+    return state;
+  }
+
+  function snapshotModalForms(m) {
+    if (!m) return;
+    m.querySelectorAll('form').forEach(form => {
+      form._initialFormState = getModalFormState(form);
+    });
+  }
+
+  function isModalDirty(m) {
+    if (!m) return false;
+    const forms = m.querySelectorAll('form');
+    for (const form of forms) {
+      if (form._isSubmitting) continue;
+      const initial = form._initialFormState || {};
+      const current = getModalFormState(form);
+      for (const key in current) {
+        const initVal = initial[key] !== undefined ? initial[key] : (typeof current[key] === 'boolean' ? false : '');
+        if (current[key] !== initVal) {
+          return true;
+        }
+      }
+    }
+    return false;
+  }
+
+  function resetModalForms(m) {
+    if (!m) return;
+    m.querySelectorAll('form').forEach(form => {
+      form.reset();
+      delete form._initialFormState;
+    });
+  }
+
   window.openModal = function (id) {
     const m = document.getElementById(id);
-    if (m) m.classList.add('active');
+    if (m) {
+      m.classList.add('active');
+      m.classList.add('open');
+      document.body.style.overflow = 'hidden';
+      // Snapshot immediately and after brief timeout for dynamically populated edit modals
+      snapshotModalForms(m);
+      setTimeout(() => snapshotModalForms(m), 50);
+
+      // Track submit to bypass discard prompt
+      m.querySelectorAll('form').forEach(form => {
+        if (!form._hasSubmitListener) {
+          form.addEventListener('submit', () => { form._isSubmitting = true; });
+          form._hasSubmitListener = true;
+        }
+      });
+    }
   };
 
-  window.closeModal = function (id) {
+  window.closeModal = function (id, force = false) {
     const m = document.getElementById(id);
-    if (m) m.classList.remove('active');
+    if (!m) return;
+
+    if (!force && isModalDirty(m)) {
+      const modalHeader = (m.querySelector('.modal-header')?.textContent || '').toLowerCase();
+      const formAction = (m.querySelector('input[name="action"]')?.value || '').toLowerCase();
+      const isAdd = formAction === 'add' || modalHeader.includes('add') || modalHeader.includes('new') || modalHeader.includes('create') || modalHeader.includes('write');
+
+      const titleText = isAdd ? 'Cancel Adding?' : 'Discard Changes?';
+      const promptText = isAdd 
+        ? 'Are you sure you want to cancel? The information you entered will not be saved.'
+        : 'Are you sure you want to close without saving your changes?';
+      const confirmBtnText = isAdd ? 'Yes, cancel' : 'Yes, discard';
+      const cancelBtnText = isAdd ? 'Continue editing' : 'Keep editing';
+
+      if (typeof Swal !== 'undefined') {
+        Swal.fire({
+          title: titleText,
+          text: promptText,
+          icon: 'warning',
+          showCancelButton: true,
+          confirmButtonColor: 'var(--clr-danger)',
+          cancelButtonColor: 'var(--clr-primary)',
+          confirmButtonText: confirmBtnText,
+          cancelButtonText: cancelBtnText,
+          background: 'var(--bg-card)',
+          color: 'var(--text-primary)'
+        }).then((result) => {
+          if (result.isConfirmed) {
+            resetModalForms(m);
+            window.closeModal(id, true);
+          }
+        });
+        return;
+      } else if (confirm(promptText)) {
+        resetModalForms(m);
+      } else {
+        return;
+      }
+    }
+
+    m.classList.remove('active');
+    m.classList.remove('open');
+    if (force) resetModalForms(m);
+    if (!document.querySelector('.modal-overlay.active, .modal-overlay.open')) {
+      document.body.style.overflow = '';
+    }
   };
 
-  // Close modal on overlay click
+  // Close modal on overlay click (with dirty check)
   document.querySelectorAll('.modal-overlay').forEach(overlay => {
     overlay.addEventListener('click', (e) => {
-      if (e.target === overlay) overlay.classList.remove('active');
+      if (e.target === overlay) {
+        window.closeModal(overlay.id);
+      }
     });
   });
 
-  // ── Confirm Delete ─────────────────────────────────────
+  // Close modals on Escape key (with dirty check)
+  document.addEventListener('keydown', (e) => {
+    if (e.key === 'Escape') {
+      const activeModal = document.querySelector('.modal-overlay.active, .modal-overlay.open');
+      if (activeModal) {
+        window.closeModal(activeModal.id);
+      }
+    }
+  });
+
+  // ── Confirm Action / Delete ────────────────────────────
   document.querySelectorAll('[data-confirm]').forEach(btn => {
     btn.addEventListener('click', (e) => {
       e.preventDefault();
-      const msg = btn.dataset.confirm || 'Are you sure you want to delete this?';
+      const msg = btn.dataset.confirm || 'Are you sure you want to proceed?';
       
       if (typeof Swal !== 'undefined') {
-          Swal.fire({
-              title: 'Confirm Action',
-              text: msg,
-              icon: 'warning',
-              showCancelButton: true,
-              confirmButtonColor: 'var(--clr-primary)',
-              cancelButtonColor: 'var(--clr-danger)',
-              confirmButtonText: 'Yes, proceed',
-              background: 'var(--bg-card)',
-              color: 'var(--text-primary)'
-          }).then((result) => {
-              if (result.isConfirmed) {
-                  const form = btn.closest('form');
-                  if (form) {
-                      form.submit();
-                  } else if (btn.tagName === 'A' && btn.href) {
-                      window.location.href = btn.href;
-                  }
-              }
-          });
-      } else {
-          // Fallback if Swal is not loaded
-          if (confirm(msg)) {
-              const form = btn.closest('form');
-              if (form) form.submit();
-              else if (btn.tagName === 'A' && btn.href) window.location.href = btn.href;
+        Swal.fire({
+          title: 'Confirm Action',
+          text: msg,
+          icon: 'warning',
+          showCancelButton: true,
+          confirmButtonColor: 'var(--clr-primary)',
+          cancelButtonColor: 'var(--clr-danger)',
+          confirmButtonText: 'Yes, proceed',
+          cancelButtonText: 'Cancel',
+          background: 'var(--bg-card)',
+          color: 'var(--text-primary)'
+        }).then((result) => {
+          if (result.isConfirmed) {
+            const form = btn.closest('form');
+            if (form) {
+              form.submit();
+            } else if (btn.tagName === 'A' && btn.href) {
+              window.location.href = btn.href;
+            }
           }
+        });
+      } else {
+        if (confirm(msg)) {
+          const form = btn.closest('form');
+          if (form) form.submit();
+          else if (btn.tagName === 'A' && btn.href) window.location.href = btn.href;
+        }
       }
     });
   });
@@ -237,7 +375,6 @@ document.addEventListener('DOMContentLoaded', function () {
   const notifBtn = document.querySelector('.notif-btn');
 
   function formatTime(timeStr) {
-    // Basic formatting from HH:MM:SS to HH:MM AM/PM
     const [h, m] = timeStr.split(':');
     let hours = parseInt(h);
     const ampm = hours >= 12 ? 'PM' : 'AM';
@@ -252,7 +389,6 @@ document.addEventListener('DOMContentLoaded', function () {
 
   async function checkAppointments() {
     try {
-      const isDev = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1';
       const apiPath = window.location.pathname.includes('gueco-optical') 
                       ? '/gueco-optical/api/check_appointments.php' 
                       : '/api/check_appointments.php';
@@ -263,16 +399,12 @@ document.addEventListener('DOMContentLoaded', function () {
       if (data && typeof data.count !== 'undefined') {
         const count = data.count;
         const appts = data.appointments || [];
-        
-        console.log('[Appt Poll] fetched data:', data);
 
         // Find new appointments
         if (knownApptIds !== null) {
           appts.forEach(appt => {
             const currentId = String(appt.id);
             if (!knownApptIds.has(currentId)) {
-              console.log('[Appt Poll] NEW APPOINTMENT DETECTED:', appt);
-              // It's a new appointment! Show toast
               const msg = `<strong>${appt.patient_name}</strong> booked an appointment on <strong>${formatDate(appt.appointment_date)}</strong> at <strong>${formatTime(appt.appointment_time)}</strong> for <em>${appt.purpose}</em>.`;
               showToast(msg, 'info', 7000); 
             }
@@ -300,7 +432,6 @@ document.addEventListener('DOMContentLoaded', function () {
         // Dynamically update dropdown list if present
         const dropdownMenu = document.querySelector('#notifDropdownWrap .dropdown-menu');
         if (dropdownMenu && knownApptIds !== null) {
-          // Rebuild HTML
           let html = `<li><h6 class="dropdown-header">Notifications</h6></li>`;
           if (appts.length === 0) {
             html += `<li><span class="dropdown-item text-muted">No new notifications</span></li>`;
@@ -333,7 +464,7 @@ document.addEventListener('DOMContentLoaded', function () {
   // Check immediately if we have a notif btn, then every 10 seconds
   if (notifBtn) {
     checkAppointments();
-    setInterval(checkAppointments, 10000); // 10 seconds for more real-time feel
+    setInterval(checkAppointments, 10000);
   }
 
 });

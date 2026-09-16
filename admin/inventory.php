@@ -11,6 +11,7 @@ $reopenData = null;
 
 // Add/Edit product
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
+    requireCsrfToken();
     $action = $_POST['action'] ?? '';
 
     if ($action === 'add' || $action === 'edit') {
@@ -27,12 +28,23 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         if (!$productCode || !$name || !$catId || $price < 0) { $msg = 'Product Code, Name, category, and a valid price are required.'; $msgType = 'danger'; }
         else {
             try {
-                // Image Upload Logic
+                // Secure Image Upload Logic
                 $imagePath = null;
                 if (isset($_FILES['image']) && $_FILES['image']['error'] === UPLOAD_ERR_OK) {
-                    $ext = pathinfo($_FILES['image']['name'], PATHINFO_EXTENSION);
-                    $imagePath = uniqid('prod_') . '.' . $ext;
-                    move_uploaded_file($_FILES['image']['tmp_name'], __DIR__ . '/../assets/images/products/' . $imagePath);
+                    $allowedExts = ['jpg', 'jpeg', 'png', 'webp', 'gif'];
+                    $allowedMimes = ['image/jpeg', 'image/png', 'image/webp', 'image/gif'];
+                    $fileTmp = $_FILES['image']['tmp_name'];
+                    $fileExt = strtolower(pathinfo($_FILES['image']['name'], PATHINFO_EXTENSION));
+                    $imgInfo = @getimagesize($fileTmp);
+                    $fileMime = $imgInfo['mime'] ?? '';
+
+                    if (in_array($fileExt, $allowedExts) && in_array($fileMime, $allowedMimes) && $_FILES['image']['size'] <= 5 * 1024 * 1024) {
+                        $imagePath = 'prod_' . bin2hex(random_bytes(10)) . '.' . $fileExt;
+                        move_uploaded_file($fileTmp, __DIR__ . '/../assets/images/products/' . $imagePath);
+                    } else {
+                        $msg = 'Invalid image file. Only JPG, PNG, WEBP, or GIF up to 5MB are allowed.';
+                        $msgType = 'danger';
+                    }
                 }
 
                 if ($action === 'add') {
@@ -45,6 +57,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                            ->execute([$newId,'stock_in',$stock,0,$stock,'Initial stock',$_SESSION['user_id']]);
                     }
                     $msg = "Product \"$name\" added.";
+                    logActivity("Added new product \"$name\" ($productCode, Price: " . formatCurrency($price) . ", Stock: $stock)", "Inventory", $_SESSION['user_id'], 'staff');
                 } else {
                     $id = (int)$_POST['id'];
                     $stmt = $db->prepare("SELECT product_code, name, category_id, supplier_id, price, low_stock_alert, description, status FROM products WHERE id=?");
@@ -64,6 +77,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                                ->execute([$productCode,$name,$catId,$suppId,$price,$alert,$desc,$stat,$id]);
                         }
                         $msg = "Product updated successfully!";
+                        logActivity("Updated product \"$name\" ($productCode, Price: " . formatCurrency($price) . ", Status: " . strtoupper($stat) . ")", "Inventory", $_SESSION['user_id'], 'staff');
                     }
                 }
             } catch (PDOException $e) {
@@ -82,13 +96,15 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $reason = sanitize(trim($_POST['reason'] ?? ''));
         if ($qty <= 0) { $msg = 'Quantity must be greater than 0.'; $msgType = 'danger'; }
         else {
-            $prod = $db->prepare("SELECT stock_quantity FROM products WHERE id=?"); $prod->execute([$id]); $prod = $prod->fetch();
-            $prevStock = $prod['stock_quantity'];
+            $prod = $db->prepare("SELECT name, stock_quantity FROM products WHERE id=?"); $prod->execute([$id]); $prod = $prod->fetch();
+            $prevStock = (int)$prod['stock_quantity'];
+            $prodName = $prod['name'] ?? ('Product #' . $id);
             $newStock = $action === 'stock_in' ? $prevStock + $qty : max(0, $prevStock - $qty);
             $db->prepare("UPDATE products SET stock_quantity=? WHERE id=?")->execute([$newStock, $id]);
             $db->prepare("INSERT INTO inventory_logs (product_id,type,quantity,previous_stock,new_stock,reason,user_id) VALUES (?,?,?,?,?,?,?)")
                ->execute([$id,$action,$qty,$prevStock,$newStock,$reason,$_SESSION['user_id']]);
             $msg = "Stock " . ($action==='stock_in'?'added':'deducted') . " successfully. New stock: $newStock";
+            logActivity(($action === 'stock_in' ? "Stock In: +$qty" : "Stock Out: -$qty") . " for \"$prodName\" (Reason: " . ($reason ?: 'None') . ", Stock: $prevStock → $newStock)", "Inventory", $_SESSION['user_id'], 'staff');
         }
     }
 }
@@ -273,6 +289,7 @@ document.addEventListener("DOMContentLoaded", function() {
     <form method="POST" enctype="multipart/form-data">
       <div class="modal-body">
         <input type="hidden" name="action" value="add">
+        <input type="hidden" name="csrf_token" value="<?= generateCsrfToken() ?>">
         <div class="form-group"><label class="form-label">Product Code / SKU *</label><input type="text" name="product_code" class="form-control" placeholder="Enter Product Code" required></div>
         <div class="form-group"><label class="form-label">Product Name *</label><input type="text" name="name" class="form-control" required></div>
         <div class="inv-b1eb0f">
@@ -305,6 +322,7 @@ document.addEventListener("DOMContentLoaded", function() {
     <form method="POST" enctype="multipart/form-data" onsubmit="return confirmEdit(event, this)">
       <div class="modal-body">
         <input type="hidden" name="action" value="edit"><input type="hidden" name="id" id="epId">
+        <input type="hidden" name="csrf_token" value="<?= generateCsrfToken() ?>">
         <div class="form-group"><label class="form-label">Product Code / SKU *</label><input type="text" name="product_code" id="epCode" class="form-control" placeholder="Enter Product Code" required></div>
         <div class="form-group"><label class="form-label">Product Name *</label><input type="text" name="name" id="epName" class="form-control" required></div>
         <div class="inv-b1eb0f">
@@ -339,6 +357,7 @@ document.addEventListener("DOMContentLoaded", function() {
       <div class="modal-body">
         <input type="hidden" name="id" id="stockProdId">
         <input type="hidden" name="action" id="stockAction">
+        <input type="hidden" name="csrf_token" value="<?= generateCsrfToken() ?>">
         <p class="inv-8c7aac">Product: <strong id="stockProdName"></strong></p>
         <div class="form-group"><label class="form-label">Quantity *</label><input type="number" name="qty" class="form-control" min="1" required></div>
         <div class="form-group"><label class="form-label">Reason / Note</label><input type="text" name="reason" class="form-control" placeholder="e.g. Supplier delivery, Sold..."></div>

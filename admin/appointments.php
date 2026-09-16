@@ -10,38 +10,72 @@ $today = date('Y-m-d');
 
 // Handle status update
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
+    requireCsrfToken();
     $apptId = (int)($_POST['appt_id'] ?? 0);
     $action = $_POST['action'];
+
+    $ptStmt = $db->prepare("SELECT p.full_name FROM appointments a JOIN patients p ON p.id=a.patient_id WHERE a.id=?");
+    $ptStmt->execute([$apptId]);
+    $ptName = $ptStmt->fetch()['full_name'] ?? ('Appointment #' . $apptId);
 
     if ($action === 'confirm') {
         $db->prepare("UPDATE appointments SET status='confirmed', verified_by=? WHERE id=?")->execute([$_SESSION['user_id'], $apptId]);
         $_SESSION['flash_msg'] = 'Appointment confirmed.'; $_SESSION['flash_type'] = 'success';
+        logActivity("Confirmed appointment #$apptId for patient $ptName", "Appointments", $_SESSION['user_id'], 'staff');
     } elseif ($action === 'complete') {
         $db->prepare("UPDATE appointments SET status='completed' WHERE id=?")->execute([$apptId]);
         $_SESSION['flash_msg'] = 'Appointment marked as completed.'; $_SESSION['flash_type'] = 'success';
+        logActivity("Marked appointment #$apptId as completed for patient $ptName", "Appointments", $_SESSION['user_id'], 'staff');
     } elseif ($action === 'cancel') {
         $db->prepare("UPDATE appointments SET status='cancelled' WHERE id=?")->execute([$apptId]);
         $_SESSION['flash_msg'] = 'Appointment cancelled.'; $_SESSION['flash_type'] = 'success';
+        logActivity("Cancelled appointment #$apptId for patient $ptName", "Appointments", $_SESSION['user_id'], 'staff');
     } elseif ($action === 'no_show') {
         $db->prepare("UPDATE appointments SET status='no_show' WHERE id=?")->execute([$apptId]);
         $_SESSION['flash_msg'] = 'Marked as no-show.'; $_SESSION['flash_type'] = 'success';
+        logActivity("Marked appointment #$apptId as No-Show for patient $ptName", "Appointments", $_SESSION['user_id'], 'staff');
     }
     header('Location: appointments.php'); exit;
 }
 
 // Filters
-$filterDate   = $_GET['date']    ?? $today;
-$filterStatus = $_GET['status']  ?? '';
-$search       = $_GET['search']  ?? '';
+$filterDate   = $_GET['date']   ?? '';
+$filterMonth  = $_GET['month']  ?? '';
+$filterStatus = $_GET['status'] ?? '';
+$search       = $_GET['search'] ?? '';
 $page         = max(1, (int)($_GET['page'] ?? 1));
 $perPage      = 15;
+
+// If visiting page with no query parameters at all (initial load), default to current month
+if (empty($_GET)) {
+    $filterMonth = date('Y-m');
+} elseif (isset($_GET['all'])) {
+    $filterDate = '';
+    $filterMonth = '';
+    $filterStatus = '';
+    $search = '';
+}
 
 $where = ['1=1'];
 $params = [];
 
-if ($filterDate) { $where[] = 'a.appointment_date = ?'; $params[] = $filterDate; }
-if ($filterStatus) { $where[] = 'a.status = ?'; $params[] = $filterStatus; }
-if ($search) { $where[] = 'p.full_name LIKE ?'; $params[] = "%$search%"; }
+if (!empty($filterDate)) {
+    $where[] = 'a.appointment_date = ?';
+    $params[] = $filterDate;
+} elseif (!empty($filterMonth)) {
+    $where[] = "DATE_FORMAT(a.appointment_date, '%Y-%m') = ?";
+    $params[] = $filterMonth;
+}
+
+if (!empty($filterStatus)) {
+    $where[] = 'a.status = ?';
+    $params[] = $filterStatus;
+}
+
+if (!empty($search)) {
+    $where[] = 'p.full_name LIKE ?';
+    $params[] = "%$search%";
+}
 
 $whereStr = implode(' AND ', $where);
 
@@ -69,7 +103,7 @@ foreach (['pending','confirmed','completed','cancelled','no_show'] as $s) {
     $stmt->execute([$s]); $overallStats[$s] = $stmt->fetch()['c'];
 }
 
-$extraHead = '<link rel="stylesheet" href="'.BASE_URL.'assets/css/pages/appointments.css">';
+$extraHead = '<link rel="stylesheet" href="'.BASE_URL.'assets/css/pages/appointments.css?v='.time().'">';
 include __DIR__ . '/../includes/header.php';
 ?>
 
@@ -77,37 +111,65 @@ include __DIR__ . '/../includes/header.php';
 <div class="appt-stats-container">
   <?php
   $statCfg = [
-      'pending'=>['warning','clock','Pending'],
-      'confirmed'=>['info','check-circle','Confirmed'],
-      'completed'=>['success','check-double','Completed'],
-      'cancelled'=>['danger','times-circle','Cancelled'],
-      'no_show'=>['secondary','user-times','No Show']
+      'pending'   => ['type' => 'pending',   'color' => '#F59E0B', 'rgb' => '245, 158, 11',  'icon' => 'clock',        'label' => 'Pending'],
+      'confirmed' => ['type' => 'confirmed', 'color' => '#0EA5E9', 'rgb' => '14, 165, 233',  'icon' => 'check-circle', 'label' => 'Confirmed'],
+      'completed' => ['type' => 'completed', 'color' => '#10B981', 'rgb' => '16, 185, 129',  'icon' => 'check-double', 'label' => 'Completed'],
+      'cancelled' => ['type' => 'cancelled', 'color' => '#EF4444', 'rgb' => '239, 68, 68',   'icon' => 'times-circle', 'label' => 'Cancelled'],
+      'no_show'   => ['type' => 'no_show',   'color' => '#8B5CF6', 'rgb' => '139, 92, 246',  'icon' => 'user-slash',   'label' => 'No Show']
   ];
-  foreach ($statCfg as $s => $cfg): ?>
-  <a href="?status=<?= $s ?>" class="appt-stat-link">
-    <div class="appt-stat-card border-<?= $cfg[0] ?>">
-      <div class="appt-stat-icon text-<?= $cfg[0] ?>">
-        <i class="fas fa-<?= $cfg[1] ?>"></i>
+
+  $baseCardParams = [];
+  if (!empty($filterDate)) $baseCardParams['date'] = $filterDate;
+  elseif (!empty($filterMonth)) $baseCardParams['month'] = $filterMonth;
+  if (!empty($search)) $baseCardParams['search'] = $search;
+
+  foreach ($statCfg as $s => $cfg): 
+    $isActive = ($filterStatus === $s);
+    $cardParams = $baseCardParams;
+    if (!$isActive) {
+        $cardParams['status'] = $s;
+    }
+    $url = 'appointments.php' . (!empty($cardParams) ? '?' . http_build_query($cardParams) : '');
+  ?>
+  <a href="<?= $url ?>" class="appt-stat-link <?= $isActive ? 'is-active' : '' ?>" title="<?= $isActive ? 'Clear status filter' : 'Filter by ' . $cfg['label'] ?>">
+    <div class="appt-stat-card appt-stat-card--<?= $cfg['type'] ?> <?= $isActive ? 'active' : '' ?>" style="--stat-color: <?= $cfg['color'] ?>; --stat-rgb: <?= $cfg['rgb'] ?>;">
+      <div class="appt-stat-glow"></div>
+      <div class="appt-stat-icon">
+        <i class="fas fa-<?= $cfg['icon'] ?>"></i>
       </div>
       <div class="appt-stat-info">
-        <div class="appt-stat-value"><?= $overallStats[$s] ?></div>
-        <div class="appt-stat-label"><?= $cfg[2] ?></div>
+        <div class="appt-stat-value"><?= number_format($overallStats[$s] ?? 0) ?></div>
+        <div class="appt-stat-label"><?= $cfg['label'] ?></div>
       </div>
+      <?php if ($isActive): ?>
+        <div class="appt-stat-active-badge" title="Active Filter">
+          <i class="fas fa-check"></i>
+        </div>
+      <?php endif; ?>
     </div>
   </a>
   <?php endforeach; ?>
 </div>
 
-<!-- Filters -->
-<div  class="card appt-684111">
-  <div  class="card-body appt-1206e8">
-    <form method="GET" class="appt-4f7fcd">
-      <div class="appt-398dad">
-        <label  class="form-label appt-25aea1">Date</label>
-        <input type="date" name="date" class="form-control" value="<?= htmlspecialchars($filterDate) ?>">
+<!-- Modern Filters Bar -->
+<div class="card appt-filter-card" id="apptFilterCard">
+  <div class="card-body appt-filter-body">
+    <form method="GET" class="appt-filter-form" id="apptFilterForm">
+      <!-- Month Filter -->
+      <div class="appt-filter-item">
+        <label class="form-label appt-filter-label">Month</label>
+        <input type="month" id="filterMonthInput" name="month" class="form-control" value="<?= htmlspecialchars($filterMonth) ?>">
       </div>
-      <div class="appt-398dad">
-        <label  class="form-label appt-25aea1">Status</label>
+
+      <!-- Specific Date Filter -->
+      <div class="appt-filter-item">
+        <label class="form-label appt-filter-label">Specific Date</label>
+        <input type="date" id="filterDateInput" name="date" class="form-control" value="<?= htmlspecialchars($filterDate) ?>">
+      </div>
+
+      <!-- Status Filter -->
+      <div class="appt-filter-item">
+        <label class="form-label appt-filter-label">Status</label>
         <select name="status" class="form-select">
           <option value="">All Statuses</option>
           <?php foreach (['pending','confirmed','completed','cancelled','no_show'] as $s): ?>
@@ -115,14 +177,19 @@ include __DIR__ . '/../includes/header.php';
           <?php endforeach; ?>
         </select>
       </div>
-      <div class="appt-e19ef5">
-        <label  class="form-label appt-25aea1">Search Patient</label>
+
+      <!-- Search Patient -->
+      <div class="appt-filter-item appt-filter-search">
+        <label class="form-label appt-filter-label">Search Patient</label>
         <input type="text" name="search" class="form-control" placeholder="Patient name..." value="<?= htmlspecialchars($search) ?>">
       </div>
-      <div class="appt-1952d6">
-        <button type="submit" class="btn btn-primary"><i class="fas fa-search"></i> Filter</button>
-        <a href="appointments.php" class="btn btn-secondary"><i class="fas fa-undo"></i></a>
-        <a href="appointments.php?date=<?= $today ?>" class="btn btn-outline-primary"><i class="fas fa-calendar-day"></i> Today</a>
+
+      <!-- Action Buttons -->
+      <div class="appt-filter-actions">
+        <button type="submit" class="btn btn-primary" title="Apply filters"><i class="fas fa-search"></i> Filter</button>
+        <a href="appointments.php?all=1" class="btn btn-secondary" title="Reset all filters"><i class="fas fa-undo"></i></a>
+        <a href="appointments.php?date=<?= $today ?>" class="btn btn-outline-primary" title="Filter for Today"><i class="fas fa-calendar-day"></i> Today</a>
+        <a href="appointments.php?month=<?= date('Y-m') ?>" class="btn btn-outline-primary" title="Filter for This Month"><i class="fas fa-calendar-alt"></i> This Month</a>
       </div>
     </form>
   </div>
@@ -155,7 +222,15 @@ include __DIR__ . '/../includes/header.php';
       <?= $total ?> Appointment<?= $total !== 1 ? 's' : '' ?> Found
     </span>
     <span class="appt-67fd48">
-      <?= $filterDate ? 'Date: ' . formatDate($filterDate) : 'All dates' ?>
+      <?php
+      if (!empty($filterDate)) {
+          echo '<i class="fas fa-calendar-day me-1"></i> Date: ' . formatDate($filterDate);
+      } elseif (!empty($filterMonth)) {
+          echo '<i class="fas fa-calendar-alt me-1"></i> Month: ' . date('F Y', strtotime($filterMonth . '-01'));
+      } else {
+          echo '<i class="fas fa-calendar me-1"></i> All dates';
+      }
+      ?>
     </span>
   </div>
   <div class="table-responsive">
@@ -200,6 +275,7 @@ include __DIR__ . '/../includes/header.php';
             <div class="appt-152c49">
               <?php if ($a['status'] === 'pending'): ?>
               <form method="POST" class="appt-1386d5" onsubmit="return confirmAction(this, 'Confirm this appointment?');">
+                <input type="hidden" name="csrf_token" value="<?= generateCsrfToken() ?>">
                 <input type="hidden" name="appt_id" value="<?= $a['id'] ?>">
                 <input type="hidden" name="action" value="confirm">
                 <button class="btn btn-sm btn-success btn-icon" title="Confirm"><i class="fas fa-check"></i></button>
@@ -207,16 +283,19 @@ include __DIR__ . '/../includes/header.php';
               <?php endif; ?>
               <?php if (in_array($a['status'],['pending','confirmed'])): ?>
               <form method="POST" class="appt-1386d5" onsubmit="return confirmAction(this, 'Mark this appointment as Complete?');">
+                <input type="hidden" name="csrf_token" value="<?= generateCsrfToken() ?>">
                 <input type="hidden" name="appt_id" value="<?= $a['id'] ?>">
                 <input type="hidden" name="action" value="complete">
                 <button class="btn btn-sm btn-primary btn-icon" title="Mark Complete"><i class="fas fa-check-double"></i></button>
               </form>
               <form method="POST" class="appt-1386d5" onsubmit="return confirmAction(this, 'Mark patient as No Show?');">
+                <input type="hidden" name="csrf_token" value="<?= generateCsrfToken() ?>">
                 <input type="hidden" name="appt_id" value="<?= $a['id'] ?>">
                 <input type="hidden" name="action" value="no_show">
                 <button class="btn btn-sm btn-secondary btn-icon" title="No Show"><i class="fas fa-user-times"></i></button>
               </form>
               <form method="POST" class="appt-1386d5" onsubmit="return confirmAction(this, 'Cancel this appointment?');">
+                <input type="hidden" name="csrf_token" value="<?= generateCsrfToken() ?>">
                 <input type="hidden" name="appt_id" value="<?= $a['id'] ?>">
                 <input type="hidden" name="action" value="cancel">
                 <button class="btn btn-sm btn-danger btn-icon" title="Cancel"><?php echo '<i class="fas fa-times"></i>'; ?></button>
@@ -232,17 +311,30 @@ include __DIR__ . '/../includes/header.php';
   </div>
 
   <!-- Pagination -->
+  <?php
+  $paginationParams = [];
+  if (!empty($filterDate)) $paginationParams['date'] = $filterDate;
+  if (!empty($filterMonth)) $paginationParams['month'] = $filterMonth;
+  if (!empty($filterStatus)) $paginationParams['status'] = $filterStatus;
+  if (!empty($search)) $paginationParams['search'] = $search;
+
+  $buildPageUrl = function($pageNum) use ($paginationParams) {
+      $p = $paginationParams;
+      $p['page'] = $pageNum;
+      return '?' . http_build_query($p);
+  };
+  ?>
   <?php if ($pagination['total_pages'] > 1): ?>
   <div class="appt-3eb868">
     <div class="pagination">
       <?php if ($pagination['has_prev']): ?>
-      <a href="?date=<?= $filterDate ?>&status=<?= $filterStatus ?>&search=<?= urlencode($search) ?>&page=<?= $page-1 ?>" class="page-btn"><i class="fas fa-chevron-left"></i></a>
+      <a href="<?= $buildPageUrl($page - 1) ?>" class="page-btn"><i class="fas fa-chevron-left"></i></a>
       <?php endif; ?>
       <?php for ($p = 1; $p <= $pagination['total_pages']; $p++): ?>
-      <a href="?date=<?= $filterDate ?>&status=<?= $filterStatus ?>&search=<?= urlencode($search) ?>&page=<?= $p ?>" class="page-btn <?= $p===$page?'active':'' ?>"><?= $p ?></a>
+      <a href="<?= $buildPageUrl($p) ?>" class="page-btn <?= $p === $page ? 'active' : '' ?>"><?= $p ?></a>
       <?php endfor; ?>
       <?php if ($pagination['has_next']): ?>
-      <a href="?date=<?= $filterDate ?>&status=<?= $filterStatus ?>&search=<?= urlencode($search) ?>&page=<?= $page+1 ?>" class="page-btn"><i class="fas fa-chevron-right"></i></a>
+      <a href="<?= $buildPageUrl($page + 1) ?>" class="page-btn"><i class="fas fa-chevron-right"></i></a>
       <?php endif; ?>
     </div>
   </div>
@@ -328,10 +420,23 @@ function confirmAction(form, message) {
 }
 
 document.addEventListener('DOMContentLoaded', function() {
+  // Auto-sync Month & Specific Date inputs (choosing one clears the other)
+  const monthInput = document.getElementById('filterMonthInput');
+  const dateInput = document.getElementById('filterDateInput');
+  if (monthInput && dateInput) {
+    monthInput.addEventListener('change', function() {
+      if (this.value) dateInput.value = '';
+    });
+    dateInput.addEventListener('change', function() {
+      if (this.value) monthInput.value = '';
+    });
+  }
+
   const btnListView = document.getElementById('btnListView');
   const btnCalView = document.getElementById('btnCalView');
   const listView = document.getElementById('listView');
   const calendarView = document.getElementById('calendarView');
+  const filterCard = document.getElementById('apptFilterCard');
   let calendar = null;
 
   // Restore preferred view from localStorage
@@ -341,24 +446,28 @@ document.addEventListener('DOMContentLoaded', function() {
     btnListView.classList.remove('active');
     listView.style.display = 'none';
     calendarView.style.display = 'block';
+    if (filterCard) filterCard.style.display = 'none';
     setTimeout(() => { initCalendar(); }, 100);
   } else {
     btnListView.classList.add('active');
     btnCalView.classList.remove('active');
     listView.style.display = 'block';
     calendarView.style.display = 'none';
+    if (filterCard) filterCard.style.display = 'block';
   }
+
+  const csrfToken = <?= json_encode(generateCsrfToken()) ?>;
 
   function buildModalActions(apptId, status) {
     let html = '';
     
     if (status === 'pending') {
-      html += `<form method="POST" class="m-0" onsubmit="return confirmAction(this, 'Confirm this appointment?');"><input type="hidden" name="appt_id" value="${apptId}"><input type="hidden" name="action" value="confirm"><button class="btn btn-sm btn-success"><i class="fas fa-check me-1"></i> Confirm</button></form>`;
+      html += `<form method="POST" class="m-0" onsubmit="return confirmAction(this, 'Confirm this appointment?');"><input type="hidden" name="csrf_token" value="${csrfToken}"><input type="hidden" name="appt_id" value="${apptId}"><input type="hidden" name="action" value="confirm"><button class="btn btn-sm btn-success"><i class="fas fa-check me-1"></i> Confirm</button></form>`;
     }
     if (status === 'pending' || status === 'confirmed') {
-      html += `<form method="POST" class="m-0" onsubmit="return confirmAction(this, 'Mark this appointment as Complete?');"><input type="hidden" name="appt_id" value="${apptId}"><input type="hidden" name="action" value="complete"><button class="btn btn-sm btn-primary"><i class="fas fa-check-double me-1"></i> Complete</button></form>`;
-      html += `<form method="POST" class="m-0" onsubmit="return confirmAction(this, 'Mark patient as No Show?');"><input type="hidden" name="appt_id" value="${apptId}"><input type="hidden" name="action" value="no_show"><button class="btn btn-sm btn-secondary"><i class="fas fa-user-times me-1"></i> No Show</button></form>`;
-      html += `<form method="POST" class="m-0" onsubmit="return confirmAction(this, 'Cancel this appointment?');"><input type="hidden" name="appt_id" value="${apptId}"><input type="hidden" name="action" value="cancel"><button class="btn btn-sm btn-danger"><i class="fas fa-times me-1"></i> Cancel</button></form>`;
+      html += `<form method="POST" class="m-0" onsubmit="return confirmAction(this, 'Mark this appointment as Complete?');"><input type="hidden" name="csrf_token" value="${csrfToken}"><input type="hidden" name="appt_id" value="${apptId}"><input type="hidden" name="action" value="complete"><button class="btn btn-sm btn-primary"><i class="fas fa-check-double me-1"></i> Complete</button></form>`;
+      html += `<form method="POST" class="m-0" onsubmit="return confirmAction(this, 'Mark patient as No Show?');"><input type="hidden" name="csrf_token" value="${csrfToken}"><input type="hidden" name="appt_id" value="${apptId}"><input type="hidden" name="action" value="no_show"><button class="btn btn-sm btn-secondary"><i class="fas fa-user-times me-1"></i> No Show</button></form>`;
+      html += `<form method="POST" class="m-0" onsubmit="return confirmAction(this, 'Cancel this appointment?');"><input type="hidden" name="csrf_token" value="${csrfToken}"><input type="hidden" name="appt_id" value="${apptId}"><input type="hidden" name="action" value="cancel"><button class="btn btn-sm btn-danger"><i class="fas fa-times me-1"></i> Cancel</button></form>`;
     }
     
     return html;
@@ -451,6 +560,7 @@ document.addEventListener('DOMContentLoaded', function() {
     btnCalView.classList.remove('active');
     listView.style.display = 'block';
     calendarView.style.display = 'none';
+    if (filterCard) filterCard.style.display = 'block';
   });
 
   btnCalView.addEventListener('click', () => {
@@ -459,6 +569,7 @@ document.addEventListener('DOMContentLoaded', function() {
     btnListView.classList.remove('active');
     listView.style.display = 'none';
     calendarView.style.display = 'block';
+    if (filterCard) filterCard.style.display = 'none';
     
     if (!calendar) {
       initCalendar();

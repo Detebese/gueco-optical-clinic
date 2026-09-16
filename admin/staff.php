@@ -9,6 +9,7 @@ $db = getDB();
 $msg = ''; $msgType = 'success';
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
+    requireCsrfToken();
     $action = $_POST['action'] ?? '';
 
     if ($action === 'add') {
@@ -29,6 +30,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 $db->prepare("INSERT INTO users (full_name,email,password,role,phone) VALUES (?,?,?,?,?)")
                    ->execute([$name, $email, password_hash($pass, PASSWORD_DEFAULT), $role, $phone]);
                 $msg = "Staff account for \"$name\" created.";
+                logActivity("Created staff account for \"$name\" ($email, Role: " . ucfirst($role) . ")", "Staff Management", $_SESSION['user_id'], 'staff');
             }
         }
     } elseif ($action === 'edit') {
@@ -47,7 +49,13 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $db->prepare("UPDATE users SET full_name=?,email=?,role=?,phone=?,status=? WHERE id=?")
                ->execute([$name,$email,$role,$phone,$stat,$id]);
         }
+        if ($id === (int)$_SESSION['user_id']) {
+            $_SESSION['user_name']  = $name;
+            $_SESSION['user_email'] = $email;
+            $_SESSION['user_role']  = $role;
+        }
         $msg = 'Staff account updated.';
+        logActivity("Updated staff account for \"$name\" ($email, Role: " . ucfirst($role) . ", Status: " . strtoupper($stat) . ")", "Staff Management", $_SESSION['user_id'], 'staff');
     } elseif ($action === 'toggle_status') {
         $id  = (int)$_POST['id'];
         $cur = $_POST['current_status'] ?? 'active';
@@ -57,6 +65,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         else {
             $db->prepare("UPDATE users SET status=? WHERE id=?")->execute([$new, $id]);
             $msg = "Account " . ($new === 'active' ? 'activated' : 'deactivated') . ".";
+            logActivity(($new === 'active' ? "Activated" : "Deactivated") . " staff account #$id", "Staff Management", $_SESSION['user_id'], 'staff');
         }
     }
 }
@@ -75,9 +84,20 @@ include __DIR__ . '/../includes/header.php';
 ?>
 
 <?php if ($msg): ?>
-<div class="alert alert-<?= $msgType ?>" data-auto-dismiss="4000">
-  <i class="fas fa-<?= $msgType==='success'?'check-circle':'exclamation-circle' ?>"></i> <?= $msg ?>
-</div>
+<script>
+document.addEventListener("DOMContentLoaded", function() {
+    Swal.fire({
+        title: '<?= $msgType === "success" ? "Success!" : ($msgType === "info" ? "Notice" : "Error") ?>',
+        text: '<?= addslashes($msg) ?>',
+        icon: '<?= $msgType === "success" ? "success" : ($msgType === "info" ? "info" : "error") ?>',
+        confirmButtonColor: 'var(--clr-primary)',
+        background: 'var(--bg-card)',
+        color: 'var(--text-primary)',
+        timer: 3000,
+        timerProgressBar: true
+    });
+});
+</script>
 <?php endif; ?>
 
 <div class="section-header">
@@ -146,6 +166,7 @@ include __DIR__ . '/../includes/header.php';
             </button>
             <?php if ($s['id'] !== (int)$_SESSION['user_id']): ?>
             <form method="POST" class="staff-5677b9">
+              <input type="hidden" name="csrf_token" value="<?= generateCsrfToken() ?>">
               <input type="hidden" name="action" value="toggle_status">
               <input type="hidden" name="id" value="<?= $s['id'] ?>">
               <input type="hidden" name="current_status" value="<?= $s['status'] ?>">
@@ -172,6 +193,7 @@ include __DIR__ . '/../includes/header.php';
     <form method="POST">
       <div class="modal-body">
         <input type="hidden" name="action" value="add">
+        <input type="hidden" name="csrf_token" value="<?= generateCsrfToken() ?>">
         <div class="form-group"><label class="form-label">Full Name *</label><input type="text" name="full_name" class="form-control" required></div>
         <div class="staff-b1eb0f">
           <div  class="form-group staff-da5cd6"><label class="form-label">Email *</label><input type="email" name="email" class="form-control" required></div>
@@ -201,6 +223,7 @@ include __DIR__ . '/../includes/header.php';
     <form method="POST" onsubmit="return confirmEdit(event, this)">
       <div class="modal-body">
         <input type="hidden" name="action" value="edit"><input type="hidden" name="id" id="esId">
+        <input type="hidden" name="csrf_token" value="<?= generateCsrfToken() ?>">
         <div class="form-group"><label class="form-label">Full Name *</label><input type="text" name="full_name" id="esName" class="form-control" required></div>
         <div class="staff-b1eb0f">
           <div  class="form-group staff-da5cd6"><label class="form-label">Email *</label><input type="email" name="email" id="esEmail" class="form-control" required></div>

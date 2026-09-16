@@ -10,6 +10,65 @@
 
 .appt-f1faad { font-size:.7rem;color:var(--text-muted);font-weight:500 }
 
+/* ─── Modern Appointment Filter Bar ────────────────────────────── */
+.appt-filter-card {
+    margin-bottom: 24px;
+    border-radius: 16px;
+    border: 1px solid var(--border-color);
+    background: var(--bg-card);
+    box-shadow: var(--shadow-sm);
+    transition: var(--transition);
+}
+
+.appt-filter-body {
+    padding: 18px 22px;
+}
+
+.appt-filter-form {
+    display: flex;
+    gap: 14px;
+    flex-wrap: wrap;
+    align-items: flex-end;
+}
+
+.appt-filter-item {
+    flex: 1;
+    min-width: 140px;
+}
+
+.appt-filter-search {
+    flex: 1.5;
+    min-width: 180px;
+}
+
+.appt-filter-label {
+    font-size: 0.76rem;
+    font-weight: 700;
+    color: var(--text-secondary);
+    text-transform: uppercase;
+    letter-spacing: 0.6px;
+    margin-bottom: 6px;
+    display: block;
+}
+
+.appt-filter-actions {
+    display: flex;
+    gap: 8px;
+    align-items: center;
+    flex-wrap: wrap;
+}
+
+.appt-filter-actions .btn {
+    border-radius: 12px;
+    padding: 9px 14px;
+    font-weight: 600;
+    font-size: 0.85rem;
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    white-space: nowrap;
+}
+
 .appt-684111 { margin-bottom:20px; }
 
 .appt-1206e8 { padding:16px 20px; }
@@ -209,73 +268,166 @@
   box-shadow: none !important;
 }
 
-/* Beautiful Stat Cards */
+/* ─── Ultra-Modern Appointment Stat Cards ────────────────────────────── */
 .appt-stats-container {
     display: grid;
-    grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
-    gap: 15px;
-    margin-bottom: 25px;
+    grid-template-columns: repeat(5, minmax(0, 1fr));
+    gap: 16px;
+    margin-bottom: 24px;
+}
+
+@media (max-width: 1200px) {
+    .appt-stats-container {
+        grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+    }
+}
+
+@media (max-width: 576px) {
+    .appt-stats-container {
+        grid-template-columns: repeat(2, 1fr);
+        gap: 12px;
+    }
+    .appt-stat-link:last-child:nth-child(odd) {
+        grid-column: span 2;
+    }
 }
 
 .appt-stat-link {
     text-decoration: none !important;
     display: block;
-    transition: transform 0.2s ease;
-}
-
-.appt-stat-link:hover {
-    transform: translateY(-3px);
+    outline: none;
+    transition: transform 0.25s cubic-bezier(0.16, 1, 0.3, 1);
 }
 
 .appt-stat-card {
+    position: relative;
     background: var(--bg-card);
     border: 1px solid var(--border-color);
-    border-radius: 12px;
+    border-radius: 16px;
     padding: 18px 20px;
     display: flex;
     align-items: center;
-    gap: 15px;
-    transition: all 0.2s ease;
-    box-shadow: 0 2px 4px rgba(0,0,0,0.02);
+    gap: 16px;
+    transition: all 0.25s cubic-bezier(0.16, 1, 0.3, 1);
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.03), 0 1px 2px rgba(0, 0, 0, 0.02);
+    overflow: hidden;
+    cursor: pointer;
+}
+
+[data-theme="dark"] .appt-stat-card {
+    background: #17161D;
+    border-color: rgba(255, 255, 255, 0.08);
+    box-shadow: 0 4px 14px rgba(0, 0, 0, 0.4);
+}
+
+/* Subtle corner ambient glow */
+.appt-stat-glow {
+    position: absolute;
+    top: -24px;
+    right: -24px;
+    width: 76px;
+    height: 76px;
+    border-radius: 50%;
+    background: radial-gradient(circle, rgba(var(--stat-rgb), 0.2) 0%, transparent 70%);
+    pointer-events: none;
+    transition: all 0.35s ease;
 }
 
 .appt-stat-link:hover .appt-stat-card {
-    box-shadow: var(--shadow-md);
-    border-color: var(--clr-primary);
+    transform: translateY(-3px);
+    border-color: rgba(var(--stat-rgb), 0.45);
+    box-shadow: 0 12px 28px -4px rgba(var(--stat-rgb), 0.16), 0 4px 10px -2px rgba(0, 0, 0, 0.04);
 }
 
+[data-theme="dark"] .appt-stat-link:hover .appt-stat-card {
+    box-shadow: 0 12px 30px -4px rgba(0, 0, 0, 0.65), 0 0 20px rgba(var(--stat-rgb), 0.25);
+}
+
+.appt-stat-link:hover .appt-stat-glow {
+    width: 110px;
+    height: 110px;
+    background: radial-gradient(circle, rgba(var(--stat-rgb), 0.35) 0%, transparent 70%);
+}
+
+/* Active Filtered State */
+.appt-stat-link.is-active .appt-stat-card,
+.appt-stat-card.active {
+    border-color: var(--stat-color);
+    box-shadow: 0 0 0 2px rgba(var(--stat-rgb), 0.25), 0 8px 24px -2px rgba(var(--stat-rgb), 0.2);
+}
+
+.appt-stat-active-badge {
+    position: absolute;
+    top: 10px;
+    right: 10px;
+    width: 20px;
+    height: 20px;
+    border-radius: 50%;
+    background: var(--stat-color);
+    color: #ffffff;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 0.65rem;
+    font-weight: 700;
+    box-shadow: 0 2px 6px rgba(0, 0, 0, 0.25);
+    animation: apptBadgePop 0.25s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+@keyframes apptBadgePop {
+    0% { transform: scale(0.5); opacity: 0; }
+    100% { transform: scale(1); opacity: 1; }
+}
+
+/* Icon Squircle */
 .appt-stat-icon {
-    width: 45px;
-    height: 45px;
-    border-radius: 10px;
+    width: 48px;
+    height: 48px;
+    min-width: 48px;
+    border-radius: 14px;
     display: flex;
     align-items: center;
     justify-content: center;
     font-size: 1.25rem;
-    background: rgba(0,0,0,0.03); /* subtle light overlay */
+    color: var(--stat-color);
+    background: rgba(var(--stat-rgb), 0.1);
+    border: 1px solid rgba(var(--stat-rgb), 0.18);
+    transition: transform 0.25s cubic-bezier(0.16, 1, 0.3, 1), background 0.25s ease;
+    position: relative;
+    z-index: 1;
 }
 
-/* For dark mode icon backgrounds */
-[data-theme="dark"] .appt-stat-icon {
-    background: rgba(255,255,255,0.05);
+.appt-stat-link:hover .appt-stat-icon {
+    transform: scale(1.08);
+    background: rgba(var(--stat-rgb), 0.18);
 }
 
+/* Stat Value & Label */
 .appt-stat-info {
     display: flex;
     flex-direction: column;
+    min-width: 0;
+    position: relative;
+    z-index: 1;
 }
 
 .appt-stat-value {
-    font-size: 1.5rem;
+    font-family: 'Plus Jakarta Sans', 'Poppins', sans-serif;
+    font-size: 1.65rem;
     font-weight: 800;
     color: var(--text-primary);
-    line-height: 1.2;
+    line-height: 1.1;
+    letter-spacing: -0.5px;
 }
 
 .appt-stat-label {
-    font-size: 0.75rem;
+    font-size: 0.72rem;
+    font-weight: 700;
     color: var(--text-muted);
-    font-weight: 600;
     text-transform: uppercase;
-    letter-spacing: 0.5px;
+    letter-spacing: 0.75px;
+    margin-top: 4px;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
 }

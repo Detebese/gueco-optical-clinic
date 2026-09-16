@@ -32,30 +32,31 @@
 
 .sales-e3e24c { color:var(--clr-warning) }
 
-.sales-34c8a2 { text-align:center;color:var(--text-muted);padding:20px;font-size:.82rem; }
+.sales-34c8a2 { text-align:center;color:var(--text-muted) !important;padding:20px;font-size:.82rem; }
 
-.sales-ef20e9 { display:flex;align-items:center;gap:10px;padding:10px 0;border-bottom:1px solid var(--border-light); }
+.sales-ef20e9 { display:flex;align-items:center;gap:12px;padding:12px 0;border-bottom:1px solid var(--border-light);transition:var(--transition); }
+.sales-ef20e9:last-child { border-bottom:none; }
 
-.sales-8b56c7 { flex:1;overflow:hidden; }
+.sales-8b56c7 { flex:1;overflow:hidden;min-width:0; }
 
-.sales-262d15 { font-weight:600;font-size:.83rem;white-space:nowrap;overflow:hidden;text-overflow:ellipsis }
+.sales-262d15 { font-weight:700;font-size:.86rem;color:var(--text-primary) !important;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;letter-spacing:-0.01em; }
 
-.sales-46d9fd { font-size:.72rem;color:var(--text-muted) }
+.sales-46d9fd { font-size:.74rem;color:var(--text-muted) !important;margin-top:2px;font-weight:500; }
 
-.sales-c58223 { font-weight:700;color:var(--clr-success);font-size:.85rem;flex-shrink:0 }
+.sales-c58223 { font-weight:800;color:var(--clr-success) !important;font-size:.88rem;flex-shrink:0;letter-spacing:-0.01em; }
 
 .sales-35a11d { padding:30px }
 
-.sales-95754e { font-family:monospace;font-size:.78rem;color:var(--clr-primary);font-weight:600 }
+.sales-95754e { font-family:monospace;font-size:.82rem;color:var(--clr-primary) !important;font-weight:700; }
 
-.sales-0de4e7 { font-size:.82rem }
+.sales-0de4e7 { font-size:.85rem;font-weight:600;color:var(--text-primary) !important; }
 
-.sales-67fd48 { font-size:.78rem;color:var(--text-muted) }
+.sales-67fd48 { font-size:.78rem;color:var(--text-muted) !important; }
 
-.sales-c0f652 { font-weight:700;color:var(--clr-success) }
+.sales-c0f652 { font-weight:800;color:var(--clr-success) !important; }
 
-.sales-26dfd7 { font-size:.8rem;color:var(--clr-warning) }
+.sales-26dfd7 { font-size:.8rem;color:var(--clr-warning) !important;font-weight:600; }
 
-.sales-d44d31 { font-size:.75rem;color:var(--text-muted) }
+.sales-d44d31 { font-size:.75rem;color:var(--text-muted) !important; }
 
 .sales-4174a0 { padding:14px 20px;border-top:1px solid var(--border-light); }

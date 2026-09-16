@@ -21,6 +21,7 @@ $patients->execute($params2); $patients = $patients->fetchAll();
 
 // Handle status toggle
 if ($_SERVER['REQUEST_METHOD']==='POST' && ($_POST['action']??'')==='toggle') {
+    requireCsrfToken();
     $id = (int)$_POST['id'];
     $cur = $_POST['cur'] ?? 'active';
     $db->prepare("UPDATE patients SET status=? WHERE id=?")->execute([$cur==='active'?'inactive':'active', $id]);
@@ -63,6 +64,7 @@ include __DIR__ . '/../includes/header.php';
           <td class="pat-67fd48"><?= formatDate($p['created_at']) ?></td>
           <td>
             <form method="POST" class="pat-5677b9">
+              <input type="hidden" name="csrf_token" value="<?= generateCsrfToken() ?>">
               <input type="hidden" name="action" value="toggle"><input type="hidden" name="id" value="<?= $p['id'] ?>"><input type="hidden" name="cur" value="<?= $p['status'] ?>">
               <button class="btn btn-sm <?= $p['status']==='active'?'btn-warning':'btn-success' ?> btn-icon"
                       data-confirm="<?= $p['status']==='active'?'Deactivate':'Activate' ?> this patient account?"

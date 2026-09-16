@@ -17,6 +17,7 @@ if ($prePatientId) {
 
 // Save prescription
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action'] ?? '') === 'save') {
+    requireCsrfToken();
     $patId  = (int)$_POST['patient_id'];
     $data = [
         'patient_id' => $patId,
@@ -38,6 +39,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action'] ?? '') === 'save'
         $msg = 'Prescription saved successfully.';
         $prePatientId = $patId;
         $prePatient = $db->prepare("SELECT * FROM patients WHERE id=?"); $prePatient->execute([$patId]); $prePatient = $prePatient->fetch();
+        $patientName = $prePatient['full_name'] ?? ('Patient #' . $patId);
+        logActivity("Created optical prescription record for patient: $patientName", "Prescriptions", $_SESSION['user_id'], 'staff');
     }
 }
 
@@ -58,7 +61,20 @@ include __DIR__ . '/../includes/header.php';
 ?>
 
 <?php if ($msg): ?>
-<div class="alert alert-<?= $msgType ?>" data-auto-dismiss="4000"><i class="fas fa-<?= $msgType==='success'?'check-circle':'exclamation-circle' ?>"></i> <?= $msg ?></div>
+<script>
+document.addEventListener("DOMContentLoaded", function() {
+    Swal.fire({
+        title: '<?= $msgType === "success" ? "Success!" : ($msgType === "info" ? "Notice" : "Error") ?>',
+        text: '<?= addslashes($msg) ?>',
+        icon: '<?= $msgType === "success" ? "success" : ($msgType === "info" ? "info" : "error") ?>',
+        confirmButtonColor: 'var(--clr-primary)',
+        background: 'var(--bg-card)',
+        color: 'var(--text-primary)',
+        timer: 3000,
+        timerProgressBar: true
+    });
+});
+</script>
 <?php endif; ?>
 
 <div class="row">
@@ -70,6 +86,7 @@ include __DIR__ . '/../includes/header.php';
       </div>
       <div class="card-body">
         <form method="POST">
+          <input type="hidden" name="csrf_token" value="<?= generateCsrfToken() ?>">
           <input type="hidden" name="action" value="save">
 
           <div class="form-group">

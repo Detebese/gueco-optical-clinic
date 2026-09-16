@@ -11,6 +11,7 @@ $today = date('Y-m-d');
 
 // Handle status updates / notes
 if (($_SERVER['REQUEST_METHOD'] ?? '') === 'POST' && isset($_POST['action'])) {
+    requireCsrfToken();
     $apptId = (int)($_POST['appt_id'] ?? 0);
     $action = $_POST['action'] ?? '';
 
@@ -20,6 +21,11 @@ if (($_SERVER['REQUEST_METHOD'] ?? '') === 'POST' && isset($_POST['action'])) {
             $db->prepare("UPDATE appointments SET notes=? WHERE id=?")->execute([$notes, $apptId]);
             $_SESSION['flash_msg'] = 'Appointment notes updated.';
             $_SESSION['flash_type'] = 'info';
+
+            $ptStmt = $db->prepare("SELECT p.full_name FROM appointments a JOIN patients p ON p.id=a.patient_id WHERE a.id=?");
+            $ptStmt->execute([$apptId]);
+            $ptName = $ptStmt->fetch()['full_name'] ?? ('Appointment #' . $apptId);
+            logActivity("Updated notes for appointment #$apptId ($ptName)", "Appointments", $_SESSION['user_id'], 'staff');
         }
     }
     

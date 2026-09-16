@@ -39,23 +39,33 @@ while ($d <= $end) {
 }
 
 // Payment method breakdown
-$payBreak = $db->prepare("SELECT payment_method, COUNT(*) as cnt, SUM(total) as total FROM sales WHERE DATE(created_at) BETWEEN ? AND ? AND status='completed' GROUP BY payment_method");
-$payBreak->execute([$filterFrom,$filterTo]); $payBreak = $payBreak->fetchAll();
-
-// Top selling products
-$topProds = $db->prepare("
-    SELECT p.name, SUM(si.quantity) as units_sold, SUM(si.total_price) as revenue
-    FROM sale_items si JOIN products p ON p.id=si.product_id
-    JOIN sales s ON s.id=si.sale_id
-    WHERE DATE(s.created_at) BETWEEN ? AND ? AND s.status='completed'
-    GROUP BY p.id ORDER BY units_sold DESC LIMIT 5
+$payBreak = $db->prepare("
+    SELECT payment_method, COUNT(*) as count, COALESCE(SUM(total),0) as total
+    FROM sales WHERE DATE(created_at) BETWEEN ? AND ? AND status='completed'
+    GROUP BY payment_method ORDER BY total DESC
 ");
-$topProds->execute([$filterFrom,$filterTo]); $topProds = $topProds->fetchAll();
+$payBreak->execute([$filterFrom, $filterTo]);
+$payBreak = $payBreak->fetchAll();
 
-// All sales paginated
-$page = max(1,(int)($_GET['page']??1)); $perPage = 15;
+// Top selling products (accounting for discount proportions)
+$topProds = $db->prepare("
+    SELECT p.name, p.product_code, SUM(si.quantity) as units_sold,
+           SUM(CASE WHEN s.subtotal > 0 THEN (si.total_price * (s.total / s.subtotal)) ELSE si.total_price END) as revenue
+    FROM sale_items si
+    JOIN products p ON p.id = si.product_id
+    JOIN sales s ON s.id = si.sale_id
+    WHERE DATE(s.created_at) BETWEEN ? AND ? AND s.status = 'completed'
+    GROUP BY si.product_id ORDER BY units_sold DESC LIMIT 5
+");
+$topProds->execute([$filterFrom, $filterTo]);
+$topProds = $topProds->fetchAll();
+
+// Total transactions count for pagination
+$page = max(1, (int)($_GET['page'] ?? 1));
+$perPage = 15;
 $total = $db->prepare("SELECT COUNT(*) as c FROM sales WHERE DATE(created_at) BETWEEN ? AND ?");
-$total->execute([$filterFrom,$filterTo]); $total = $total->fetch()['c'];
+$total->execute([$filterFrom, $filterTo]);
+$total = $total->fetch()['c'];
 $pg = paginate($total, $perPage, $page);
 
 $sales = $db->prepare("
@@ -64,44 +74,45 @@ $sales = $db->prepare("
     WHERE DATE(s.created_at) BETWEEN ? AND ?
     ORDER BY s.created_at DESC LIMIT ? OFFSET ?
 ");
-$sales->execute([$filterFrom,$filterTo,$perPage,$pg['offset']]); $sales = $sales->fetchAll();
+$sales->execute([$filterFrom, $filterTo, $perPage, $pg['offset']]);
+$sales = $sales->fetchAll();
 
 $extraHead = '<link rel="stylesheet" href="'.BASE_URL.'assets/css/pages/sales_reports.css">';
 include __DIR__ . '/../includes/header.php';
 ?>
 
 <!-- Filter -->
-<div  class="card sales-684111">
-  <div  class="card-body sales-1206e8">
+<div class="card sales-684111">
+  <div class="card-body sales-1206e8">
     <form method="GET" class="sales-c9b9c2">
-      <div class="sales-131150"><label  class="form-label sales-7c8fee">From</label><input type="date" name="from" class="form-control" value="<?= $filterFrom ?>"></div>
-      <div class="sales-131150"><label  class="form-label sales-7c8fee">To</label><input type="date" name="to" class="form-control" value="<?= $filterTo ?>"></div>
+      <div class="sales-131150"><label class="form-label sales-7c8fee">From</label><input type="date" name="from" class="form-control" value="<?= $filterFrom ?>"></div>
+      <div class="sales-131150"><label class="form-label sales-7c8fee">To</label><input type="date" name="to" class="form-control" value="<?= $filterTo ?>"></div>
       <div>
         <button type="submit" class="btn btn-primary"><i class="fas fa-filter"></i> Apply</button>
         <a href="?from=<?= date('Y-m-01') ?>&to=<?= date('Y-m-d') ?>" class="btn btn-secondary ms-1">This Month</a>
         <a href="?from=<?= date('Y-m-d') ?>&to=<?= date('Y-m-d') ?>" class="btn btn-outline-primary ms-1">Today</a>
-          <a href="print_sales_report.php?from=<?= $filterFrom ?>&to=<?= $filterTo ?>" target="_blank" class="btn btn-danger ms-2"><i class="fas fa-file-pdf"></i> Export PDF</a>
+        <a href="print_sales_report.php?from=<?= $filterFrom ?>&to=<?= $filterTo ?>" target="_blank" class="btn btn-danger ms-2"><i class="fas fa-file-pdf"></i> Export PDF</a>
       </div>
     </form>
   </div>
 </div>
 
 <!-- Summary Cards -->
-<div  class="row sales-7afe40">
+<div class="row sales-7afe40">
   <div class="col-4">
-    <div  class="stat-card sales-5bc9bb">
+    <div class="stat-card sales-5bc9bb">
       <div class="stat-icon green"><i class="fas fa-peso-sign"></i></div>
       <div class="stat-info"><div class="stat-value"><?= formatCurrency($summary['total_sales']) ?></div><div class="stat-label">Total Revenue</div></div>
     </div>
   </div>
   <div class="col-4">
-    <div  class="stat-card sales-bc6c06">
+    <div class="stat-card sales-bc6c06">
       <div class="stat-icon blue"><i class="fas fa-receipt"></i></div>
       <div class="stat-info"><div class="stat-value"><?= number_format($summary['total_tx']) ?></div><div class="stat-label">Total Transactions</div></div>
     </div>
   </div>
   <div class="col-4">
-    <div  class="stat-card sales-0ff679">
+    <div class="stat-card sales-0ff679">
       <div class="stat-icon orange"><i class="fas fa-tags"></i></div>
       <div class="stat-info"><div class="stat-value"><?= formatCurrency($summary['total_discount']) ?></div><div class="stat-label">Total Discounts Given</div></div>
     </div>
@@ -109,45 +120,52 @@ include __DIR__ . '/../includes/header.php';
 </div>
 
 <!-- Charts -->
-<div  class="row sales-7afe40">
+<div class="row sales-7afe40">
   <div class="col-8">
     <div class="card">
-      <div class="card-header"><h6><i  class="fas fa-chart-area me-2 sales-b6b6a8"></i>Daily Sales — <?= formatDate($filterFrom) ?> to <?= formatDate($filterTo) ?></h6></div>
+      <div class="card-header"><h6><i class="fas fa-chart-area me-2 sales-b6b6a8"></i>Daily Sales — <?= formatDate($filterFrom) ?> to <?= formatDate($filterTo) ?></h6></div>
       <div class="card-body"><div id="salesChartContainer" style="min-height:280px; margin-top:10px;"></div></div>
     </div>
   </div>
   <div class="col-4">
-    <div  class="card sales-0d61ee">
-      <div class="card-header"><h6><i  class="fas fa-credit-card me-2 sales-0cac58"></i>Payment Methods</h6></div>
-      <div  class="card-body sales-3543ea">
+    <div class="card sales-0d61ee">
+      <div class="card-header"><h6><i class="fas fa-credit-card me-2 sales-0cac58"></i>Payment Methods</h6></div>
+      <div class="card-body sales-3543ea">
         <?php if (empty($payBreak)): ?>
           <div style="height:250px; display:flex; flex-direction:column; justify-content:center; align-items:center; color:var(--text-muted); opacity:0.6;">
             <i class="fas fa-chart-pie" style="font-size:3rem; margin-bottom:15px;"></i>
             <p style="font-size:0.95rem; margin:0; font-weight:500;">No transactions yet</p>
           </div>
-          <?php else: ?>
+        <?php else: ?>
           <div id="payChartContainer" style="min-height:260px;"></div>
-          <?php endif; ?>
+        <?php endif; ?>
       </div>
     </div>
   </div>
 </div>
 
 <!-- Top Products + Sales Table -->
-<div  class="row sales-7afe40">
+<div class="row sales-7afe40">
   <div class="col-4">
     <div class="card">
-      <div class="card-header"><h6><i  class="fas fa-fire me-2 sales-e3e24c"></i>Top Selling Products</h6></div>
+      <div class="card-header"><h6><i class="fas fa-fire me-2 sales-e3e24c"></i>Top Selling Products</h6></div>
       <div class="card-body">
         <?php if (empty($topProds)): ?>
         <div class="sales-34c8a2">No data for this period</div>
         <?php else: ?>
-        <?php foreach ($topProds as $i => $tp): ?>
+        <?php foreach ($topProds as $i => $tp): 
+          $rankStyle = match($i) {
+            0 => 'background: linear-gradient(135deg, #F59E0B, #D97706); color: #FFFFFF; box-shadow: 0 2px 8px rgba(245,158,11,0.35);',
+            1 => 'background: linear-gradient(135deg, #94A3B8, #64748B); color: #FFFFFF; box-shadow: 0 2px 8px rgba(148,163,184,0.35);',
+            2 => 'background: linear-gradient(135deg, #E09A67, #B86B35); color: #FFFFFF; box-shadow: 0 2px 8px rgba(224,154,103,0.35);',
+            default => 'background: var(--bg-hover); color: var(--text-primary); border: 1px solid var(--border-color);'
+          };
+        ?>
         <div class="sales-ef20e9">
-          <div style="width:28px;height:28px;background:var(--clr-<?= $i===0?'warning':($i===1?'secondary':'primary') ?>);border-radius:50%;display:flex;align-items:center;justify-content:center;color:#fff;font-weight:700;font-size:.75rem;flex-shrink:0;"><?= $i+1 ?></div>
+          <div style="width:28px;height:28px;<?= $rankStyle ?>;border-radius:50%;display:flex;align-items:center;justify-content:center;font-weight:800;font-size:.78rem;flex-shrink:0;"><?= $i+1 ?></div>
           <div class="sales-8b56c7">
             <div class="sales-262d15"><?= sanitize($tp['name']) ?></div>
-            <div class="sales-46d9fd"><?= $tp['units_sold'] ?> units sold</div>
+            <div class="sales-46d9fd"><?= $tp['units_sold'] ?> unit<?= $tp['units_sold'] != 1 ? 's' : '' ?> sold</div>
           </div>
           <div class="sales-c58223"><?= formatCurrency($tp['revenue']) ?></div>
         </div>
@@ -159,14 +177,14 @@ include __DIR__ . '/../includes/header.php';
   <div class="col-8">
     <div class="card">
       <div class="card-header">
-        <h6><i  class="fas fa-table me-2 sales-b6b6a8"></i>All Transactions (<?= $total ?>)</h6>
+        <h6><i class="fas fa-table me-2 sales-b6b6a8"></i>All Transactions (<?= $total ?>)</h6>
       </div>
       <div class="table-responsive">
         <table class="table">
           <thead><tr><th>Invoice</th><th>Patient</th><th>Cashier</th><th>Total</th><th>Discount</th><th>Method</th><th>Date</th><th>Status</th><th style="text-align:right;">Receipt</th></tr></thead>
           <tbody>
             <?php if (empty($sales)): ?>
-            <tr><td colspan="9"><div  class="empty-state sales-35a11d"><div class="empty-icon"><i class="fas fa-receipt"></i></div><h6>No transactions</h6></div></td></tr>
+            <tr><td colspan="9"><div class="empty-state sales-35a11d"><div class="empty-icon"><i class="fas fa-receipt"></i></div><h6>No transactions</h6></div></td></tr>
             <?php else: ?>
             <?php foreach ($sales as $s): ?>
             <tr>
@@ -266,9 +284,8 @@ const themeMode = document.documentElement.getAttribute("data-theme") === "dark"
     tooltip: { theme: themeMode, style: { fontSize: "15px" } }
   };
   if (document.querySelector("#payChartContainer")) {
-      new ApexCharts(document.querySelector("#payChartContainer"), payOptions).render();
+    new ApexCharts(document.querySelector("#payChartContainer"), payOptions).render();
   }
 </script>';
 include __DIR__ . '/../includes/footer.php';
 ?>
-

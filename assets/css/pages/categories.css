@@ -1,45 +1,224 @@
-/* 
- * Categories Page Styles 
- */
+/* ============================================================
+   Categories Page Styles — Luxury Modern Aesthetic
+   ============================================================ */
+
+/* Page Header & Stats */
+.cat-header-wrap {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  flex-wrap: wrap;
+  margin-bottom: 24px;
+}
+
+.cat-header-left {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+}
+
+.cat-header-icon-box {
+  width: 48px;
+  height: 48px;
+  border-radius: 14px;
+  background: linear-gradient(135deg, var(--clr-bronze), var(--clr-bronze-dark));
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: #fff;
+  font-size: 1.25rem;
+  box-shadow: 0 4px 14px rgba(224, 154, 103, 0.35);
+  flex-shrink: 0;
+}
+
+.cat-header-titles h4 {
+  font-size: 1.25rem;
+  font-weight: 800;
+  color: var(--text-primary);
+  margin: 0 0 2px 0;
+  letter-spacing: -0.01em;
+}
+
+.cat-header-titles p {
+  font-size: 0.8rem;
+  color: var(--text-muted);
+  margin: 0;
+}
+
+.cat-stat-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 12px;
+  background: var(--bg-hover);
+  border: 1px solid var(--border-color);
+  border-radius: 9999px;
+  font-size: 0.76rem;
+  font-weight: 600;
+  color: var(--text-secondary);
+}
+
+/* Search & Filter Toolbar */
+.cat-toolbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  flex-wrap: wrap;
+  margin-bottom: 18px;
+}
+
+.cat-search-box {
+  position: relative;
+  min-width: 260px;
+  flex: 1;
+  max-width: 380px;
+}
+
+.cat-search-box input {
+  width: 100%;
+  padding: 9px 16px 9px 38px;
+  border-radius: 9999px;
+  background: var(--bg-card);
+  border: 1px solid var(--border-color);
+  color: var(--text-primary);
+  font-size: 0.84rem;
+  transition: var(--transition);
+}
+
+.cat-search-box input::placeholder {
+  color: var(--text-muted) !important;
+  opacity: 0.75 !important;
+}
+
+.cat-search-box input:focus {
+  outline: none;
+  border-color: var(--clr-bronze);
+  box-shadow: 0 0 0 3px rgba(224, 154, 103, 0.18);
+}
+
+.cat-search-box i {
+  position: absolute;
+  left: 14px;
+  top: 50%;
+  transform: translateY(-50%);
+  color: var(--text-muted);
+  font-size: 0.85rem;
+}
+
+.cat-filter-tabs {
+  display: flex;
+  gap: 6px;
+  background: var(--bg-card);
+  border: 1px solid var(--border-color);
+  padding: 4px;
+  border-radius: 9999px;
+}
+
+.cat-filter-btn {
+  border: none;
+  background: transparent;
+  padding: 5px 14px;
+  border-radius: 9999px;
+  font-size: 0.76rem;
+  font-weight: 600;
+  color: var(--text-muted);
+  cursor: pointer;
+  transition: var(--transition);
+}
+
+.cat-filter-btn:hover {
+  color: var(--text-primary);
+}
+
+.cat-filter-btn.active {
+  background: var(--clr-bronze);
+  color: #0A0A0D;
+  font-weight: 700;
+}
+
+[data-theme="light"] .cat-filter-btn.active {
+  background: #18181B;
+  color: #FFFFFF;
+}
+
+/* Category Table Enhancements */
+.cat-cell-name {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.cat-icon-badge {
+  width: 36px;
+  height: 36px;
+  border-radius: 10px;
+  background: rgba(224, 154, 103, 0.12);
+  border: 1px solid rgba(224, 154, 103, 0.2);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--clr-bronze);
+  font-size: 0.95rem;
+  flex-shrink: 0;
+}
+
+.cat-name-text {
+  font-weight: 700;
+  font-size: 0.88rem;
+  color: var(--text-primary);
+}
+
+.cat-count-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 4px 10px;
+  border-radius: 9999px;
+  font-size: 0.74rem;
+  font-weight: 600;
+  background: rgba(6, 182, 212, 0.12);
+  color: #06B6D4;
+  border: 1px solid rgba(6, 182, 212, 0.25);
+}
+
+.cat-actions-group {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+/* Modern Modal Enhancements */
+.modal-icon-badge {
+  width: 40px;
+  height: 40px;
+  border-radius: 12px;
+  background: linear-gradient(135deg, var(--clr-bronze), var(--clr-bronze-dark));
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: #fff;
+  font-size: 1.1rem;
+  box-shadow: 0 4px 12px rgba(224, 154, 103, 0.3);
+  flex-shrink: 0;
+}
+
+.modal-header-titles h5 {
+  font-size: 1.05rem;
+  font-weight: 800;
+  color: var(--text-primary);
+  margin: 0;
+}
+
+.modal-header-titles small {
+  font-size: 0.74rem;
+  color: var(--text-muted);
+}
 
 /* Fix for SweetAlert2 success icon white background masks in dark mode */
 .swal2-success-circular-line-left,
 .swal2-success-circular-line-right,
 .swal2-success-fix {
-    background-color: var(--bg-card) !important;
-}
-
-/* Table Column Styles */
-.cat-table-index {
-    font-size: 0.78rem;
-    color: var(--text-muted);
-}
-
-.cat-table-name {
-    font-weight: 600;
-    font-size: 0.88rem;
-}
-
-.cat-table-desc {
-    font-size: 0.8rem;
-    color: var(--text-muted);
-}
-
-.cat-table-created {
-    font-size: 0.78rem;
-    color: var(--text-muted);
-}
-
-/* Icon Styles */
-.cat-header-icon {
-    color: var(--clr-primary);
-}
-
-/* Form Styles */
-.cat-required-star {
-    color: var(--clr-danger);
-}
-
-.cat-delete-form {
-    display: inline;
+  background-color: var(--bg-card) !important;
 }

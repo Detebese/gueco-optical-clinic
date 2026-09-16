@@ -10,6 +10,7 @@ $msg = ''; $msgType = 'success';
 
 // Stock-in / out
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
+    requireCsrfToken();
     $action = $_POST['action'] ?? '';
     if ($action === 'stock_in' || $action === 'stock_out') {
         $id     = (int)$_POST['id'];
@@ -17,12 +18,15 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $reason = sanitize(trim($_POST['reason'] ?? ''));
         if ($qty <= 0) { $msg = 'Quantity must be greater than 0.'; $msgType = 'danger'; }
         else {
-            $prod = $db->prepare("SELECT stock_quantity FROM products WHERE id=?"); $prod->execute([$id]); $prev = $prod->fetch()['stock_quantity'];
+            $prod = $db->prepare("SELECT name, stock_quantity FROM products WHERE id=?"); $prod->execute([$id]); $prodData = $prod->fetch();
+            $prev = (int)($prodData['stock_quantity'] ?? 0);
+            $prodName = $prodData['name'] ?? ('Product #' . $id);
             $new = $action === 'stock_in' ? $prev + $qty : max(0, $prev - $qty);
             $db->prepare("UPDATE products SET stock_quantity=? WHERE id=?")->execute([$new, $id]);
             $db->prepare("INSERT INTO inventory_logs (product_id,type,quantity,previous_stock,new_stock,reason,user_id) VALUES (?,?,?,?,?,?,?)")
                ->execute([$id,$action,$qty,$prev,$new,$reason,$_SESSION['user_id']]);
             $msg = "Stock " . ($action==='stock_in'?'added':'deducted') . ". New stock: $new";
+            logActivity(($action === 'stock_in' ? "Stock In: +$qty" : "Stock Out: -$qty") . " for \"$prodName\" (Reason: " . ($reason ?: 'None') . ", Stock: $prev → $new)", "Inventory", $_SESSION['user_id'], 'staff');
         }
     }
 }
@@ -57,7 +61,20 @@ include __DIR__ . '/../includes/header.php';
 ?>
 
 <?php if ($msg): ?>
-<div class="alert alert-<?= $msgType ?>" data-auto-dismiss="4000"><i class="fas fa-<?= $msgType==='success'?'check-circle':'exclamation-circle' ?>"></i> <?= $msg ?></div>
+<script>
+document.addEventListener("DOMContentLoaded", function() {
+    Swal.fire({
+        title: '<?= $msgType === "success" ? "Success!" : ($msgType === "info" ? "Notice" : "Error") ?>',
+        text: '<?= addslashes($msg) ?>',
+        icon: '<?= $msgType === "success" ? "success" : ($msgType === "info" ? "info" : "error") ?>',
+        confirmButtonColor: 'var(--clr-primary)',
+        background: 'var(--bg-card)',
+        color: 'var(--text-primary)',
+        timer: 3000,
+        timerProgressBar: true
+    });
+});
+</script>
 <?php endif; ?>
 
 <div class="row" style="margin-bottom:16px;">
@@ -152,6 +169,7 @@ include __DIR__ . '/../includes/header.php';
   <div class="modal-box" style="max-width:380px;">
     <div class="modal-header"><h5 id="stockTitle">Stock In</h5><button class="modal-close" onclick="closeModal('stockModal')"><i class="fas fa-times"></i></button></div>
     <form method="POST">
+      <input type="hidden" name="csrf_token" value="<?= generateCsrfToken() ?>">
       <div class="modal-body">
         <input type="hidden" name="id" id="sId"><input type="hidden" name="action" id="sAction">
         <p style="font-size:.85rem;color:var(--text-muted);margin-bottom:12px;">Product: <strong id="sProdName"></strong></p>

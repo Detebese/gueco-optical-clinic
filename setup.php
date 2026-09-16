@@ -1,9 +1,13 @@
 <?php
 // ============================================================
-// SETUP SCRIPT — Run this ONCE to initialize the database
-// Access: http://localhost/gueco-optical/setup.php
-// DELETE this file after running!
+// SETUP SCRIPT — LOCKED FOR SECURITY
 // ============================================================
+// To run setup in development, define ALLOW_SETUP = true in config.
+if (!defined('ALLOW_SETUP') || ALLOW_SETUP !== true) {
+    http_response_code(403);
+    die('<!DOCTYPE html><html><head><title>Access Denied</title><style>body{font-family:sans-serif;display:flex;align-items:center;justify-content:center;height:100vh;margin:0;background:#f8fafc;color:#1e293b;}</style></head><body><div style="background:#fff;padding:30px 40px;border-radius:12px;box-shadow:0 4px 20px rgba(0,0,0,.08);text-align:center;"><h2>🔒 Setup Locked</h2><p style="color:#64748b;">The installation script has been disabled for system security.</p><a href="login.php" style="display:inline-block;margin-top:15px;padding:10px 20px;background:#2563eb;color:#fff;text-decoration:none;border-radius:8px;font-weight:600;">Go to Login</a></div></body></html>');
+}
+
 define('BASE_URL', '');
 require_once 'config/db.php';
 

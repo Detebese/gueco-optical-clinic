@@ -1,0 +1,31 @@
+# ============================================================
+# Apache Security Configuration — Gueco Optical
+# ============================================================
+
+# Disable Directory Browsing
+Options -Indexes
+
+# Prevent access to hidden files and sensitive directories
+<FilesMatch "^\.|\.(git|env|sql|log|json|lock|bak|config)$">
+    <IfModule mod_authz_core.c>
+        Require all denied
+    </IfModule>
+    <IfModule !mod_authz_core.c>
+        Order allow,deny
+        Deny from all
+    </IfModule>
+</FilesMatch>
+
+# Protect database directory
+<IfModule mod_rewrite.c>
+    RewriteEngine On
+    RewriteRule ^database/ - [F,L,NC]
+</IfModule>
+
+# Security Headers
+<IfModule mod_headers.c>
+    Header set X-Content-Type-Options "nosniff"
+    Header set X-Frame-Options "SAMEORIGIN"
+    Header set X-XSS-Protection "1; mode=block"
+    Header set Referrer-Policy "strict-origin-when-cross-origin"
+</IfModule>

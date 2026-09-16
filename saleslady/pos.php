@@ -9,6 +9,10 @@ $db = getDB();
 
 // Process sale submission
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action'] ?? '') === 'process_sale') {
+    if (!verifyCsrfToken($_POST['csrf_token'] ?? '')) {
+        echo json_encode(['success' => false, 'error' => 'Security validation failed (CSRF). Please refresh the page.']);
+        exit;
+    }
     $patientId  = (int)($_POST['patient_id'] ?? 0) ?: null;
     $items      = json_decode($_POST['items'] ?? '[]', true);
     $payMethod  = $_POST['payment_method'] ?? 'cash';
@@ -23,28 +27,29 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action'] ?? '') === 'proce
     // Calculate subtotal and build item details
     $subtotal = 0;
     $itemsDetailed = [];
-    foreach ($items as &$item) {
+    foreach ($items as $rawItem) {
         $prod = $db->prepare("SELECT * FROM products WHERE id=? AND status='active'");
-        $prod->execute([$item['id']]); $prod = $prod->fetch();
+        $prod->execute([$rawItem['id']]); 
+        $prod = $prod->fetch();
         if (!$prod) { 
-            echo json_encode(['success'=>false,'error'=>'Product not found or inactive: ID #'.$item['id']]); 
+            echo json_encode(['success'=>false,'error'=>'Product not found or inactive: ID #'.$rawItem['id']]); 
             exit; 
         }
-        if ($prod['stock_quantity'] < $item['qty']) {
+        if ($prod['stock_quantity'] < $rawItem['qty']) {
             echo json_encode(['success'=>false,'error'=>"Insufficient stock for: {$prod['name']}. Available stock: {$prod['stock_quantity']}"]); 
-            exit;
+            exit; 
         }
-        $item['price'] = (float)$prod['price'];
-        $item['total'] = (float)($prod['price'] * $item['qty']);
-        $item['name']  = $prod['name'];
-        $subtotal += $item['total'];
+        $itemPrice = (float)$prod['price'];
+        $itemQty   = (int)$rawItem['qty'];
+        $itemTotal = (float)($itemPrice * $itemQty);
+        $subtotal += $itemTotal;
 
         $itemsDetailed[] = [
-            'id'    => $item['id'],
+            'id'    => (int)$rawItem['id'],
             'name'  => $prod['name'],
-            'qty'   => (int)$item['qty'],
-            'price' => (float)$prod['price'],
-            'total' => (float)$item['total']
+            'qty'   => $itemQty,
+            'price' => $itemPrice,
+            'total' => $itemTotal
         ];
     }
 
@@ -79,7 +84,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action'] ?? '') === 'proce
         $saleId = $db->lastInsertId();
 
         // Insert items + deduct stock
-        foreach ($items as $item) {
+        foreach ($itemsDetailed as $item) {
             $db->prepare("INSERT INTO sale_items (sale_id,product_id,item_name,item_type,quantity,unit_price,total_price) VALUES (?,?,?, 'product', ?,?,?)")
                ->execute([$saleId,$item['id'],$item['name'],$item['qty'],$item['price'],$item['total']]);
 
@@ -95,6 +100,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action'] ?? '') === 'proce
         }
 
         $db->commit();
+        logActivity("Completed sale $invoiceNo for $patientName (Total: " . formatCurrency($total) . ", Payment: " . strtoupper($payMethod) . ")", "Sales / POS", $_SESSION['user_id'], 'staff');
         echo json_encode([
             'success'        => true,
             'invoice_no'     => $invoiceNo,
@@ -629,6 +635,7 @@ async function processCheckout() {
   btn.innerHTML = '<i class="fas fa-spinner fa-spin me-1"></i> Processing...';
 
   const form = new FormData();
+  form.append('csrf_token', '<?= generateCsrfToken() ?>');
   form.append('action', 'process_sale');
   form.append('items', JSON.stringify(cart.map(i => ({ id: i.id, name: i.name, qty: i.qty }))));
   form.append('patient_id', document.getElementById('patientSelect').value);

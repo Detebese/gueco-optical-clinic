@@ -10,6 +10,15 @@ require_once __DIR__ . '/db.php';
 
 function startSession(): void {
     if (session_status() === PHP_SESSION_NONE) {
+        $isSecure = (!empty($_SERVER['HTTPS']) && $_SERVER['HTTPS'] !== 'off') || (isset($_SERVER['SERVER_PORT']) && $_SERVER['SERVER_PORT'] == 443);
+        session_set_cookie_params([
+            'lifetime' => 0,
+            'path'     => '/',
+            'domain'   => '',
+            'secure'   => $isSecure,
+            'httponly' => true,
+            'samesite' => 'Lax'
+        ]);
         session_start();
     }
 }
@@ -26,12 +35,33 @@ function isPatientLoggedIn(): bool {
 
 function getCurrentUser(): ?array {
     if (!isLoggedIn()) return null;
-    return [
+    static $currentUser = null;
+    if ($currentUser !== null) {
+        return $currentUser;
+    }
+    try {
+        $db = getDB();
+        $stmt = $db->prepare("SELECT id, full_name, role, email, phone, status FROM users WHERE id = ?");
+        $stmt->execute([$_SESSION['user_id']]);
+        $user = $stmt->fetch();
+        if ($user) {
+            // Synchronize active session with current database data
+            $_SESSION['user_name']  = $user['full_name'];
+            $_SESSION['user_role']  = $user['role'];
+            $_SESSION['user_email'] = $user['email'];
+            $currentUser = $user;
+            return $currentUser;
+        }
+    } catch (Exception $e) {
+        // Fallback to session data
+    }
+    $currentUser = [
         'id'        => $_SESSION['user_id'],
-        'full_name' => $_SESSION['user_name'],
-        'role'      => $_SESSION['user_role'],
-        'email'     => $_SESSION['user_email'],
+        'full_name' => $_SESSION['user_name'] ?? 'Admin',
+        'role'      => $_SESSION['user_role'] ?? 'admin',
+        'email'     => $_SESSION['user_email'] ?? '',
     ];
+    return $currentUser;
 }
 
 function requireRole(string ...$roles): void {
@@ -72,7 +102,7 @@ function getRoleLabel(string $role): string {
     };
 }
 
-// --- Security ---
+// --- Security & Rate Limiting ---
 
 function sanitize(string $value): string {
     return htmlspecialchars(strip_tags(trim($value)), ENT_QUOTES, 'UTF-8');
@@ -86,9 +116,61 @@ function generateCsrfToken(): string {
     return $_SESSION['csrf_token'];
 }
 
-function verifyCsrfToken(string $token): bool {
+function verifyCsrfToken(?string $token): bool {
     startSession();
-    return isset($_SESSION['csrf_token']) && hash_equals($_SESSION['csrf_token'], $token);
+    if (empty($token) || empty($_SESSION['csrf_token'])) {
+        return false;
+    }
+    return hash_equals($_SESSION['csrf_token'], $token);
+}
+
+function requireCsrfToken(): void {
+    $token = $_POST['csrf_token'] ?? $_SERVER['HTTP_X_CSRF_TOKEN'] ?? '';
+    if (!verifyCsrfToken($token)) {
+        http_response_code(403);
+        die('Invalid or expired security token (CSRF). Please refresh the page and try again.');
+    }
+}
+
+function checkRateLimit(string $key, int $maxAttempts = 5, int $decaySeconds = 900): bool {
+    startSession();
+    $now = time();
+    if (!isset($_SESSION['rate_limits'][$key])) {
+        return true;
+    }
+    $entry = $_SESSION['rate_limits'][$key];
+    if ($now > $entry['reset_at']) {
+        unset($_SESSION['rate_limits'][$key]);
+        return true;
+    }
+    return $entry['attempts'] < $maxAttempts;
+}
+
+function recordFailedAttempt(string $key, int $decaySeconds = 900): int {
+    startSession();
+    $now = time();
+    if (!isset($_SESSION['rate_limits'][$key]) || $now > $_SESSION['rate_limits'][$key]['reset_at']) {
+        $_SESSION['rate_limits'][$key] = [
+            'attempts' => 1,
+            'reset_at' => $now + $decaySeconds
+        ];
+    } else {
+        $_SESSION['rate_limits'][$key]['attempts']++;
+    }
+    return $_SESSION['rate_limits'][$key]['attempts'];
+}
+
+function clearRateLimit(string $key): void {
+    startSession();
+    if (isset($_SESSION['rate_limits'][$key])) {
+        unset($_SESSION['rate_limits'][$key]);
+    }
+}
+
+function getRateLimitRemainingSeconds(string $key): int {
+    startSession();
+    if (!isset($_SESSION['rate_limits'][$key])) return 0;
+    return max(0, $_SESSION['rate_limits'][$key]['reset_at'] - time());
 }
 
 // --- Database Helpers ---
@@ -195,6 +277,7 @@ function paginate(int $total, int $perPage, int $currentPage): array {
         'per_page'    => $perPage,
         'current'     => $currentPage,
         'total_pages' => $totalPages,
+        'pages'       => $totalPages,
         'offset'      => $offset,
         'has_prev'    => $currentPage > 1,
         'has_next'    => $currentPage < $totalPages,

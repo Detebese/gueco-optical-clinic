@@ -9,6 +9,7 @@ $db = getDB();
 $msg = ''; $msgType = 'success';
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
+    requireCsrfToken();
     $action = $_POST['action'] ?? '';
     if ($action === 'add' || $action === 'edit') {
         $data = [
@@ -22,24 +23,44 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         elseif ($action === 'add') {
             $db->prepare("INSERT INTO suppliers (company_name,contact_person,phone,email,address) VALUES (?,?,?,?,?)")->execute($data);
             $msg = 'Supplier added successfully.';
+            logActivity("Added new supplier \"{$data[0]}\"", "Suppliers", $_SESSION['user_id'], 'staff');
         } else {
             $id = (int)$_POST['id'];
             $stat = $_POST['status'] ?? 'active';
-            $data[] = $stat; $data[] = $id;
-            $db->prepare("UPDATE suppliers SET company_name=?,contact_person=?,phone=?,email=?,address=?,status=? WHERE id=?")->execute($data);
-            $msg = 'Supplier updated.';
+            $curr = $db->prepare("SELECT company_name,contact_person,phone,email,address,status FROM suppliers WHERE id=?");
+            $curr->execute([$id]);
+            $old = $curr->fetch();
+            if ($old && $old['company_name'] === $data[0] && ($old['contact_person'] ?? '') === $data[1] && ($old['phone'] ?? '') === $data[2] && ($old['email'] ?? '') === $data[3] && ($old['address'] ?? '') === $data[4] && $old['status'] === $stat) {
+                $msg = 'No changes were made. The supplier details are already up to date!';
+                $msgType = 'info';
+            } else {
+                $data[] = $stat; $data[] = $id;
+                $db->prepare("UPDATE suppliers SET company_name=?,contact_person=?,phone=?,email=?,address=?,status=? WHERE id=?")->execute($data);
+                $msg = 'Supplier updated.';
+                logActivity("Updated supplier \"{$data[0]}\" (Status: " . strtoupper($stat) . ")", "Suppliers", $_SESSION['user_id'], 'staff');
+            }
         }
     } elseif ($action === 'delete') {
         $id = (int)$_POST['id'];
         $cnt = $db->prepare("SELECT COUNT(*) as c FROM products WHERE supplier_id=? AND status='active'"); $cnt->execute([$id]); $cnt = $cnt->fetch()['c'];
         if ($cnt > 0) { $msg = "Cannot delete: $cnt product(s) linked to this supplier."; $msgType = 'danger'; }
-        else { $db->prepare("UPDATE suppliers SET status='inactive' WHERE id=?")->execute([$id]); $msg = 'Supplier deactivated.'; }
+        else { 
+            $db->prepare("UPDATE suppliers SET status='inactive' WHERE id=?")->execute([$id]); 
+            $msg = 'Supplier deactivated.'; 
+            logActivity("Deactivated supplier #$id", "Suppliers", $_SESSION['user_id'], 'staff');
+        }
     }
 }
 
-$search = sanitize($_GET['search'] ?? '');
-$whereStr = $search ? "WHERE company_name LIKE '%$search%' OR contact_person LIKE '%$search%'" : '';
-$suppliers = $db->query("SELECT s.*, (SELECT COUNT(*) FROM products p WHERE p.supplier_id=s.id AND p.status='active') as product_count FROM suppliers s $whereStr ORDER BY s.company_name ASC")->fetchAll();
+$search = trim($_GET['search'] ?? '');
+if ($search !== '') {
+    $stmt = $db->prepare("SELECT s.*, (SELECT COUNT(*) FROM products p WHERE p.supplier_id=s.id AND p.status='active') as product_count FROM suppliers s WHERE company_name LIKE ? OR contact_person LIKE ? ORDER BY s.company_name ASC");
+    $term = "%$search%";
+    $stmt->execute([$term, $term]);
+    $suppliers = $stmt->fetchAll();
+} else {
+    $suppliers = $db->query("SELECT s.*, (SELECT COUNT(*) FROM products p WHERE p.supplier_id=s.id AND p.status='active') as product_count FROM suppliers s ORDER BY s.company_name ASC")->fetchAll();
+}
 
 $extraHead = '<link rel="stylesheet" href="'.BASE_URL.'assets/css/pages/suppliers.css">';
 include __DIR__ . '/../includes/header.php';
@@ -99,6 +120,7 @@ document.addEventListener("DOMContentLoaded", function() {
             </button>
             <?php if ($sup['product_count'] == 0): ?>
             <form method="POST" class="sup-5677b9">
+              <input type="hidden" name="csrf_token" value="<?= generateCsrfToken() ?>">
               <input type="hidden" name="action" value="delete"><input type="hidden" name="id" value="<?= $sup['id'] ?>">
               <button class="btn btn-sm btn-danger btn-icon" data-confirm="Deactivate this supplier?"><i class="fas fa-ban"></i></button>
             </form>
@@ -118,6 +140,7 @@ document.addEventListener("DOMContentLoaded", function() {
     <div class="modal-header"><h5><i  class="fas fa-plus me-2 sup-b6b6a8"></i>Add Supplier</h5>
       <button class="modal-close" onclick="closeModal('addModal')"><i class="fas fa-times"></i></button></div>
     <form method="POST">
+      <input type="hidden" name="csrf_token" value="<?= generateCsrfToken() ?>">
       <div class="modal-body">
         <input type="hidden" name="action" value="add">
         <div class="form-group"><label class="form-label">Company Name *</label><input type="text" name="company_name" class="form-control" required></div>
@@ -138,7 +161,8 @@ document.addEventListener("DOMContentLoaded", function() {
   <div class="modal-box">
     <div class="modal-header"><h5><i  class="fas fa-edit me-2 sup-b6b6a8"></i>Edit Supplier</h5>
       <button class="modal-close" onclick="closeModal('editModal')"><i class="fas fa-times"></i></button></div>
-    <form method="POST">
+    <form method="POST" onsubmit="return confirmEditSupplier(event, this)">
+      <input type="hidden" name="csrf_token" value="<?= generateCsrfToken() ?>">
       <div class="modal-body">
         <input type="hidden" name="action" value="edit"><input type="hidden" name="id" id="eId">
         <div class="form-group"><label class="form-label">Company Name *</label><input type="text" name="company_name" id="eName" class="form-control" required></div>
@@ -158,7 +182,10 @@ document.addEventListener("DOMContentLoaded", function() {
 </div>
 
 <script>
+let currentEditSupplier = null;
+
 function openEditSupplier(s) {
+  currentEditSupplier = s;
   document.getElementById('eId').value = s.id;
   document.getElementById('eName').value = s.company_name;
   document.getElementById('eContact').value = s.contact_person || '';
@@ -167,6 +194,50 @@ function openEditSupplier(s) {
   document.getElementById('eAddress').value = s.address || '';
   document.getElementById('eStatus').value = s.status;
   openModal('editModal');
+}
+
+function confirmEditSupplier(e, form) {
+  e.preventDefault();
+  const s = currentEditSupplier;
+  if (s) {
+    const name = document.getElementById('eName').value.trim();
+    const contact = document.getElementById('eContact').value.trim();
+    const phone = document.getElementById('ePhone').value.trim();
+    const email = document.getElementById('eEmail').value.trim();
+    const address = document.getElementById('eAddress').value.trim();
+    const stat = document.getElementById('eStatus').value;
+
+    if (name === s.company_name && contact === (s.contact_person || '') && phone === (s.phone || '') && email === (s.email || '') && address === (s.address || '') && stat === s.status) {
+      Swal.fire({
+        title: 'Notice',
+        text: 'No changes were made. The supplier details are already up to date!',
+        icon: 'info',
+        background: 'var(--bg-card)',
+        color: 'var(--text-primary)',
+        confirmButtonColor: 'var(--clr-primary)'
+      });
+      return false;
+    }
+  }
+
+  Swal.fire({
+    title: 'Save Changes?',
+    text: 'Are you sure you want to update this supplier?',
+    icon: 'warning',
+    showCancelButton: true,
+    confirmButtonColor: 'var(--clr-primary)',
+    cancelButtonColor: 'var(--clr-danger)',
+    confirmButtonText: 'Yes, update it!',
+    cancelButtonText: 'Cancel',
+    background: 'var(--bg-card)',
+    color: 'var(--text-primary)'
+  }).then((result) => {
+    if (result.isConfirmed) {
+      form._isSubmitting = true;
+      form.submit();
+    }
+  });
+  return false;
 }
 </script>
 <?php include __DIR__ . '/../includes/footer.php'; ?>

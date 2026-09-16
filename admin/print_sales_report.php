@@ -63,8 +63,6 @@ foreach ($sales as $s) {
       body { padding: 1.5cm; }
       .report-container { border: none; padding: 0; max-width: 100%; }
   }
-      .report-container { border: none; padding: 0; }
-  }
 </style>
 </head>
 <body onload="window.print()">
