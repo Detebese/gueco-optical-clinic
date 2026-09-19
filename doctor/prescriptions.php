@@ -8,8 +8,9 @@ $breadcrumb = ['Doctor', 'Prescriptions'];
 $db = getDB();
 $msg = ''; $msgType = 'success';
 
-// Pre-fill patient
+// Pre-fill patient & appointment
 $prePatientId = (int)($_GET['patient_id'] ?? 0);
+$preApptId    = (int)($_GET['appt_id'] ?? 0);
 $prePatient = null;
 if ($prePatientId) {
     $prePatient = $db->prepare("SELECT * FROM patients WHERE id=?"); $prePatient->execute([$prePatientId]); $prePatient = $prePatient->fetch();
@@ -19,6 +20,7 @@ if ($prePatientId) {
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action'] ?? '') === 'save') {
     requireCsrfToken();
     $patId  = (int)$_POST['patient_id'];
+    $apptId = (int)($_POST['appt_id'] ?? 0);
     $data = [
         'patient_id' => $patId,
         'doctor_id'  => $_SESSION['user_id'],
@@ -36,7 +38,14 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action'] ?? '') === 'save'
     if (!$patId) { $msg = 'Please select a patient.'; $msgType = 'danger'; }
     else {
         $db->prepare("INSERT INTO prescriptions (patient_id,doctor_id,od_sphere,od_cylinder,od_axis,os_sphere,os_cylinder,os_axis,pd,add_power,notes) VALUES (:patient_id,:doctor_id,:od_sphere,:od_cylinder,:od_axis,:os_sphere,:os_cylinder,:os_axis,:pd,:add_power,:notes)")->execute($data);
-        $msg = 'Prescription saved successfully.';
+        
+        if ($apptId > 0) {
+            $db->prepare("UPDATE appointments SET status='completed' WHERE id=? AND patient_id=?")->execute([$apptId, $patId]);
+            $msg = 'Prescription saved successfully! Consultation completed and forwarded for Optical Dispensing & Checkout.';
+        } else {
+            $msg = 'Prescription saved successfully.';
+        }
+        
         $prePatientId = $patId;
         $prePatient = $db->prepare("SELECT * FROM patients WHERE id=?"); $prePatient->execute([$patId]); $prePatient = $prePatient->fetch();
         $patientName = $prePatient['full_name'] ?? ('Patient #' . $patId);
@@ -88,6 +97,7 @@ document.addEventListener("DOMContentLoaded", function() {
         <form method="POST">
           <input type="hidden" name="csrf_token" value="<?= generateCsrfToken() ?>">
           <input type="hidden" name="action" value="save">
+          <input type="hidden" name="appt_id" value="<?= $preApptId ?>">
 
           <div class="form-group">
             <label class="form-label">Patient *</label>

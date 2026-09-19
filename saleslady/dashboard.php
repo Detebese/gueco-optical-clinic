@@ -59,18 +59,21 @@ include __DIR__ . '/../includes/header.php';
 ?>
 
 <!-- Quick Action Buttons -->
-<div style="display:flex;gap:12px;margin-bottom:24px;flex-wrap:wrap;">
+<div style="display:flex;gap:12px;margin-bottom:24px;flex-wrap:wrap;align-items:center;">
+  <a href="../saleslady/pos.php?mode=retail" class="btn btn-warning" style="background:linear-gradient(135deg,#f59e0b,#d97706);border:none;color:#fff;font-weight:700;box-shadow:0 4px 12px rgba(245,158,11,0.25);">
+    <i class="fas fa-bolt me-1"></i> Quick Sale / Walk-in Purchase
+  </a>
   <a href="../saleslady/pos.php" class="btn btn-primary">
-    <i class="fas fa-cash-register"></i> New Sale / POS
+    <i class="fas fa-cash-register me-1"></i> POS Terminal
   </a>
   <a href="../saleslady/appointments.php" class="btn btn-outline-primary">
-    <i class="fas fa-calendar-check"></i> View Appointments
+    <i class="fas fa-calendar-check me-1"></i> Scheduled Patients & Queue
   </a>
   <a href="../saleslady/inventory.php" class="btn btn-outline-primary">
-    <i class="fas fa-warehouse"></i> Stock Management
+    <i class="fas fa-warehouse me-1"></i> Stock Management
   </a>
   <a href="../saleslady/patients.php" class="btn btn-outline-primary">
-    <i class="fas fa-users"></i> Patient Info
+    <i class="fas fa-users me-1"></i> Patient Info
   </a>
 </div>
 

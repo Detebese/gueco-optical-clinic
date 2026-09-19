@@ -43,7 +43,15 @@ $apptsStmt = $db->query("
            p.gender as patient_gender,
            p.birthdate as patient_birthdate,
            (SELECT COUNT(*) FROM prescriptions rx WHERE rx.patient_id = a.patient_id) as rx_count,
-           (SELECT COUNT(*) FROM appointments a2 WHERE a2.patient_id = a.patient_id AND a2.status = 'completed') as completed_visits
+           (SELECT COUNT(*) FROM appointments a2 WHERE a2.patient_id = a.patient_id AND a2.status = 'completed') as completed_visits,
+           COALESCE(
+               (SELECT s.id FROM sales s WHERE s.appointment_id = a.id ORDER BY s.id DESC LIMIT 1),
+               (SELECT s2.id FROM sales s2 WHERE s2.patient_id = a.patient_id AND DATE(s2.created_at) = a.appointment_date ORDER BY s2.id DESC LIMIT 1)
+           ) as sale_id,
+           COALESCE(
+               (SELECT s.invoice_no FROM sales s WHERE s.appointment_id = a.id ORDER BY s.id DESC LIMIT 1),
+               (SELECT s2.invoice_no FROM sales s2 WHERE s2.patient_id = a.patient_id AND DATE(s2.created_at) = a.appointment_date ORDER BY s2.id DESC LIMIT 1)
+           ) as invoice_no
     FROM appointments a
     JOIN patients p ON p.id = a.patient_id
     ORDER BY a.appointment_date ASC, a.appointment_time ASC
@@ -121,20 +129,25 @@ include __DIR__ . '/../includes/header.php';
       </div>
     </div>
 
-    <!-- View Switcher (Week / Month / Agenda / Queue) -->
-    <div class="cal-view-switcher">
-      <button type="button" class="cal-view-btn" data-view="week" id="viewBtnWeek">
-        <i class="fas fa-calendar-week"></i> Week
-      </button>
-      <button type="button" class="cal-view-btn active" data-view="month" id="viewBtnMonth">
-        <i class="fas fa-calendar-alt"></i> Month
-      </button>
-      <button type="button" class="cal-view-btn" data-view="agenda" id="viewBtnAgenda">
-        <i class="fas fa-list-ul"></i> Agenda
-      </button>
-      <button type="button" class="cal-view-btn" data-view="table" id="viewBtnTable">
-        <i class="fas fa-users-cog"></i> Queue
-      </button>
+    <!-- Quick Sale Button & View Switcher -->
+    <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;">
+      <a href="pos.php?mode=retail" class="btn btn-warning btn-sm d-flex align-items-center gap-1 fw-bold shadow-sm" style="background:linear-gradient(135deg,#f59e0b,#d97706);border:none;color:#fff;border-radius:8px;padding:6px 14px;font-size:0.8rem;text-decoration:none;">
+        <i class="fas fa-bolt"></i> Quick Sale / Walk-in
+      </a>
+      <div class="cal-view-switcher">
+        <button type="button" class="cal-view-btn" data-view="week" id="viewBtnWeek">
+          <i class="fas fa-calendar-week"></i> Week
+        </button>
+        <button type="button" class="cal-view-btn active" data-view="month" id="viewBtnMonth">
+          <i class="fas fa-calendar-alt"></i> Month
+        </button>
+        <button type="button" class="cal-view-btn" data-view="agenda" id="viewBtnAgenda">
+          <i class="fas fa-list-ul"></i> Agenda
+        </button>
+        <button type="button" class="cal-view-btn" data-view="table" id="viewBtnTable">
+          <i class="fas fa-users-cog"></i> Queue
+        </button>
+      </div>
     </div>
   </div>
 
@@ -289,6 +302,14 @@ include __DIR__ . '/../includes/header.php';
           <label class="form-label text-muted small fw-bold text-uppercase"><i class="fas fa-sticky-note me-1"></i> Notes & Customer Requests</label>
           <div class="cal-modal-notes" id="modalNotes">
             No special notes provided.
+          </div>
+        </div>
+
+        <!-- Dynamic Lock/Status Alert for Consultation Flow -->
+        <div id="modalConsultationLockAlert" class="alert alert-warning d-flex align-items-center gap-2 mb-3 py-2 px-3" style="display:none;font-size:0.82rem;border-radius:10px;border:1.5px solid #f59e0b;background:rgba(245,158,11,0.08);">
+          <i class="fas fa-lock fa-lg text-warning flex-shrink-0"></i>
+          <div>
+            <strong>Awaiting Doctor Examination:</strong> POS checkout unlocks automatically once the Optometrist inputs the prescription and completes the medical consultation.
           </div>
         </div>
 
@@ -900,8 +921,50 @@ document.addEventListener('DOMContentLoaded', function() {
 
     document.getElementById('modalNotes').textContent = appt.notes && appt.notes.trim() !== '' ? appt.notes : 'No special notes entered for this appointment.';
 
-    // Saleslady Shortcuts
-    document.getElementById('modalBtnPos').href = `pos.php?patient_id=${appt.patient_id}&appt_id=${appt.id}`;
+    // Saleslady Shortcuts & Lock Logic
+    const btnPos = document.getElementById('modalBtnPos');
+    const lockAlert = document.getElementById('modalConsultationLockAlert');
+    const purpose = (appt.purpose || 'consultation').toLowerCase();
+    const isConsultation = purpose.includes('consultation') || purpose.includes('eye_exam') || purpose.includes('checkup');
+    const isExamCompleted = appt.status === 'completed' || (parseInt(appt.rx_count, 10) > 0 && appt.status !== 'pending');
+    const isCancelledOrNoShow = appt.status === 'cancelled' || appt.status === 'no_show';
+    const hasSale = !!appt.sale_id;
+
+    if (hasSale) {
+      if (lockAlert) lockAlert.style.display = 'none';
+      btnPos.href = `receipt.php?id=${appt.sale_id}`;
+      btnPos.target = '_blank';
+      btnPos.className = 'btn btn-success btn-sm flex-fill py-2 shadow-sm';
+      btnPos.style.pointerEvents = '';
+      btnPos.style.opacity = '1';
+      btnPos.innerHTML = `<i class="fas fa-file-invoice me-1"></i> View Receipt (${escapeHtml(appt.invoice_no || '#' + appt.sale_id)})`;
+    } else if (isCancelledOrNoShow) {
+      if (lockAlert) lockAlert.style.display = 'none';
+      btnPos.removeAttribute('href');
+      btnPos.target = '_self';
+      btnPos.className = 'btn btn-secondary btn-sm flex-fill py-2 disabled';
+      btnPos.style.pointerEvents = 'none';
+      btnPos.style.opacity = '0.65';
+      btnPos.innerHTML = `<i class="fas fa-ban me-1"></i> ${appt.status === 'cancelled' ? 'Appointment Cancelled' : 'No-Show Recorded'}`;
+    } else if (isConsultation && !isExamCompleted) {
+      // Consultation pending Doctor Examination -> LOCK POS BUTTON
+      if (lockAlert) lockAlert.style.display = 'flex';
+      btnPos.removeAttribute('href');
+      btnPos.target = '_self';
+      btnPos.className = 'btn btn-secondary btn-sm flex-fill py-2 disabled';
+      btnPos.style.pointerEvents = 'none';
+      btnPos.style.opacity = '0.85';
+      btnPos.innerHTML = `<i class="fas fa-lock me-1"></i> POS Locked (Awaiting Doctor Exam)`;
+    } else {
+      if (lockAlert) lockAlert.style.display = 'none';
+      btnPos.href = `pos.php?patient_id=${appt.patient_id}&appt_id=${appt.id}`;
+      btnPos.target = '_self';
+      btnPos.className = 'btn btn-primary btn-sm flex-fill py-2 shadow-sm';
+      btnPos.style.pointerEvents = '';
+      btnPos.style.opacity = '1';
+      btnPos.innerHTML = `<i class="fas fa-shopping-cart me-1"></i> Proceed to POS Checkout`;
+    }
+
     document.getElementById('modalBtnPatient').href = `patients.php?view=${appt.patient_id}`;
 
     appointmentModal.show();
@@ -927,6 +990,21 @@ document.addEventListener('DOMContentLoaded', function() {
     } else {
       let html = '<div class="d-flex flex-column gap-3">';
       dayAppts.forEach(appt => {
+        const p = (appt.purpose || 'consultation').toLowerCase();
+        const isConsult = p.includes('consultation') || p.includes('eye_exam') || p.includes('checkup');
+        const isDone = appt.status === 'completed' || (parseInt(appt.rx_count, 10) > 0 && appt.status !== 'pending');
+
+        let actionBtn = '';
+        if (appt.sale_id) {
+          actionBtn = `<a href="receipt.php?id=${appt.sale_id}" target="_blank" class="btn btn-success btn-sm px-3 shadow-sm" title="View Receipt"><i class="fas fa-file-invoice me-1"></i> Receipt</a>`;
+        } else if (appt.status === 'cancelled' || appt.status === 'no_show') {
+          actionBtn = `<span class="badge bg-secondary py-2 px-3">${appt.status === 'cancelled' ? 'Cancelled' : 'No-Show'}</span>`;
+        } else if (isConsult && !isDone) {
+          actionBtn = `<button type="button" class="btn btn-secondary btn-sm px-3 disabled" style="opacity:0.75;cursor:not-allowed;" title="POS Locked: Awaiting Doctor's Exam & Prescription"><i class="fas fa-lock me-1"></i> Awaiting Exam</button>`;
+        } else {
+          actionBtn = `<a href="pos.php?patient_id=${appt.patient_id}&appt_id=${appt.id}" class="btn btn-primary btn-sm px-3 shadow-sm" title="Proceed to Checkout"><i class="fas fa-shopping-cart me-1"></i> Checkout</a>`;
+        }
+
         html += `
           <div class="cal-info-card p-3 d-flex justify-content-between align-items-center flex-wrap gap-3">
             <div class="d-flex align-items-center gap-3">
@@ -946,9 +1024,7 @@ document.addEventListener('DOMContentLoaded', function() {
               <button type="button" class="btn btn-outline-primary btn-sm px-3 btn-open-single" data-id="${appt.id}">
                 <i class="fas fa-eye me-1"></i> Manage
               </button>
-              <a href="pos.php?patient_id=${appt.patient_id}&appt_id=${appt.id}" class="btn btn-primary btn-sm px-3" title="Checkout">
-                <i class="fas fa-shopping-cart"></i>
-              </a>
+              ${actionBtn}
             </div>
           </div>
         `;

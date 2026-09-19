@@ -56,9 +56,9 @@ function getCurrentUser(): ?array {
         // Fallback to session data
     }
     $currentUser = [
-        'id'        => $_SESSION['user_id'],
-        'full_name' => $_SESSION['user_name'] ?? 'Admin',
-        'role'      => $_SESSION['user_role'] ?? 'admin',
+        'id'        => $_SESSION['user_id'] ?? 0,
+        'full_name' => $_SESSION['user_name'] ?? 'User',
+        'role'      => $_SESSION['user_role'] ?? 'guest',
         'email'     => $_SESSION['user_email'] ?? '',
     ];
     return $currentUser;

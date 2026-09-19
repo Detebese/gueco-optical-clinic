@@ -64,7 +64,15 @@ $apptsStmt = $db->query("
            p.gender as patient_gender,
            p.birthdate as patient_birthdate,
            (SELECT COUNT(*) FROM prescriptions rx WHERE rx.patient_id = a.patient_id) as rx_count,
-           (SELECT COUNT(*) FROM appointments a2 WHERE a2.patient_id = a.patient_id AND a2.status = 'completed') as completed_visits
+           (SELECT COUNT(*) FROM appointments a2 WHERE a2.patient_id = a.patient_id AND a2.status = 'completed') as completed_visits,
+           COALESCE(
+               (SELECT s.id FROM sales s WHERE s.appointment_id = a.id ORDER BY s.id DESC LIMIT 1),
+               (SELECT s2.id FROM sales s2 WHERE s2.patient_id = a.patient_id AND DATE(s2.created_at) = a.appointment_date ORDER BY s2.id DESC LIMIT 1)
+           ) as sale_id,
+           COALESCE(
+               (SELECT s.invoice_no FROM sales s WHERE s.appointment_id = a.id ORDER BY s.id DESC LIMIT 1),
+               (SELECT s2.invoice_no FROM sales s2 WHERE s2.patient_id = a.patient_id AND DATE(s2.created_at) = a.appointment_date ORDER BY s2.id DESC LIMIT 1)
+           ) as invoice_no
     FROM appointments a
     JOIN patients p ON p.id = a.patient_id
     ORDER BY a.appointment_date ASC, a.appointment_time ASC
@@ -294,6 +302,9 @@ include __DIR__ . '/../includes/header.php';
             </a>
             <a href="#" id="modalBtnRx" class="btn btn-secondary btn-sm flex-fill py-2">
               <i class="fas fa-glasses me-1"></i> Write New Prescription
+            </a>
+            <a href="#" id="modalBtnReceipt" class="btn btn-outline-success btn-sm flex-fill py-2" style="display:none;" target="_blank">
+              <i class="fas fa-file-invoice me-1"></i> View Receipt
             </a>
           </div>
         </div>
@@ -892,7 +903,18 @@ document.addEventListener('DOMContentLoaded', function() {
 
     // Clinical Action Links
     document.getElementById('modalBtnRecord').href = `patients.php?view=${appt.patient_id}`;
-    document.getElementById('modalBtnRx').href = `prescriptions.php?patient_id=${appt.patient_id}`;
+    document.getElementById('modalBtnRx').href = `prescriptions.php?patient_id=${appt.patient_id}&appt_id=${appt.id}`;
+    
+    const btnReceipt = document.getElementById('modalBtnReceipt');
+    if (btnReceipt) {
+      if (appt.sale_id) {
+        btnReceipt.href = `../saleslady/receipt.php?id=${appt.sale_id}`;
+        btnReceipt.style.display = 'inline-flex';
+        btnReceipt.innerHTML = `<i class="fas fa-file-invoice me-1"></i> View Receipt (${escapeHtml(appt.invoice_no || '#' + appt.sale_id)})`;
+      } else {
+        btnReceipt.style.display = 'none';
+      }
+    }
 
     // Fill IDs into status forms
     const currDateIso = formatDateIso(currentDate);
