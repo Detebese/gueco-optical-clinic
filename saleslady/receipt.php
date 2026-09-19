@@ -480,49 +480,7 @@ $autoPrint = isset($_GET['auto_print']) && $_GET['auto_print'] == '1';
       </tbody>
     </table>
 
-    <?php if ($rx): ?>
-    <!-- Optical Prescription Details -->
-    <div style="background:#f8fafc;border:1px solid #e2e8f0;border-radius:8px;padding:12px 14px;margin-bottom:20px;">
-      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;border-bottom:1px solid #e2e8f0;padding-bottom:5px;">
-        <span style="font-size:0.75rem;font-weight:800;text-transform:uppercase;color:var(--clr-primary);letter-spacing:0.5px;"><i class="fas fa-glasses me-1"></i> Patient Optical Prescription</span>
-        <span style="font-size:0.72rem;color:var(--text-muted);font-weight:600;">Prescribing Doctor: Dr. <?= sanitize($rx['doctor_name'] ?? 'Optometrist') ?> &middot; <?= date('M d, Y', strtotime($rx['created_at'])) ?></span>
-      </div>
-      <table style="width:100%;font-size:0.78rem;border-collapse:collapse;text-align:center;">
-        <thead>
-          <tr style="background:#eef2f6;color:#334155;font-weight:700;">
-            <th style="padding:6px 8px;text-align:left;">Eye</th>
-            <th style="padding:6px 8px;">SPH</th>
-            <th style="padding:6px 8px;">CYL</th>
-            <th style="padding:6px 8px;">AXIS</th>
-            <th style="padding:6px 8px;">ADD</th>
-            <th style="padding:6px 8px;">PD</th>
-          </tr>
-        </thead>
-        <tbody>
-          <tr>
-            <td style="padding:6px 8px;text-align:left;font-weight:700;color:#0f172a;">OD (Right Eye)</td>
-            <td style="padding:6px 8px;font-weight:600;"><?= sanitize($rx['od_sphere'] ?: '0.00') ?></td>
-            <td style="padding:6px 8px;font-weight:600;"><?= sanitize($rx['od_cylinder'] ?: '0.00') ?></td>
-            <td style="padding:6px 8px;"><?= sanitize($rx['od_axis'] ?: '—') ?></td>
-            <td style="padding:6px 8px;"><?= sanitize($rx['add_power'] ?: '—') ?></td>
-            <td style="padding:6px 8px;font-weight:700;color:var(--clr-primary);" rowspan="2"><?= sanitize($rx['pd'] ?: '—') ?></td>
-          </tr>
-          <tr style="background:#fafafa;">
-            <td style="padding:6px 8px;text-align:left;font-weight:700;color:#0f172a;">OS (Left Eye)</td>
-            <td style="padding:6px 8px;font-weight:600;"><?= sanitize($rx['os_sphere'] ?: '0.00') ?></td>
-            <td style="padding:6px 8px;font-weight:600;"><?= sanitize($rx['os_cylinder'] ?: '0.00') ?></td>
-            <td style="padding:6px 8px;"><?= sanitize($rx['os_axis'] ?: '—') ?></td>
-            <td style="padding:6px 8px;"><?= sanitize($rx['add_power'] ?: '—') ?></td>
-          </tr>
-        </tbody>
-      </table>
-      <?php if (!empty($rx['notes'])): ?>
-      <div style="font-size:0.72rem;color:var(--text-muted);margin-top:6px;font-style:italic;padding-top:4px;border-top:1px dashed #e2e8f0;">
-        <strong>Clinical Recommendation:</strong> <?= sanitize($rx['notes']) ?>
-      </div>
-      <?php endif; ?>
-    </div>
-    <?php endif; ?>
+
 
     <!-- Totals Summary -->
     <div class="summary-section">
