@@ -73,7 +73,7 @@ include __DIR__ . '/../includes/header.php';
 ?>
 
 <!-- Quick Stats Summary Header (Side by Side Colored Indicators) -->
-<div class="row g-3 mb-4 cal-stat-grid">
+<div class="row g-3 mb-4">
   <!-- Card 1: Today's Appointments -->
   <div class="col-lg-3 col-sm-6">
     <div class="bento-stat" style="--stat-color:#10B981; --stat-rgb:16, 185, 129;">
