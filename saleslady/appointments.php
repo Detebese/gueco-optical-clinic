@@ -68,44 +68,84 @@ $confirmedCount = count(array_filter($allAppointments, fn($a) => $a['status'] ==
 $totalCount = count($allAppointments);
 
 $extraHead = '<link rel="stylesheet" href="' . BASE_URL . 'assets/css/calendar.css?v=' . time() . '">';
+$extraHead .= '<link rel="stylesheet" href="'.BASE_URL.'assets/css/pages/dashboard.css?v='.time().'">';
 include __DIR__ . '/../includes/header.php';
 ?>
 
 <!-- Quick Stats Summary Header (Side by Side Colored Indicators) -->
-<div style="display: grid; grid-template-columns: repeat(4, 1fr); gap: 16px; margin-bottom: 24px;" class="cal-stat-grid">
-  <div>
-    <div class="stat-card" style="--stat-color:var(--clr-primary); padding:16px 20px; height:100%;">
-      <div class="stat-icon blue"><i class="fas fa-calendar-check"></i></div>
-      <div class="stat-info">
-        <div class="stat-value"><?= number_format($todayActiveCount) ?></div>
-        <div class="stat-label">Today's Appointments</div>
+<div class="row g-3 mb-4 cal-stat-grid">
+  <!-- Card 1: Today's Appointments -->
+  <div class="col-lg-3 col-sm-6">
+    <div class="bento-stat" style="--stat-color:#10B981; --stat-rgb:16, 185, 129;">
+      <div class="bento-stat-glow"></div>
+      <div class="bento-stat-left">
+        <div class="bento-label">Today's Appointments</div>
+        <div class="bento-value"><?= number_format($todayActiveCount) ?></div>
+        <div class="bento-badge green">
+          <i class="fas fa-calendar-day"></i> Scheduled today
+        </div>
+      </div>
+      <div class="bento-stat-right">
+        <div class="bento-stat-icon">
+          <i class="fas fa-calendar-check"></i>
+        </div>
       </div>
     </div>
   </div>
-  <div>
-    <div class="stat-card" style="--stat-color:var(--clr-warning); padding:16px 20px; height:100%;">
-      <div class="stat-icon orange"><i class="fas fa-hourglass-half"></i></div>
-      <div class="stat-info">
-        <div class="stat-value"><?= number_format($pendingCount) ?></div>
-        <div class="stat-label">Pending Confirmation</div>
+
+  <!-- Card 2: Pending Confirmation -->
+  <div class="col-lg-3 col-sm-6">
+    <div class="bento-stat" style="--stat-color:#F59E0B; --stat-rgb:245, 158, 11;">
+      <div class="bento-stat-glow"></div>
+      <div class="bento-stat-left">
+        <div class="bento-label">Pending Confirmation</div>
+        <div class="bento-value"><?= number_format($pendingCount) ?></div>
+        <div class="bento-badge warning">
+          <i class="fas fa-hourglass-half"></i> Needs action
+        </div>
+      </div>
+      <div class="bento-stat-right">
+        <div class="bento-stat-icon">
+          <i class="fas fa-clock"></i>
+        </div>
       </div>
     </div>
   </div>
-  <div>
-    <div class="stat-card" style="--stat-color:var(--clr-success); padding:16px 20px; height:100%;">
-      <div class="stat-icon teal"><i class="fas fa-user-check"></i></div>
-      <div class="stat-info">
-        <div class="stat-value"><?= number_format($confirmedCount) ?></div>
-        <div class="stat-label">Confirmed Upcoming</div>
+
+  <!-- Card 3: Confirmed Upcoming -->
+  <div class="col-lg-3 col-sm-6">
+    <div class="bento-stat" style="--stat-color:#0EA5E9; --stat-rgb:14, 165, 233;">
+      <div class="bento-stat-glow"></div>
+      <div class="bento-stat-left">
+        <div class="bento-label">Confirmed Upcoming</div>
+        <div class="bento-value"><?= number_format($confirmedCount) ?></div>
+        <div class="bento-badge blue">
+          <i class="fas fa-check-circle"></i> Ready
+        </div>
+      </div>
+      <div class="bento-stat-right">
+        <div class="bento-stat-icon">
+          <i class="fas fa-user-check"></i>
+        </div>
       </div>
     </div>
   </div>
-  <div>
-    <div class="stat-card" style="--stat-color:var(--clr-secondary); padding:16px 20px; height:100%;">
-      <div class="stat-icon purple"><i class="fas fa-calendar-alt"></i></div>
-      <div class="stat-info">
-        <div class="stat-value"><?= number_format($totalCount) ?></div>
-        <div class="stat-label">Total Appointments</div>
+
+  <!-- Card 4: Total Appointments -->
+  <div class="col-lg-3 col-sm-6">
+    <div class="bento-stat" style="--stat-color:#8B5CF6; --stat-rgb:139, 92, 246;">
+      <div class="bento-stat-glow"></div>
+      <div class="bento-stat-left">
+        <div class="bento-label">Total Appointments</div>
+        <div class="bento-value"><?= number_format($totalCount) ?></div>
+        <div class="bento-badge purple">
+          <i class="fas fa-calendar-alt"></i> All time records
+        </div>
+      </div>
+      <div class="bento-stat-right">
+        <div class="bento-stat-icon">
+          <i class="fas fa-list-ul"></i>
+        </div>
       </div>
     </div>
   </div>

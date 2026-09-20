@@ -56,44 +56,84 @@ $apptStatus = $db->prepare("
 $apptStatus->execute([$today]);
 $apptStatusData = $apptStatus->fetchAll(PDO::FETCH_KEY_PAIR);
 
+$extraHead = '<link rel="stylesheet" href="'.BASE_URL.'assets/css/pages/dashboard.css?v='.time().'">';
 include __DIR__ . '/../includes/header.php';
 ?>
 
 <!-- Stats -->
-<div class="row" style="margin-bottom:24px;">
-  <div class="col-3">
-    <div class="stat-card" style="--stat-color:var(--clr-info)">
-      <div class="stat-icon teal"><i class="fas fa-user-injured"></i></div>
-      <div class="stat-info">
-        <div class="stat-value"><?= number_format($totalPatients) ?></div>
-        <div class="stat-label">Total Patients</div>
+<div class="row g-3 mb-4">
+  <!-- Card 1: Total Patients -->
+  <div class="col-lg-3 col-sm-6">
+    <div class="bento-stat" style="--stat-color:#0EA5E9; --stat-rgb:14, 165, 233;">
+      <div class="bento-stat-glow"></div>
+      <div class="bento-stat-left">
+        <div class="bento-label">Total Patients</div>
+        <div class="bento-value"><?= number_format($totalPatients) ?></div>
+        <div class="bento-badge blue">
+          <i class="fas fa-users"></i> Registered
+        </div>
+      </div>
+      <div class="bento-stat-right">
+        <div class="bento-stat-icon">
+          <i class="fas fa-user-injured"></i>
+        </div>
       </div>
     </div>
   </div>
-  <div class="col-3">
-    <div class="stat-card" style="--stat-color:var(--clr-primary)">
-      <div class="stat-icon blue"><i class="fas fa-calendar-day"></i></div>
-      <div class="stat-info">
-        <div class="stat-value"><?= number_format($todayAppts) ?></div>
-        <div class="stat-label">Today's Appointments</div>
+
+  <!-- Card 2: Today's Appointments -->
+  <div class="col-lg-3 col-sm-6">
+    <div class="bento-stat" style="--stat-color:#10B981; --stat-rgb:16, 185, 129;">
+      <div class="bento-stat-glow"></div>
+      <div class="bento-stat-left">
+        <div class="bento-label">Today's Appointments</div>
+        <div class="bento-value"><?= number_format($todayAppts) ?></div>
+        <div class="bento-badge green">
+          <i class="fas fa-calendar-day"></i> Scheduled today
+        </div>
+      </div>
+      <div class="bento-stat-right">
+        <div class="bento-stat-icon">
+          <i class="fas fa-calendar-check"></i>
+        </div>
       </div>
     </div>
   </div>
-  <div class="col-3">
-    <div class="stat-card" style="--stat-color:var(--clr-warning)">
-      <div class="stat-icon orange"><i class="fas fa-clock"></i></div>
-      <div class="stat-info">
-        <div class="stat-value"><?= number_format($pendingAppts) ?></div>
-        <div class="stat-label">Pending Confirmations</div>
+
+  <!-- Card 3: Pending Confirmations -->
+  <div class="col-lg-3 col-sm-6">
+    <div class="bento-stat" style="--stat-color:#F59E0B; --stat-rgb:245, 158, 11;">
+      <div class="bento-stat-glow"></div>
+      <div class="bento-stat-left">
+        <div class="bento-label">Pending Confirmations</div>
+        <div class="bento-value"><?= number_format($pendingAppts) ?></div>
+        <div class="bento-badge warning">
+          <i class="fas fa-hourglass-half"></i> Needs action
+        </div>
+      </div>
+      <div class="bento-stat-right">
+        <div class="bento-stat-icon">
+          <i class="fas fa-clock"></i>
+        </div>
       </div>
     </div>
   </div>
-  <div class="col-3">
-    <div class="stat-card" style="--stat-color:var(--clr-secondary)">
-      <div class="stat-icon purple"><i class="fas fa-glasses"></i></div>
-      <div class="stat-info">
-        <div class="stat-value"><?= number_format($totalRx) ?></div>
-        <div class="stat-label">Prescriptions Written</div>
+
+  <!-- Card 4: Prescriptions Written -->
+  <div class="col-lg-3 col-sm-6">
+    <div class="bento-stat" style="--stat-color:#8B5CF6; --stat-rgb:139, 92, 246;">
+      <div class="bento-stat-glow"></div>
+      <div class="bento-stat-left">
+        <div class="bento-label">Prescriptions Written</div>
+        <div class="bento-value"><?= number_format($totalRx) ?></div>
+        <div class="bento-badge purple">
+          <i class="fas fa-glasses"></i> All time records
+        </div>
+      </div>
+      <div class="bento-stat-right">
+        <div class="bento-stat-icon">
+          <i class="fas fa-file-medical"></i>
+        </div>
       </div>
     </div>
   </div>
