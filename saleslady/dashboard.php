@@ -55,6 +55,7 @@ $lowItems = $db->query("
     ORDER BY p.stock_quantity ASC LIMIT 5
 ")->fetchAll();
 
+$extraHead = '<link rel="stylesheet" href="'.BASE_URL.'assets/css/pages/dashboard.css?v='.time().'">';
 include __DIR__ . '/../includes/header.php';
 ?>
 
@@ -77,44 +78,85 @@ include __DIR__ . '/../includes/header.php';
   </a>
 </div>
 
-<!-- Stats -->
-<div class="row" style="margin-bottom:24px;">
-  <div class="col-3">
-    <div class="stat-card" style="--stat-color:var(--clr-success)">
-      <div class="stat-icon green"><i class="fas fa-peso-sign"></i></div>
-      <div class="stat-info">
-        <div class="stat-value"><?= formatCurrency($todaySales) ?></div>
-        <div class="stat-label">Today's Revenue</div>
-        <div class="stat-change up"><i class="fas fa-receipt"></i> <?= $todayTxCount ?> transactions</div>
+<!-- ─── Bento Top Metric Cards Row (4 Responsive Cards) ─── -->
+<div class="row g-3 mb-4">
+  <!-- Card 1: Today's Revenue -->
+  <div class="col-lg-3 col-sm-6">
+    <div class="bento-stat" style="--stat-color:#10B981; --stat-rgb:16, 185, 129;">
+      <div class="bento-stat-glow"></div>
+      <div class="bento-stat-left">
+        <div class="bento-label">Today's Revenue</div>
+        <div class="bento-value"><?= formatCurrency($todaySales) ?></div>
+        <div class="bento-badge <?= $todayTxCount > 0 ? 'up' : 'neutral' ?>">
+          <i class="fas fa-receipt"></i> <?= $todayTxCount ?> transaction<?= $todayTxCount !== 1 ? 's' : '' ?>
+        </div>
+      </div>
+      <div class="bento-stat-right">
+        <div class="bento-stat-icon">
+          <i class="fas fa-peso-sign"></i>
+        </div>
       </div>
     </div>
   </div>
-  <div class="col-3">
-    <div class="stat-card" style="--stat-color:var(--clr-primary)">
-      <div class="stat-icon blue"><i class="fas fa-receipt"></i></div>
-      <div class="stat-info">
-        <div class="stat-value"><?= number_format($todayTxCount) ?></div>
-        <div class="stat-label">Transactions Today</div>
+
+  <!-- Card 2: Transactions Today -->
+  <div class="col-lg-3 col-sm-6">
+    <div class="bento-stat" style="--stat-color:#0EA5E9; --stat-rgb:14, 165, 233;">
+      <div class="bento-stat-glow"></div>
+      <div class="bento-stat-left">
+        <div class="bento-label">Transactions Today</div>
+        <div class="bento-value"><?= number_format($todayTxCount) ?></div>
+        <div class="bento-badge blue">
+          <i class="fas fa-cash-register"></i> Processed today
+        </div>
+      </div>
+      <div class="bento-stat-right">
+        <div class="bento-stat-icon">
+          <i class="fas fa-receipt"></i>
+        </div>
       </div>
     </div>
   </div>
-  <div class="col-3">
-    <div class="stat-card" style="--stat-color:var(--clr-info)">
-      <div class="stat-icon teal"><i class="fas fa-calendar-check"></i></div>
-      <div class="stat-info">
-        <div class="stat-value"><?= number_format($todayAppts) ?></div>
-        <div class="stat-label">Appointments Today</div>
+
+  <!-- Card 3: Appointments Today -->
+  <div class="col-lg-3 col-sm-6">
+    <div class="bento-stat" style="--stat-color:#8B5CF6; --stat-rgb:139, 92, 246;">
+      <div class="bento-stat-glow"></div>
+      <div class="bento-stat-left">
+        <div class="bento-label">Appointments Today</div>
+        <div class="bento-value"><?= number_format($todayAppts) ?></div>
+        <div class="bento-badge purple">
+          <i class="fas fa-calendar-day"></i> Scheduled
+        </div>
+      </div>
+      <div class="bento-stat-right">
+        <div class="bento-stat-icon">
+          <i class="fas fa-calendar-check"></i>
+        </div>
       </div>
     </div>
   </div>
-  <div class="col-3">
-    <div class="stat-card" style="--stat-color:<?= $lowStock > 0 ? 'var(--clr-danger)' : 'var(--clr-success)' ?>">
-      <div class="stat-icon <?= $lowStock > 0 ? 'red' : 'green' ?>"><i class="fas fa-boxes"></i></div>
-      <div class="stat-info">
-        <div class="stat-value"><?= number_format($lowStock) ?></div>
-        <div class="stat-label">Low Stock Alerts</div>
-        <div class="stat-change <?= $lowStock > 0 ? 'down' : 'up' ?>">
-          <?= $lowStock > 0 ? '<i class="fas fa-exclamation-triangle"></i> Needs attention' : '<i class="fas fa-check"></i> All good' ?>
+
+  <!-- Card 4: Low Stock Alerts -->
+  <?php
+  $isLowStock = ($lowStock > 0);
+  $stockColor = $isLowStock ? '#EF4444' : '#E09A67';
+  $stockRgb   = $isLowStock ? '239, 68, 68' : '224, 154, 103';
+  ?>
+  <div class="col-lg-3 col-sm-6">
+    <div class="bento-stat" style="--stat-color:<?= $stockColor ?>; --stat-rgb:<?= $stockRgb ?>;">
+      <div class="bento-stat-glow"></div>
+      <div class="bento-stat-left">
+        <div class="bento-label">Low Stock Alerts</div>
+        <div class="bento-value"><?= number_format($lowStock) ?></div>
+        <div class="bento-badge <?= $isLowStock ? 'danger' : 'neutral' ?>">
+          <i class="fas fa-<?= $isLowStock ? 'triangle-exclamation' : 'boxes-stacked' ?>"></i>
+          <?= $isLowStock ? 'Needs attention' : 'All good' ?>
+        </div>
+      </div>
+      <div class="bento-stat-right">
+        <div class="bento-stat-icon">
+          <i class="fas fa-boxes"></i>
         </div>
       </div>
     </div>
