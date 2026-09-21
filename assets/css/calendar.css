@@ -297,8 +297,8 @@ html:not([data-theme="dark"]) .cal-filter-pill.active,
 }
 .cal-bullet.bullet-all       { background: #38bdf8; box-shadow: 0 0 6px rgba(56, 189, 248, 0.6); }
 .cal-bullet.bullet-confirmed { background: #10b981; box-shadow: 0 0 6px rgba(16, 185, 129, 0.6); }
-.cal-bullet.bullet-pending   { background: #f59e0b; box-shadow: 0 0 6px rgba(245, 158, 11, 0.6); }
-.cal-bullet.bullet-completed { background: #06b6d4; box-shadow: 0 0 6px rgba(6, 182, 212, 0.6); }
+.cal-bullet.bullet-pending   { background: #268fc8; box-shadow: 0 0 6px rgba(38, 143, 200, 0.6); }
+.cal-bullet.bullet-completed { background: #00adef; box-shadow: 0 0 6px rgba(0, 173, 239, 0.6); }
 .cal-bullet.bullet-no_show   { background: #94a3b8; box-shadow: 0 0 6px rgba(148, 163, 184, 0.6); }
 
 .cal-search-box {
@@ -484,8 +484,8 @@ html:not([data-theme="dark"]) .cal-day-number,
   display: inline-block;
 }
 .cal-indicator-dot.dot-confirmed { background: #10b981; box-shadow: 0 0 5px rgba(16, 185, 129, 0.8); }
-.cal-indicator-dot.dot-pending   { background: #f59e0b; box-shadow: 0 0 5px rgba(245, 158, 11, 0.8); }
-.cal-indicator-dot.dot-completed { background: #06b6d4; box-shadow: 0 0 5px rgba(6, 182, 212, 0.8); }
+.cal-indicator-dot.dot-pending   { background: #268fc8; box-shadow: 0 0 5px rgba(38, 143, 200, 0.8); }
+.cal-indicator-dot.dot-completed { background: #00adef; box-shadow: 0 0 5px rgba(0, 173, 239, 0.8); }
 .cal-indicator-dot.dot-cancelled { background: #ef4444; box-shadow: 0 0 5px rgba(239, 68, 68, 0.8); }
 .cal-indicator-dot.dot-no_show   { background: #64748b; }
 
@@ -571,8 +571,8 @@ html:not([data-theme="dark"]) .cal-event-card:hover,
 }
 
 .cal-event-card.status-confirmed::before { background: #10b981; }
-.cal-event-card.status-pending::before   { background: #f59e0b; }
-.cal-event-card.status-completed::before { background: #06b6d4; }
+.cal-event-card.status-pending::before   { background: #268fc8; }
+.cal-event-card.status-completed::before { background: #00adef; }
 .cal-event-card.status-cancelled::before { background: #ef4444; }
 .cal-event-card.status-no_show::before   { background: #64748b; }
 
@@ -609,7 +609,7 @@ html:not([data-theme="dark"]) .cal-event-time,
   line-height: 1.2;
 }
 .cal-side-chip.chip-confirmed { background: rgba(16, 185, 129, 0.2); color: #34d399; }
-.cal-side-chip.chip-pending   { background: rgba(245, 158, 11, 0.2); color: #fbbf24; }
+.cal-side-chip.chip-pending   { background: rgba(38, 143, 200, 0.2); color: #268fc8; }
 .cal-side-chip.chip-completed { background: rgba(6, 182, 212, 0.2); color: #38bdf8; }
 .cal-side-chip.chip-cancelled { background: rgba(239, 68, 68, 0.2); color: #f87171; }
 .cal-side-chip.chip-no_show   { background: rgba(100, 116, 139, 0.2); color: #94a3b8; }
@@ -617,7 +617,7 @@ html:not([data-theme="dark"]) .cal-event-time,
 html:not([data-theme="dark"]) .cal-side-chip.chip-confirmed,
 [data-theme="light"] .cal-side-chip.chip-confirmed { background: rgba(16, 185, 129, 0.15); color: #059669; }
 html:not([data-theme="dark"]) .cal-side-chip.chip-pending,
-[data-theme="light"] .cal-side-chip.chip-pending   { background: rgba(245, 158, 11, 0.15); color: #d97706; }
+[data-theme="light"] .cal-side-chip.chip-pending   { background: rgba(38, 143, 200, 0.15); color: #1e74bd; }
 html:not([data-theme="dark"]) .cal-side-chip.chip-completed,
 [data-theme="light"] .cal-side-chip.chip-completed { background: rgba(6, 182, 212, 0.15); color: #0891b2; }
 html:not([data-theme="dark"]) .cal-side-chip.chip-cancelled,
@@ -802,8 +802,8 @@ html:not([data-theme="dark"]) .cal-week-card:hover,
 }
 
 .cal-week-card.status-confirmed::before { background: #10b981; }
-.cal-week-card.status-pending::before   { background: #f59e0b; }
-.cal-week-card.status-completed::before { background: #06b6d4; }
+.cal-week-card.status-pending::before   { background: #268fc8; }
+.cal-week-card.status-completed::before { background: #00adef; }
 .cal-week-card.status-cancelled::before { background: #ef4444; }
 .cal-week-card.status-no_show::before   { background: #64748b; }
 

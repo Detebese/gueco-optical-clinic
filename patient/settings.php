@@ -21,9 +21,24 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
     // Update Profile
     if ($action === 'update_profile') {
-        $phone = sanitize($_POST['phone'] ?? '');
-        $address = sanitize($_POST['address'] ?? '');
-        $db->prepare("UPDATE patients SET phone=?, address=? WHERE id=?")->execute([$phone, $address, $patientId]);
+        $fullName = sanitize($_POST['full_name'] ?? '');
+        $fullName = preg_replace('/([a-z])([A-Z])/', '$1 $2', $fullName);
+        $fullName = ucwords(strtolower($fullName));
+        
+        $phone    = sanitize($_POST['phone'] ?? '');
+        $gender   = sanitize($_POST['gender'] ?? '');
+        $address  = sanitize($_POST['address'] ?? '');
+        $bdate    = sanitize($_POST['birthdate'] ?? '');
+        
+        $cleanPhone = preg_replace('/[^0-9]/', '', $phone);
+        
+        $db->prepare("UPDATE patients SET full_name=COALESCE(NULLIF(?,''), full_name), phone=?, gender=?, address=?, birthdate=NULLIF(?,''), updated_at=NOW() WHERE id=?")
+           ->execute([$fullName, $cleanPhone, $gender, $address, $bdate ?: null, $patientId]);
+        
+        if (!empty($fullName)) {
+            $_SESSION['patient_name'] = $fullName;
+        }
+        
         $_SESSION['flash_msg'] = 'Profile updated successfully!';
         $_SESSION['flash_type'] = 'success';
         header('Location: settings.php');
@@ -69,9 +84,11 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 $patient = $db->prepare("SELECT * FROM patients WHERE id=?"); 
 $patient->execute([$patientId]); 
 $patient = $patient->fetch();
+$userTheme = $_COOKIE['gueco_theme'] ?? ($_COOKIE['theme'] ?? 'dark');
+$currentTheme = ($userTheme === 'light') ? 'light' : 'dark';
 ?>
 <!DOCTYPE html>
-<html lang="en" data-theme="dark">
+<html lang="en" data-theme="<?= $currentTheme ?>">
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
@@ -81,10 +98,15 @@ $patient = $patient->fetch();
   <script>
     (function() {
       try {
-        var theme = localStorage.getItem("gueco_theme") || localStorage.getItem("gueco-theme") || localStorage.getItem("guecoTheme") || "dark";
+        var theme = localStorage.getItem("gueco_theme") || localStorage.getItem("gueco-theme") || localStorage.getItem("theme") || localStorage.getItem("guecoTheme");
+        if (!theme) {
+          var m = document.cookie.match(/(?:^|;\s*)gueco_theme=([^;]+)/);
+          theme = m ? m[1] : "<?= $currentTheme ?>";
+        }
+        if (theme !== "light" && theme !== "dark") theme = "dark";
         document.documentElement.setAttribute("data-theme", theme);
       } catch (e) {
-        document.documentElement.setAttribute("data-theme", "dark");
+        document.documentElement.setAttribute("data-theme", "<?= $currentTheme ?>");
       }
     })();
   </script>
@@ -94,37 +116,62 @@ $patient = $patient->fetch();
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@300;400;500;600;700;800;900&family=Poppins:wght@300;400;500;600;700;800;900&display=swap" rel="stylesheet">
+  <!-- SweetAlert2 (Modal Popups) -->
+  <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
   
   <style>
     *,*::before,*::after { box-sizing:border-box; margin:0; padding:0; }
 
-    :root { 
-      /* Luxury Brand Color Tokens */
-      --clr-bronze-light: #FDBA74;
-      --clr-bronze:       #E09A67;
-      --clr-bronze-dark:  #B86B35;
-      --clr-gold:         #F59E0B;
-      --clr-amber:        #D97706;
+    /* SweetAlert2 Overrides */
+    .swal2-container { z-index: 200000 !important; backdrop-filter: blur(8px) !important; -webkit-backdrop-filter: blur(8px) !important; }
+    .swal2-popup.patient-swal-popup {
+      border-radius: 22px !important; font-family: 'Plus Jakarta Sans', sans-serif !important;
+      padding: 28px 24px 24px !important; border: 1.5px solid var(--border-color) !important;
+      background: var(--bg-card) !important; color: var(--text-primary) !important;
+      box-shadow: 0 25px 60px -8px rgba(0, 0, 0, 0.4) !important;
+    }
+    [data-theme="dark"] .swal2-popup.patient-swal-popup {
+      background: #162238 !important; border: 1.5px solid rgba(56, 189, 248, 0.3) !important;
+      box-shadow: 0 30px 80px -10px rgba(0, 0, 0, 0.9), 0 0 35px rgba(56, 189, 248, 0.15) !important;
+    }
+    .patient-swal-popup .swal2-title { font-size: 1.35rem !important; font-weight: 900 !important; color: var(--text-primary) !important; }
+    [data-theme="dark"] .patient-swal-popup .swal2-title { color: #FFFFFF !important; }
+    .patient-swal-popup .swal2-html-container { font-size: .92rem !important; color: var(--text-secondary) !important; margin: 6px 0 18px !important; }
+    [data-theme="dark"] .patient-swal-popup .swal2-html-container { color: #CBD5E1 !important; }
+    .patient-swal-popup .swal2-confirm {
+      border-radius: 12px !important; padding: 12px 28px !important; font-size: .88rem !important;
+      font-weight: 800 !important; border: none !important;
+      background: linear-gradient(135deg, var(--clr-primary), var(--clr-secondary)) !important;
+      color: #FFFFFF !important; box-shadow: 0 4px 0 #0369A1 !important;
+    }
 
-      --clr-primary:      #E09A67;
-      --clr-primary-light:#FDBA74;
-      --clr-primary-dark: #B86B35;
-      --clr-secondary:    #C26325;
+    :root { 
+      /* Blue Luxury Brand Color Tokens */
+      --clr-bronze-light: #27AAE2;
+      --clr-bronze:       #235EAE;
+      --clr-bronze-dark:  #272264;
+      --clr-gold:         #00ADEF;
+      --clr-amber:        #1E74BD;
+
+      --clr-primary:      #235EAE;
+      --clr-primary-light:#00ADEF;
+      --clr-primary-dark: #272264;
+      --clr-secondary:    #00ADEF;
       
       --clr-success:      #10B981;
       --clr-danger:       #EF4444;
-      --clr-warning:      #F59E0B;
-      --clr-info:         #0EA5E9;
+      --clr-warning:      #268FC8;
+      --clr-info:         #00ADEF;
     }
 
     [data-theme="dark"] {
       --bg-body:          #0A0A0D;
-      --bg-card:          #17161D;
-      --bg-card-glass:    rgba(23, 22, 29, 0.85);
+      --bg-card:          #13162B;
+      --bg-card-glass:    rgba(19, 22, 43, 0.85);
       --bg-topbar:        rgba(10, 10, 13, 0.88);
-      --bg-hover:         rgba(224, 154, 103, 0.08);
-      --bg-input:         #1E1C24;
-      --bg-input-focus:   #25232D;
+      --bg-hover:         rgba(0, 173, 239, 0.08);
+      --bg-input:         #1A1D36;
+      --bg-input-focus:   #23274A;
 
       --text-primary:     #F9FAFB;
       --text-secondary:   #E5E7EB;
@@ -133,20 +180,20 @@ $patient = $patient->fetch();
 
       --border-color:     rgba(255, 255, 255, 0.09);
       --border-light:     rgba(255, 255, 255, 0.05);
-      --border-glow:      rgba(224, 154, 103, 0.35);
+      --border-glow:      rgba(0, 173, 239, 0.35);
 
       --shadow-md:        0 12px 36px rgba(0, 0, 0, 0.45);
       --shadow-card:      0 8px 32px rgba(0, 0, 0, 0.35);
     }
 
     [data-theme="light"] {
-      --bg-body:          #F3F1EC;
+      --bg-body:          #F0F4F9;
       --bg-card:          #FFFFFF;
       --bg-card-glass:    rgba(255, 255, 255, 0.92);
-      --bg-topbar:        rgba(243, 241, 236, 0.90);
-      --bg-hover:         rgba(224, 154, 103, 0.06);
-      --bg-input:         #EBE7E0;
-      --bg-input-focus:   #E2DDD4;
+      --bg-topbar:        rgba(240, 244, 249, 0.90);
+      --bg-hover:         #E0EBF7;
+      --bg-input:         #E5EEF8;
+      --bg-input-focus:   #FFFFFF;
 
       --text-primary:     #17161D;
       --text-secondary:   #3B3944;
@@ -155,9 +202,9 @@ $patient = $patient->fetch();
 
       --border-color:     rgba(0, 0, 0, 0.08);
       --border-light:     rgba(0, 0, 0, 0.04);
-      --border-glow:      rgba(224, 154, 103, 0.25);
+      --border-glow:      rgba(35, 94, 174, 0.25);
 
-      --shadow-md:        0 12px 36px rgba(184, 107, 53, 0.08);
+      --shadow-md:        0 12px 36px rgba(35, 94, 174, 0.08);
       --shadow-card:      0 8px 30px rgba(0, 0, 0, 0.05);
     }
 
@@ -166,7 +213,6 @@ $patient = $patient->fetch();
       background: var(--bg-body);
       color: var(--text-primary);
       min-height: 100vh;
-      font-size: 15px;
       line-height: 1.6;
       transition: background-color 0.3s ease, color 0.3s ease;
     }
@@ -175,14 +221,14 @@ $patient = $patient->fetch();
     .bg-mesh {
       position: fixed; inset: 0; z-index: 0; pointer-events: none;
       background:
-        radial-gradient(ellipse 70% 60% at 5% 0%, rgba(224, 154, 103, 0.12) 0%, transparent 50%),
-        radial-gradient(ellipse 50% 50% at 95% 100%, rgba(194, 99, 37, 0.08) 0%, transparent 50%),
-        radial-gradient(circle at 50% 50%, rgba(245, 158, 11, 0.03) 0%, transparent 60%);
+        radial-gradient(ellipse 70% 60% at 5% 0%, rgba(0, 173, 239, 0.12) 0%, transparent 50%),
+        radial-gradient(ellipse 50% 50% at 95% 100%, rgba(35, 94, 174, 0.08) 0%, transparent 50%),
+        radial-gradient(circle at 50% 50%, rgba(39, 170, 226, 0.03) 0%, transparent 60%);
     }
     [data-theme="light"] .bg-mesh {
       background:
-        radial-gradient(ellipse 70% 60% at 5% 0%, rgba(224, 154, 103, 0.08) 0%, transparent 50%),
-        radial-gradient(ellipse 50% 50% at 95% 100%, rgba(194, 99, 37, 0.05) 0%, transparent 50%);
+        radial-gradient(ellipse 70% 60% at 5% 0%, rgba(0, 173, 239, 0.08) 0%, transparent 50%),
+        radial-gradient(ellipse 50% 50% at 95% 100%, rgba(35, 94, 174, 0.05) 0%, transparent 50%);
     }
 
     /* TOPBAR */
@@ -198,7 +244,7 @@ $patient = $patient->fetch();
     .topbar-logo {
       width: 42px; height: 42px; object-fit: contain; border-radius: 10px;
       border: 1px solid var(--border-glow);
-      box-shadow: 0 2px 10px rgba(224, 154, 103, 0.2);
+      box-shadow: 0 2px 10px rgba(0, 173, 239, 0.2);
     }
     .topbar-name { font-weight: 800; font-size: 1.05rem; color: var(--text-primary); letter-spacing: -0.01em; }
     .topbar-sub  { font-size: .75rem; color: var(--text-muted); font-weight: 500; }
@@ -213,7 +259,7 @@ $patient = $patient->fetch();
     }
     .theme-btn:hover {
       border-color: var(--clr-primary); color: var(--clr-primary);
-      transform: scale(1.05); box-shadow: 0 0 15px rgba(224, 154, 103, 0.25);
+      transform: scale(1.05); box-shadow: 0 0 15px rgba(0, 173, 239, 0.25);
     }
 
     .user-chip {
@@ -222,13 +268,13 @@ $patient = $patient->fetch();
       border-radius: 100px; padding: 5px 14px 5px 5px; cursor: pointer;
       transition: all .2s cubic-bezier(0.16, 1, 0.3, 1);
     }
-    .user-chip:hover { border-color: var(--clr-primary); box-shadow: 0 0 12px rgba(224, 154, 103, 0.2); }
+    .user-chip:hover { border-color: var(--clr-primary); box-shadow: 0 0 12px rgba(0, 173, 239, 0.2); }
     .user-avatar {
       width: 30px; height: 30px; border-radius: 50%;
       background: linear-gradient(135deg, var(--clr-primary), var(--clr-secondary));
       display: flex; align-items: center; justify-content: center;
       color: #fff; font-weight: 800; font-size: .76rem;
-      box-shadow: 0 2px 8px rgba(224, 154, 103, 0.35);
+      box-shadow: 0 2px 8px rgba(35, 94, 174, 0.35);
     }
     .user-name { font-size: .88rem; font-weight: 700; color: var(--text-primary); }
 
@@ -272,8 +318,8 @@ $patient = $patient->fetch();
       display: flex; align-items: center; justify-content: center;
       font-size: 1.25rem; color: #fff; flex-shrink: 0;
     }
-    .card-icon.bronze { background: linear-gradient(135deg, var(--clr-primary), var(--clr-secondary)); box-shadow: 0 6px 18px rgba(224, 154, 103, 0.35); }
-    .card-icon.orange { background: linear-gradient(135deg, #D97706, #B86B35); box-shadow: 0 6px 18px rgba(217, 119, 6, 0.3); }
+    .card-icon.bronze { background: linear-gradient(135deg, var(--clr-primary), var(--clr-secondary)); box-shadow: 0 6px 18px rgba(35, 94, 174, 0.35); }
+    .card-icon.orange { background: linear-gradient(135deg, #1E74BD, #272264); box-shadow: 0 6px 18px rgba(30, 116, 189, 0.3); }
     .card-title { font-size: 1.25rem; font-weight: 800; color: var(--text-primary); margin: 0; letter-spacing: -0.01em; }
     .card-subtitle { font-size: .84rem; color: var(--text-muted); margin: 3px 0 0; font-weight: 500; }
 
@@ -285,7 +331,7 @@ $patient = $patient->fetch();
     }
     .field-control:focus {
       border-color: var(--clr-primary);
-      box-shadow: 0 0 0 3px rgba(224, 154, 103, 0.2);
+      box-shadow: 0 0 0 3px rgba(0, 173, 239, 0.2);
     }
     .field-control:disabled { opacity: .6; cursor: not-allowed; }
     
@@ -294,23 +340,23 @@ $patient = $patient->fetch();
       background: linear-gradient(135deg, var(--clr-primary), var(--clr-secondary));
       color: #fff; font-family: inherit; font-size: .95rem; font-weight: 800;
       cursor: pointer; transition: all .25s cubic-bezier(0.16, 1, 0.3, 1);
-      box-shadow: 0 6px 20px rgba(224, 154, 103, 0.35);
+      box-shadow: 0 6px 20px rgba(35, 94, 174, 0.35);
     }
     .btn-primary:hover {
       transform: translateY(-2px);
-      box-shadow: 0 10px 28px rgba(224, 154, 103, 0.5);
+      box-shadow: 0 10px 28px rgba(0, 173, 239, 0.5);
     }
     
     .btn-warning {
       width: 100%; padding: 14px 24px; border-radius: 12px; border: none;
-      background: linear-gradient(135deg, #D97706, #B86B35);
+      background: linear-gradient(135deg, #1E74BD, #272264);
       color: #fff; font-family: inherit; font-size: .95rem; font-weight: 800;
       cursor: pointer; transition: all .25s cubic-bezier(0.16, 1, 0.3, 1);
-      box-shadow: 0 6px 20px rgba(217, 119, 6, 0.3);
+      box-shadow: 0 6px 20px rgba(30, 116, 189, 0.3);
     }
     .btn-warning:hover {
       transform: translateY(-2px);
-      box-shadow: 0 10px 28px rgba(217, 119, 6, 0.45);
+      box-shadow: 0 10px 28px rgba(30, 116, 189, 0.45);
     }
 
     .alert {
@@ -345,7 +391,7 @@ $patient = $patient->fetch();
   </a>
   <div class="topbar-right">
     <button class="theme-btn" id="themeToggle" title="Toggle Light/Dark Theme">
-      <i class="fas fa-moon" id="themeIcon"></i>
+      <i class="<?= $currentTheme === 'dark' ? 'fas fa-sun' : 'fas fa-moon' ?>" id="themeIcon"></i>
     </button>
     <div class="user-dropdown" id="userDropdown">
       <div class="user-chip" onclick="toggleDropdown()">
@@ -366,9 +412,13 @@ $patient = $patient->fetch();
 <div class="page-wrap">
   <a href="dashboard.php" class="back-link"><i class="fas fa-arrow-left"></i> Back to Dashboard</a>
 
-  <!-- Alerts -->
+  <!-- Notifications Popup Carrier (SweetAlert2 Modal Popup) -->
   <?php if ($flashMsg): ?>
-  <div class="alert alert-<?= $flashType ?>"><i class="fas fa-info-circle"></i> <?= sanitize($flashMsg) ?></div>
+  <div id="patientFlashMsg"
+       data-msg="<?= htmlspecialchars((string)$flashMsg, ENT_QUOTES) ?>"
+       data-type="<?= htmlspecialchars((string)$flashType, ENT_QUOTES) ?>"
+       data-title="<?= htmlspecialchars((string)($flashType === 'success' ? 'Success!' : 'Notice'), ENT_QUOTES) ?>"
+       style="display:none"></div>
   <?php endif; ?>
 
   <!-- Profile Settings Card -->
@@ -397,9 +447,25 @@ $patient = $patient->fetch();
       </div>
 
       <div class="row g-3 mb-3">
+        <div class="col-md-6">
+          <label style="display:block;font-size:.78rem;font-weight:800;text-transform:uppercase;letter-spacing:.06em;color:var(--text-muted);margin-bottom:7px;"><i class="fas fa-phone me-1"></i>Contact Number</label>
+          <input type="tel" name="phone" maxlength="11" minlength="11" oninput="this.value = this.value.replace(/[^0-9]/g, '')" class="field-control" value="<?= htmlspecialchars($patient['phone'] ?? '') ?>" placeholder="09xxxxxxxxx">
+        </div>
+        <div class="col-md-6">
+          <label style="display:block;font-size:.78rem;font-weight:800;text-transform:uppercase;letter-spacing:.06em;color:var(--text-muted);margin-bottom:7px;"><i class="fas fa-venus-mars me-1"></i>Biological Sex / Gender</label>
+          <select name="gender" class="field-control">
+            <option value="">Select</option>
+            <option value="male" <?= ($patient['gender'] ?? '') === 'male' ? 'selected' : '' ?>>Male</option>
+            <option value="female" <?= ($patient['gender'] ?? '') === 'female' ? 'selected' : '' ?>>Female</option>
+            <option value="other" <?= ($patient['gender'] ?? '') === 'other' ? 'selected' : '' ?>>Other</option>
+          </select>
+        </div>
+      </div>
+
+      <div class="row g-3 mb-3">
         <div class="col-md-12">
-          <label style="display:block;font-size:.78rem;font-weight:800;text-transform:uppercase;letter-spacing:.06em;color:var(--text-muted);margin-bottom:7px;"><i class="fas fa-phone me-1"></i>Phone Number</label>
-          <input type="text" name="phone" class="field-control" value="<?= htmlspecialchars($patient['phone'] ?? '') ?>" placeholder="09xxxxxxxxx">
+          <label style="display:block;font-size:.78rem;font-weight:800;text-transform:uppercase;letter-spacing:.06em;color:var(--text-muted);margin-bottom:7px;"><i class="fas fa-birthday-cake me-1"></i>Birthdate</label>
+          <input type="date" name="birthdate" max="<?= date('Y-m-d') ?>" class="field-control" value="<?= htmlspecialchars($patient['birthdate'] ?? '') ?>">
         </div>
       </div>
 
@@ -452,24 +518,32 @@ $patient = $patient->fetch();
 const html = document.documentElement;
 const themeBtn  = document.getElementById('themeToggle');
 const themeIcon = document.getElementById('themeIcon');
-const savedTheme = localStorage.getItem('gueco_theme') || localStorage.getItem('gueco-theme') || localStorage.getItem('guecoTheme') || 'dark';
 
-html.setAttribute('data-theme', savedTheme);
-if (themeIcon) {
-  themeIcon.className = savedTheme === 'dark' ? 'fas fa-moon' : 'fas fa-sun';
+function applyPatientTheme(theme) {
+  if (theme !== 'light' && theme !== 'dark') theme = 'dark';
+  html.setAttribute('data-theme', theme);
+  try {
+    localStorage.setItem('gueco_theme', theme);
+    localStorage.setItem('gueco-theme', theme);
+    localStorage.setItem('guecoTheme', theme);
+    localStorage.setItem('theme', theme);
+    document.cookie = "gueco_theme=" + theme + "; path=/; max-age=31536000; SameSite=Lax";
+    document.cookie = "theme=" + theme + "; path=/; max-age=31536000; SameSite=Lax";
+  } catch(e) {}
+  if (themeIcon) {
+    themeIcon.className = (theme === 'dark') ? 'fas fa-sun' : 'fas fa-moon';
+  }
 }
 
+const savedTheme = localStorage.getItem('gueco_theme') || localStorage.getItem('gueco-theme') || localStorage.getItem('theme') || localStorage.getItem('guecoTheme') || '<?= $currentTheme ?>';
+applyPatientTheme(savedTheme);
+
 if (themeBtn) {
-  themeBtn.addEventListener('click', () => {
+  themeBtn.addEventListener('click', (e) => {
+    e.preventDefault();
     const current = html.getAttribute('data-theme') || 'dark';
     const next = current === 'dark' ? 'light' : 'dark';
-    html.setAttribute('data-theme', next);
-    localStorage.setItem('gueco_theme', next);
-    localStorage.setItem('gueco-theme', next);
-    localStorage.setItem('guecoTheme', next);
-    if (themeIcon) {
-      themeIcon.className = next === 'dark' ? 'fas fa-moon' : 'fas fa-sun';
-    }
+    applyPatientTheme(next);
   });
 }
 
@@ -481,6 +555,44 @@ document.addEventListener('click', function(e) {
   if (!e.target.closest('.user-dropdown')) {
     const dropdown = document.getElementById('userDropdown');
     if (dropdown) dropdown.classList.remove('open');
+  }
+});
+
+// SweetAlert2 Modal Popup Notification
+function showPopupModal(msg, type = 'info', title = null) {
+  if (!msg) return;
+  if (typeof Swal === 'undefined') {
+    alert(msg);
+    return;
+  }
+  const isError = (type === 'danger' || type === 'error');
+  const isSuccess = (type === 'success');
+  const iconType = isSuccess ? 'success' : (isError ? 'error' : 'info');
+  const titleText = title || (isSuccess ? 'Success!' : (isError ? 'Notice' : 'Information'));
+
+  Swal.fire({
+    title: titleText,
+    text: msg,
+    icon: iconType,
+    confirmButtonText: 'OK',
+    confirmButtonColor: 'var(--clr-primary)',
+    background: 'var(--bg-card)',
+    color: 'var(--text-primary)',
+    customClass: {
+      popup: 'patient-swal-popup'
+    }
+  });
+}
+
+document.addEventListener('DOMContentLoaded', function() {
+  const pFlash = document.getElementById('patientFlashMsg');
+  if (pFlash) {
+    const msg = pFlash.dataset.msg;
+    const type = pFlash.dataset.type || 'info';
+    const title = pFlash.dataset.title;
+    if (msg) {
+      showPopupModal(msg, type, title);
+    }
   }
 });
 </script>

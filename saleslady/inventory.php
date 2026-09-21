@@ -33,10 +33,12 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
 $search = sanitize($_GET['search'] ?? '');
 $catFilter = (int)($_GET['cat'] ?? 0);
+$tierFilter = sanitize($_GET['tier'] ?? '');
 $stockFilter = $_GET['stock'] ?? '';
 $where = ['p.status = "active"']; $params = [];
-if ($search) { $where[] = 'p.name LIKE ?'; $params[] = "%$search%"; }
+if ($search) { $where[] = '(p.name LIKE ? OR p.product_code LIKE ?)'; $params[] = "%$search%"; $params[] = "%$search%"; }
 if ($catFilter) { $where[] = 'p.category_id=?'; $params[] = $catFilter; }
+if (in_array($tierFilter, ['budget', 'mid', 'high'])) { $where[] = 'p.tier=?'; $params[] = $tierFilter; }
 if ($stockFilter === 'low') $where[] = 'p.stock_quantity <= p.low_stock_alert';
 if ($stockFilter === 'out') $where[] = 'p.stock_quantity = 0';
 $whereStr = implode(' AND ', $where);
@@ -89,10 +91,16 @@ document.addEventListener("DOMContentLoaded", function() {
     <!-- Filters -->
     <div style="margin-bottom:14px;display:flex;gap:8px;flex-wrap:wrap;">
       <form method="GET" style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;">
-        <input type="text" name="search" class="form-control" placeholder="Search product..." value="<?= htmlspecialchars($search) ?>" style="width:200px;">
-        <select name="cat" class="form-select" style="width:160px;">
+        <input type="text" name="search" class="form-control" placeholder="Search product..." value="<?= htmlspecialchars($search) ?>" style="width:170px;">
+        <select name="cat" class="form-select" style="width:140px;">
           <option value="">All Categories</option>
           <?php foreach ($categories as $c): ?><option value="<?= $c['id'] ?>" <?= $catFilter==$c['id']?'selected':'' ?>><?= sanitize($c['name']) ?></option><?php endforeach; ?>
+        </select>
+        <select name="tier" class="form-select" style="width:140px;">
+          <option value="">All Tiers</option>
+          <option value="budget" <?= $tierFilter==='budget'?'selected':'' ?>>⚪ Budget</option>
+          <option value="mid" <?= $tierFilter==='mid'?'selected':'' ?>>🔵 Mid</option>
+          <option value="high" <?= $tierFilter==='high'?'selected':'' ?>>🟣 High</option>
         </select>
         <button type="submit" class="btn btn-outline-primary"><i class="fas fa-search"></i></button>
         <a href="inventory.php" class="btn btn-secondary"><i class="fas fa-undo"></i></a>
@@ -102,23 +110,24 @@ document.addEventListener("DOMContentLoaded", function() {
     <div class="table-wrapper">
       <div class="table-responsive">
         <table class="table">
-          <thead><tr><th>Product</th><th>Category</th><th>Price</th><th>Stock</th><th>Alert At</th><th>Actions</th></tr></thead>
+          <thead><tr><th>Product</th><th>Tier</th><th>Category</th><th>Price</th><th>Stock</th><th>Alert At</th><th>Actions</th></tr></thead>
           <tbody>
             <?php if (empty($products)): ?>
-            <tr><td colspan="6"><div class="empty-state"><div class="empty-icon"><i class="fas fa-boxes"></i></div><h6>No products found</h6></div></td></tr>
+            <tr><td colspan="7"><div class="empty-state"><div class="empty-icon"><i class="fas fa-boxes"></i></div><h6>No products found</h6></div></td></tr>
             <?php else: ?>
             <?php foreach ($products as $p): ?>
             <?php $isLow = $p['stock_quantity'] <= $p['low_stock_alert']; $isOut = $p['stock_quantity'] == 0; ?>
             <tr>
               <td><div style="font-weight:600;font-size:.88rem"><?= sanitize($p['name']) ?></div></td>
+              <td><?= tierBadge($p['tier'] ?? 'budget') ?></td>
               <td><span class="badge bg-secondary"><?= sanitize($p['cat_name']) ?></span></td>
               <td style="font-weight:700;color:var(--clr-success)"><?= formatCurrency($p['price']) ?></td>
               <td>
-                <span style="font-weight:800;font-size:.95rem;color:<?= $isOut?'var(--clr-danger)':($isLow?'var(--clr-warning)':'var(--text-primary)') ?>">
+                <span style="font-weight:800;font-size:.95rem;color:<?= $isOut?'#DC2626':($isLow?'#EF4444':'var(--text-primary)') ?>">
                   <?= $p['stock_quantity'] ?>
                 </span>
-                <?php if ($isOut): ?><span class="badge bg-danger ms-1" style="font-size:.62rem">OUT</span>
-                <?php elseif ($isLow): ?><span class="badge bg-warning ms-1" style="font-size:.62rem">LOW</span><?php endif; ?>
+                <?php if ($isOut): ?><span class="badge badge-out-alert ms-1" style="font-size:.65rem; padding:2px 6px;">OUT</span>
+                <?php elseif ($isLow): ?><span class="badge badge-low-alert ms-1" style="font-size:.65rem; padding:2px 6px; font-weight:700;">LOW</span><?php endif; ?>
               </td>
               <td style="font-size:.8rem;color:var(--text-muted)"><?= $p['low_stock_alert'] ?></td>
               <td>

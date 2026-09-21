@@ -4,7 +4,7 @@ define('BASE_URL', '');
 require_once 'config/functions.php';
 startSession();
 
-$isPatient = isPatientLoggedIn();
+$isPatient = isPatient2FAVerified();
 $isStaff = isLoggedIn();
 
 $error = '';
@@ -17,95 +17,110 @@ if (isset($_GET['registered'])) {
     $tab = 'login';
 }
 
-// ── REGISTER ──
+// ── REGISTER (Email & Password Only with Real Domain Verification) ──
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action']) && $_POST['action'] === 'register') {
     $showModal = true;
     if (!verifyCsrfToken($_POST['csrf_token'] ?? '')) {
         $error = 'Security session expired. Please refresh the page and try again.';
         $tab   = 'register';
     } else {
-        $fullName  = sanitize(trim($_POST['full_name'] ?? ''));
-        // Fix camelCase names: "JuanDelaCruz" -> "Juan Dela Cruz"
-        $fullName  = preg_replace('/([a-z])([A-Z])/', '$1 $2', $fullName);
-        $fullName  = ucwords(strtolower($fullName)); // ensure proper casing
-        $email     = trim($_POST['email'] ?? '');
-        $password  = $_POST['password'] ?? '';
-        $confirm   = $_POST['confirm_password'] ?? '';
-        $phone     = sanitize(trim($_POST['phone'] ?? ''));
-        $address   = sanitize(trim($_POST['address'] ?? ''));
-        $birthdate = $_POST['birthdate'] ?? '';
-        $gender    = $_POST['gender'] ?? '';
-        $consent   = !empty($_POST['privacy_consent']);
+        $email    = trim($_POST['email'] ?? '');
+        $password = $_POST['password'] ?? '';
+        $confirm  = $_POST['confirm_password'] ?? '';
+        $consent  = !empty($_POST['privacy_consent']);
 
-        if (empty($fullName)) {
-            $error = 'Please enter your full name.';
-            $errorField = 'full_name';
-            $tab   = 'register';
-        } elseif (empty($email)) {
-            $error = 'Please enter your email.';
+        if (empty($email)) {
+            $error = 'Please enter your email address.';
             $errorField = 'email';
-            $tab   = 'register';
-        } elseif (empty($password)) {
-            $error = 'Please enter a password.';
-            $errorField = 'password';
             $tab   = 'register';
         } elseif (!filter_var($email, FILTER_VALIDATE_EMAIL)) {
-            $error = 'Please enter a valid email address.';
+            $error = 'Please enter a valid email address (e.g. yourname@gmail.com).';
             $errorField = 'email';
             $tab   = 'register';
-        } elseif (!empty($phone) && strlen($phone) !== 11) {
-            $error = 'Phone number must be exactly 11 digits.';
-            $errorField = 'phone';
-            $tab   = 'register';
-        } elseif (!empty($birthdate) && strtotime($birthdate) > time()) {
-            $error = 'Birthdate cannot be in the future.';
-            $errorField = 'birthdate';
-            $tab   = 'register';
-        } elseif (strlen($password) < 8) {
-            $error = 'Password must be at least 8 characters.';
-            $errorField = 'password';
-            $tab   = 'register';
-        } elseif ($password !== $confirm) {
-            $error = 'Passwords do not match.';
-            $errorField = 'confirm_password';
-            $tab   = 'register';
-        } elseif (!$consent) {
-            $error = 'You must agree to the Data Privacy Notice (RA 10173) to create an account.';
-            $errorField = 'privacy_consent';
-            $tab   = 'register';
         } else {
-            try {
-                $db   = getDB();
-                $check = $db->prepare("SELECT id FROM patients WHERE email = ?");
-                $check->execute([$email]);
-                if ($check->fetch()) {
-                    $error = 'This email is already registered. Please login instead.';
-                    $errorField = 'email';
-                    $tab   = 'register';
-                } else {
-                    $stmt = $db->prepare(
-                        "INSERT INTO patients (full_name, email, password, phone, address, birthdate, gender)
-                         VALUES (?, ?, ?, ?, ?, ?, ?)"
-                    );
-                    $stmt->execute([
-                        $fullName,
-                        $email,
-                        password_hash($password, PASSWORD_DEFAULT),
-                        $phone,
-                        $address,
-                        $birthdate ?: null,
-                        $gender ?: null,
-                    ]);
-                    $patientId = $db->lastInsertId();
+            $domain = strtolower(substr(strrchr($email, "@"), 1));
+            $disallowedDomains = [
+                'tempmail.com', 'throwawaymail.com', 'mailinator.com', 
+                'guerrillamail.com', '10minutemail.com', 'yopmail.com', 
+                'trashmail.com', 'sharklasers.com', 'guerrillamailblock.com',
+                'fakemailgenerator.com', 'dispostable.com'
+            ];
 
-                    $_SESSION['flash_msg']  = 'Account successfully created! You can now log in.';
-                    $_SESSION['flash_type'] = 'success';
-                    header('Location: index.php?registered=1');
-                    exit;
-                }
-            } catch (Exception $e) {
-                $error = 'Registration failed. Please try again.';
+            if (in_array($domain, $disallowedDomains)) {
+                $error = 'Temporary or disposable email addresses are not allowed. Please use your real email or Gmail.';
+                $errorField = 'email';
                 $tab   = 'register';
+            } elseif (in_array($domain, ['gmai.com', 'gmal.com', 'gmial.com', 'gmaill.com', 'gmil.com'])) {
+                $error = 'Did you mean @gmail.com? Please check your email spelling.';
+                $errorField = 'email';
+                $tab   = 'register';
+            } elseif (!checkdnsrr($domain, 'MX') && !checkdnsrr($domain, 'A')) {
+                $error = 'We could not reach this email domain. Please provide a real, active email or Gmail address to receive your verification code.';
+                $errorField = 'email';
+                $tab   = 'register';
+            } elseif (empty($password)) {
+                $error = 'Please enter a password.';
+                $errorField = 'password';
+                $tab   = 'register';
+            } elseif (strlen($password) < 8) {
+                $error = 'Password must be at least 8 characters.';
+                $errorField = 'password';
+                $tab   = 'register';
+            } elseif ($password !== $confirm) {
+                $error = 'Passwords do not match.';
+                $errorField = 'confirm_password';
+                $tab   = 'register';
+            } elseif (!$consent) {
+                $error = 'You must agree to the Terms and Conditions to create an account.';
+                $errorField = 'privacy_consent';
+                $tab   = 'register';
+            } else {
+                try {
+                    $db = getDB();
+                    $check = $db->prepare("SELECT id FROM patients WHERE email = ?");
+                    $check->execute([$email]);
+                    if ($check->fetch()) {
+                        $error = 'This email is already registered. Please log in instead.';
+                        $errorField = 'email';
+                        $tab   = 'register';
+                    } else {
+                        $stmt = $db->prepare(
+                            "INSERT INTO patients (email, password, created_at)
+                             VALUES (?, ?, NOW())"
+                        );
+                        $stmt->execute([
+                            $email,
+                            password_hash($password, PASSWORD_DEFAULT),
+                        ]);
+                        $patientId = (int)$db->lastInsertId();
+
+                        // Set up session for OTP verification
+                        session_regenerate_id(true);
+                        $_SESSION['patient_id']           = $patientId;
+                        $_SESSION['patient_name']         = '';
+                        $_SESSION['patient_email']        = $email;
+                        $_SESSION['patient_avatar']       = '';
+                        $_SESSION['patient_2fa_verified'] = false;
+
+                        // Issue 6-digit OTP and send via email
+                        issuePatientLoginOTP([
+                            'id'        => $patientId,
+                            'full_name' => '',
+                            'email'     => $email,
+                            'avatar'    => ''
+                        ]);
+
+                        $_SESSION['flash_msg']   = 'Account created! Enter the 6-digit verification code sent to ' . htmlspecialchars($email) . '.';
+                        $_SESSION['flash_type']  = 'info';
+                        $_SESSION['flash_title'] = 'Verify Your Email';
+
+                        header('Location: verify-otp.php');
+                        exit;
+                    }
+                } catch (Exception $e) {
+                    $error = 'Registration failed. Please try again.';
+                    $tab   = 'register';
+                }
             }
         }
     }
@@ -114,6 +129,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action']) && $_POST['
 // ── LOGIN ──
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action']) && $_POST['action'] === 'login') {
     $showModal = true;
+    $tab = 'login';
     $ip = $_SERVER['REMOTE_ADDR'] ?? '127.0.0.1';
     $rlKey = 'patient_login_' . $ip;
 
@@ -139,11 +155,16 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action']) && $_POST['
                     clearRateLimit($rlKey);
                     session_regenerate_id(true);
 
-                    $_SESSION['patient_id']    = $patient['id'];
-                    $_SESSION['patient_name']  = $patient['full_name'];
-                    $_SESSION['patient_email'] = $patient['email'];
+                    $_SESSION['patient_id']     = (int)$patient['id'];
+                    $_SESSION['patient_name']   = $patient['full_name'];
+                    $_SESSION['patient_email']  = $patient['email'];
+                    $_SESSION['patient_avatar'] = $patient['avatar'] ?? '';
+                    $_SESSION['patient_2fa_verified'] = false;
 
-                    header('Location: patient/dashboard.php');
+                    // Issue 6-digit verification OTP
+                    issuePatientLoginOTP($patient);
+
+                    header('Location: verify-otp.php');
                     exit;
                 } else {
                     recordFailedAttempt($rlKey, 900);
@@ -315,9 +336,11 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action']) && $_POST['
         }
     }
 }
+$userTheme = $_COOKIE['gueco_theme'] ?? ($_COOKIE['theme'] ?? 'dark');
+$currentTheme = ($userTheme === 'light') ? 'light' : 'dark';
 ?>
 <!DOCTYPE html>
-<html lang="en" data-theme="dark">
+<html lang="en" data-theme="<?= $currentTheme ?>">
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
@@ -328,10 +351,15 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action']) && $_POST['
   <script>
     (function() {
       try {
-        var theme = localStorage.getItem("gueco_theme") || localStorage.getItem("gueco-theme") || localStorage.getItem("theme") || "dark";
+        var theme = localStorage.getItem("gueco_theme") || localStorage.getItem("gueco-theme") || localStorage.getItem("theme") || localStorage.getItem("guecoTheme");
+        if (!theme) {
+          var m = document.cookie.match(/(?:^|;\s*)gueco_theme=([^;]+)/);
+          theme = m ? m[1] : "<?= $currentTheme ?>";
+        }
+        if (theme !== "light" && theme !== "dark") theme = "dark";
         document.documentElement.setAttribute("data-theme", theme);
       } catch (e) {
-        document.documentElement.setAttribute("data-theme", "dark");
+        document.documentElement.setAttribute("data-theme", "<?= $currentTheme ?>");
       }
     })();
   </script>
@@ -341,34 +369,35 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action']) && $_POST['
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@300;400;500;600;700;800;900&family=Poppins:wght@300;400;500;600;700;800;900&display=swap" rel="stylesheet">
+  <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
   <style>
     *,*::before,*::after{box-sizing:border-box;margin:0;padding:0;}
     :root { 
-      /* Luxury Brand Color Palette */
-      --clr-bronze-light: #FDBA74;
-      --clr-bronze:       #E09A67;
-      --clr-bronze-dark:  #B86B35;
-      --clr-gold:         #F59E0B;
-      --clr-amber:        #D97706;
+      /* Blue Luxury Brand Color Palette */
+      --clr-bronze-light: #27AAE2;
+      --clr-bronze:       #235EAE;
+      --clr-bronze-dark:  #272264;
+      --clr-gold:         #00ADEF;
+      --clr-amber:        #1E74BD;
 
-      --clr-primary:      #E09A67;
-      --clr-primary-light:#FDBA74;
-      --clr-primary-dark: #B86B35;
-      --clr-secondary:    #C26325;
+      --clr-primary:      #235EAE;
+      --clr-primary-light:#00ADEF;
+      --clr-primary-dark: #272264;
+      --clr-secondary:    #00ADEF;
       
       --clr-success:      #10B981;
       --clr-danger:       #EF4444;
-      --clr-warning:      #F59E0B;
-      --clr-info:         #0EA5E9;
+      --clr-warning:      #268FC8;
+      --clr-info:         #00ADEF;
 
       /* Dark Theme */
       --bg-body:          #0A0A0D;
-      --bg-card:          #17161D;
-      --bg-card-glass:    rgba(23, 22, 29, 0.88);
+      --bg-card:          #13162B;
+      --bg-card-glass:    rgba(19, 22, 43, 0.88);
       --bg-topbar:        rgba(10, 10, 13, 0.85);
-      --bg-hover:         rgba(224, 154, 103, 0.08);
-      --bg-input:         #1E1C24;
-      --bg-input-focus:   #25232D;
+      --bg-hover:         rgba(0, 173, 239, 0.08);
+      --bg-input:         #1A1D36;
+      --bg-input-focus:   #23274A;
 
       --text-primary:     #F9FAFB;
       --text-secondary:   #E5E7EB;
@@ -377,7 +406,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action']) && $_POST['
 
       --border-color:     rgba(255, 255, 255, 0.09);
       --border-light:     rgba(255, 255, 255, 0.05);
-      --border-glow:      rgba(224, 154, 103, 0.35);
+      --border-glow:      rgba(0, 173, 239, 0.35);
 
       --shadow-sm:        0 2px 8px rgba(0, 0, 0, 0.45);
       --shadow-md:        0 8px 24px rgba(0, 0, 0, 0.55);
@@ -385,13 +414,13 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action']) && $_POST['
       --shadow-xl:        0 28px 60px rgba(0, 0, 0, 0.8);
     }
     [data-theme="light"] {
-      /* Warm Alabaster Canvas */
-      --bg-body:          #F3F1EC;
+      /* Clean Crisp Canvas */
+      --bg-body:          #F0F4F9;
       --bg-card:          #FFFFFF;
       --bg-card-glass:    rgba(255, 255, 255, 0.95);
       --bg-topbar:        rgba(255, 255, 255, 0.9);
-      --bg-hover:         #E8E4DC;
-      --bg-input:         #EBE7E0;
+      --bg-hover:         #E0EBF7;
+      --bg-input:         #E5EEF8;
       --bg-input-focus:   #FFFFFF;
 
       --text-primary:     #18181B;
@@ -401,7 +430,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action']) && $_POST['
 
       --border-color:     rgba(0, 0, 0, 0.08);
       --border-light:     rgba(0, 0, 0, 0.04);
-      --border-glow:      rgba(224, 154, 103, 0.35);
+      --border-glow:      rgba(35, 94, 174, 0.25);
 
       --shadow-sm:        0 2px 6px rgba(0, 0, 0, 0.03);
       --shadow-md:        0 8px 24px rgba(0, 0, 0, 0.06);
@@ -418,13 +447,13 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action']) && $_POST['
     .bg-mesh {
       position:fixed; inset:0; z-index:-1; pointer-events:none;
       background:
-        radial-gradient(ellipse 70% 60% at 0% 0%, rgba(224,154,103,.14) 0%, transparent 60%),
-        radial-gradient(ellipse 50% 50% at 100% 100%, rgba(194,99,37,.1) 0%, transparent 60%);
+        radial-gradient(ellipse 70% 60% at 0% 0%, rgba(0,173,239,.14) 0%, transparent 60%),
+        radial-gradient(ellipse 50% 50% at 100% 100%, rgba(35,94,174,.1) 0%, transparent 60%);
     }
     [data-theme="light"] .bg-mesh {
       background:
-        radial-gradient(ellipse 70% 60% at 0% 0%, rgba(224,154,103,.1) 0%, transparent 60%),
-        radial-gradient(ellipse 50% 50% at 100% 100%, rgba(194,99,37,.06) 0%, transparent 60%);
+        radial-gradient(ellipse 70% 60% at 0% 0%, rgba(0,173,239,.1) 0%, transparent 60%),
+        radial-gradient(ellipse 50% 50% at 100% 100%, rgba(35,94,174,.06) 0%, transparent 60%);
     }
 
     /* TOPBAR */
@@ -438,7 +467,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action']) && $_POST['
     .topbar-brand { display:flex; align-items:center; gap:16px; text-decoration:none; }
     .topbar-logo {
       width:52px; height:52px; object-fit:contain; border-radius:50%;
-      background:rgba(255,255,255,0.95); padding:2px; box-shadow:0 2px 10px rgba(224,154,103,0.35);
+      background:rgba(255,255,255,0.95); padding:2px; box-shadow:0 2px 10px rgba(0,173,239,0.35);
     }
     .topbar-name { font-weight:800; font-size:1.3rem; color:var(--text-primary); line-height:1.2; letter-spacing:-0.3px; }
     .topbar-sub  { font-size:.85rem; color:var(--text-muted); font-weight:500; }
@@ -464,13 +493,13 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action']) && $_POST['
     .hero-text { flex:1; }
     .badge-est {
       display:inline-flex; align-items:center; gap:8px; padding:8px 18px;
-      background:rgba(224,154,103,.14); color:#E09A67; border-radius:100px;
+      background:rgba(0,173,239,.14); color:#00ADEF; border-radius:100px;
       font-size:.85rem; font-weight:700; letter-spacing:.06em; text-transform:uppercase;
-      margin-bottom:24px; border:1px solid rgba(224,154,103,.35); box-shadow:0 2px 10px rgba(224,154,103,.12);
+      margin-bottom:24px; border:1px solid rgba(0,173,239,.35); box-shadow:0 2px 10px rgba(0,173,239,.12);
     }
     .hero h1 { font-size:3.8rem; font-weight:900; line-height:1.15; margin-bottom:24px; color:var(--text-primary); letter-spacing:-1px; }
     .hero h1 span {
-      background:linear-gradient(135deg,#FDBA74 0%,#E09A67 50%,#C26325 100%);
+      background:linear-gradient(135deg,#00ADEF 0%,#27AAE2 50%,#235EAE 100%);
       -webkit-background-clip:text; -webkit-text-fill-color:transparent;
     }
     .hero p { font-size:1.15rem; color:var(--text-secondary); line-height:1.7; margin-bottom:40px; max-width:540px; }
@@ -479,11 +508,145 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action']) && $_POST['
     .stat-item h3 { font-size:2.2rem; font-weight:800; margin:0; color:var(--clr-primary); }
     .stat-item p { font-size:.9rem; color:var(--text-muted); font-weight:600; text-transform:uppercase; letter-spacing:.05em; margin:0; }
 
-    .hero-image { flex:1; position:relative; }
-    .hero-image img { width:100%; border-radius:32px; box-shadow:0 30px 60px rgba(0,0,0,.4); position:relative; z-index:2; border:1px solid var(--border-color); }
-    .hero-image::after {
-      content:''; position:absolute; inset:-20px; background:linear-gradient(135deg,var(--clr-primary),var(--clr-secondary));
-      filter:blur(60px); opacity:.25; z-index:1; border-radius:50%;
+    /* 3D FLOATING HERO LOGO EMBLEM (LOGO ONLY) */
+    .hero-image {
+      flex: 1;
+      position: relative;
+      perspective: 1200px;
+      display: flex;
+      justify-content: center;
+      align-items: center;
+    }
+    .hero-logo-container {
+      position: relative;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      width: 100%;
+      max-width: 440px;
+      padding: 20px;
+    }
+    /* Radiant Glow Aura Behind Logo */
+    .hero-logo-aura {
+      position: absolute;
+      width: 340px;
+      height: 340px;
+      border-radius: 50%;
+      background: radial-gradient(circle, rgba(0, 173, 239, 0.35) 0%, rgba(35, 94, 174, 0.18) 50%, transparent 70%);
+      filter: blur(45px);
+      z-index: 1;
+      pointer-events: none;
+      animation: pulseAura 5s ease-in-out infinite alternate;
+    }
+    @keyframes pulseAura {
+      0%   { transform: scale(0.92); opacity: 0.7; }
+      100% { transform: scale(1.15); opacity: 1; }
+    }
+
+    /* High-Tech Optic Precision Ring */
+    .hero-logo-ring {
+      position: absolute;
+      width: 430px;
+      height: 430px;
+      border-radius: 50%;
+      border: 1.5px dashed rgba(0, 173, 239, 0.28);
+      z-index: 1;
+      pointer-events: none;
+      animation: spinRing 40s linear infinite;
+    }
+    .hero-logo-ring::before {
+      content: '';
+      position: absolute;
+      inset: 28px;
+      border-radius: 50%;
+      border: 1px solid rgba(35, 94, 174, 0.18);
+    }
+    @keyframes spinRing {
+      from { transform: rotate(0deg); }
+      to   { transform: rotate(360deg); }
+    }
+
+    /* 3D Elevated Logo Card / Pedestal */
+    .hero-3d-logo-card {
+      position: relative;
+      z-index: 2;
+      width: 360px;
+      height: 360px;
+      border-radius: 46px;
+      background: #FFFFFF;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 36px;
+      border: 2px solid rgba(0, 173, 239, 0.25);
+      box-shadow: 0 28px 70px -8px rgba(0, 173, 239, 0.35),
+                  0 14px 30px rgba(35, 94, 174, 0.22),
+                  inset 0 3px 0 #FFFFFF;
+      animation: floatEmblem 5s ease-in-out infinite alternate;
+      transition: transform 0.4s cubic-bezier(0.16, 1, 0.3, 1), box-shadow 0.4s cubic-bezier(0.16, 1, 0.3, 1), border-color 0.3s;
+      cursor: pointer;
+      overflow: hidden;
+    }
+    [data-theme="dark"] .hero-3d-logo-card {
+      box-shadow: 0 35px 80px -10px rgba(0, 0, 0, 0.65),
+                  0 0 50px rgba(0, 173, 239, 0.3),
+                  inset 0 2px 0 rgba(255, 255, 255, 0.95);
+      border-color: rgba(0, 173, 239, 0.4);
+    }
+    .hero-3d-logo-card:hover {
+      transform: translateY(-10px) scale(1.03);
+      box-shadow: 0 45px 95px -10px rgba(0, 173, 239, 0.48),
+                  0 0 65px rgba(0, 173, 239, 0.35),
+                  inset 0 2px 0 #FFFFFF;
+      border-color: rgba(0, 173, 239, 0.6);
+    }
+
+    /* Glossy Glass Sheen on Hover */
+    .hero-3d-logo-card::before {
+      content: '';
+      position: absolute;
+      top: 0; left: -100%;
+      width: 100%; height: 100%;
+      background: linear-gradient(105deg, transparent 40%, rgba(255, 255, 255, 0.4) 50%, transparent 60%);
+      transition: all 0.6s ease;
+      pointer-events: none;
+    }
+    .hero-3d-logo-card:hover::before {
+      left: 100%;
+    }
+
+    /* Pure Logo Image */
+    .hero-pure-logo {
+      width: 100% !important;
+      height: 100% !important;
+      object-fit: contain !important;
+      border-radius: 0 !important;
+      box-shadow: none !important;
+      border: none !important;
+      margin: 0 !important;
+      background: transparent !important;
+      padding: 0 !important;
+      filter: drop-shadow(0 6px 14px rgba(35, 94, 174, 0.18));
+      transition: transform 0.4s cubic-bezier(0.16, 1, 0.3, 1);
+    }
+    .hero-3d-logo-card:hover .hero-pure-logo {
+      transform: scale(1.05);
+    }
+
+    @keyframes floatEmblem {
+      0%   { transform: translateY(0px) rotate(0deg); }
+      100% { transform: translateY(-14px) rotate(0.6deg); }
+    }
+
+    @media (max-width: 991px) {
+      .hero-logo-ring { width: 330px; height: 330px; }
+      .hero-logo-aura { width: 260px; height: 260px; }
+      .hero-3d-logo-card { width: 280px; height: 280px; border-radius: 36px; padding: 26px; }
+    }
+    @media (max-width: 576px) {
+      .hero-logo-ring { width: 270px; height: 270px; }
+      .hero-logo-aura { width: 220px; height: 220px; }
+      .hero-3d-logo-card { width: 230px; height: 230px; border-radius: 30px; padding: 20px; }
     }
 
     /* DETAILS */
@@ -493,273 +656,864 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action']) && $_POST['
       padding:40px; border-radius:24px; backdrop-filter:blur(16px);
       transition:transform .3s cubic-bezier(0.16,1,0.3,1), box-shadow .3s cubic-bezier(0.16,1,0.3,1), border-color .3s;
     }
-    .detail-card:hover { transform:translateY(-8px); box-shadow:0 20px 40px rgba(0,0,0,.3); border-color:rgba(224,154,103,.4); }
+    .detail-card:hover { transform:translateY(-8px); box-shadow:0 20px 40px rgba(0,0,0,.3); border-color:rgba(0,173,239,.4); }
     .detail-icon {
       width:64px; height:64px; border-radius:18px; display:flex; align-items:center; justify-content:center;
       font-size:1.8rem; margin-bottom:24px; color:#fff;
     }
-    .icon-bronze { background:linear-gradient(135deg,#E09A67,#FDBA74); box-shadow:0 12px 24px rgba(224,154,103,.35); }
-    .icon-gold   { background:linear-gradient(135deg,#D97706,#FBBF24); box-shadow:0 12px 24px rgba(217,119,6,.35); }
-    .icon-emerald{ background:linear-gradient(135deg,#059669,#34D399); box-shadow:0 12px 24px rgba(5,150,105,.35); }
+    .icon-bronze { background:linear-gradient(135deg,#235EAE,#00ADEF); box-shadow:0 12px 24px rgba(35,94,174,.35); }
+    .icon-gold   { background:linear-gradient(135deg,#1E74BD,#27AAE2); box-shadow:0 12px 24px rgba(30,116,189,.35); }
+    .icon-emerald{ background:linear-gradient(135deg,#2D3891,#272264); box-shadow:0 12px 24px rgba(45,56,145,.35); }
     
     .detail-card h3 { font-size:1.3rem; font-weight:700; margin-bottom:12px; }
     .detail-card p { font-size:1rem; color:var(--text-secondary); line-height:1.6; margin:0; }
 
-    /* FLOATING ACTION BUTTON */
+    /* FLOATING ACTION BUTTON (3D ELEVATION) */
     .fab {
       position:fixed; bottom:40px; right:40px; z-index:999;
-      background:linear-gradient(135deg,var(--clr-primary),var(--clr-secondary));
-      color:#fff; padding:18px 32px; border-radius:100px; font-size:1.05rem; font-weight:700;
+      background:linear-gradient(135deg, #235EAE 0%, #00ADEF 100%);
+      color:#fff; padding:16px 32px; border-radius:100px; font-size:1.02rem; font-weight:800;
       display:flex; align-items:center; gap:12px; border:none; cursor:pointer;
-      box-shadow:0 16px 36px rgba(224,154,103,.4);
-      transition:all .3s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+      box-shadow: 0 14px 34px -4px rgba(0, 173, 239, 0.45),
+                  0 6px 14px rgba(35, 94, 174, 0.35),
+                  inset 0 1px 0 rgba(255, 255, 255, 0.4);
+      transition:all .25s cubic-bezier(0.16, 1, 0.3, 1);
       text-decoration:none !important;
     }
-    .fab i { font-size:1.3rem; }
+    .fab i { font-size:1.2rem; }
     .fab:hover {
-      transform:scale(1.05) translateY(-4px); box-shadow:0 24px 50px rgba(224,154,103,.55); color:#fff;
+      transform:translateY(-4px) scale(1.03);
+      box-shadow: 0 20px 45px -4px rgba(0, 173, 239, 0.65),
+                  0 10px 20px rgba(35, 94, 174, 0.45),
+                  inset 0 1px 0 rgba(255, 255, 255, 0.55);
+      color:#fff;
+    }
+    .fab:active {
+      transform:translateY(1px) scale(0.98);
+      box-shadow: 0 6px 16px rgba(0, 173, 239, 0.35);
     }
 
-    /* MODAL STYLES */
+    /* MODAL STYLES (PREMIUM 3D MODERN REDESIGN - NO WEIRD SCROLLBAR) */
     .modal-overlay { 
-      display:none; position:fixed; inset:0; background:rgba(0,0,0,.65); backdrop-filter:blur(10px);
-      z-index:9999; align-items:center; justify-content:center; padding:20px;
+      display: none; position: fixed; inset: 0; 
+      background: radial-gradient(circle at 50% 35%, rgba(10, 18, 36, 0.85) 0%, rgba(3, 7, 15, 0.95) 100%);
+      backdrop-filter: blur(20px); -webkit-backdrop-filter: blur(20px);
+      z-index: 9999; align-items: center; justify-content: center; padding: 16px;
     }
-    .modal-overlay.open { display:flex !important; }
+    .modal-overlay.open { display: flex !important; }
+    
     .auth-card {
-      background:var(--bg-card); border:1px solid rgba(224,154,103,.35); border-radius:24px;
-      width:100%; max-width:480px; box-shadow:0 24px 60px rgba(0,0,0,.55), 0 0 25px rgba(224,154,103,.12); overflow:hidden;
-      animation:modalIn .3s cubic-bezier(0.16,1,0.3,1); max-height:90vh; overflow-y:auto;
+      background: linear-gradient(165deg, rgba(20, 30, 52, 0.98) 0%, rgba(10, 16, 30, 0.99) 100%);
+      border: 2px solid rgba(0, 173, 239, 0.45);
+      border-radius: 28px;
+      width: 100%; max-width: 530px;
+      box-shadow: 0 35px 95px -15px rgba(0, 0, 0, 0.92), 
+                  0 0 50px rgba(0, 173, 239, 0.25),
+                  inset 0 1px 1px 0 rgba(255, 255, 255, 0.25);
+      position: relative;
+      animation: modalPopIn .32s cubic-bezier(0.16, 1, 0.3, 1);
+      max-height: 94vh;
+      overflow-y: auto;
+      scrollbar-width: none !important;
+      -ms-overflow-style: none !important;
     }
-    @keyframes modalIn { from{opacity:0;transform:scale(.95) translateY(16px);}to{opacity:1;transform:scale(1) translateY(0);} }
-    .auth-header {
-      padding:22px 26px; display:flex; align-items:center; justify-content:space-between;
-      border-bottom:1px solid var(--border-color); background:rgba(224,154,103,.06);
+    .auth-card::-webkit-scrollbar {
+      display: none !important;
+      width: 0 !important;
+      height: 0 !important;
     }
-    .auth-title { font-size:1.25rem; font-weight:700; margin:0; color:var(--text-primary); }
-    .close-btn {
-      background:rgba(255,255,255,.08); border:none; color:var(--text-secondary);
-      width:32px; height:32px; border-radius:50%; cursor:pointer; transition:all .2s;
-      display:flex; align-items:center; justify-content:center;
+    [data-theme="light"] .auth-card {
+      background: #FFFFFF;
+      border: 2px solid #CBD5E1;
+      box-shadow: 0 30px 85px -10px rgba(35, 94, 174, 0.25),
+                  0 12px 30px rgba(0, 0, 0, 0.08),
+                  inset 0 1px 0 #FFFFFF;
     }
-    .close-btn:hover { background:var(--clr-danger); color:#fff; transform:rotate(90deg); }
-    
-    .auth-tabs { display:flex; border-bottom:1px solid var(--border-color); }
-    .auth-tab {
-      flex:1; padding:16px; text-align:center; cursor:pointer; font-size:.9rem; font-weight:600;
-      color:var(--text-muted); background:none; border:none; font-family:inherit; transition:all .2s;
+    @keyframes modalPopIn { 
+      from { opacity: 0; transform: scale(.94) translateY(14px); }
+      to   { opacity: 1; transform: scale(1) translateY(0); } 
     }
-    .auth-tab.active { color:var(--clr-primary); border-bottom:2px solid var(--clr-primary); background:rgba(224,154,103,.06); }
-    
-    .auth-panel { padding:28px; display:none; }
-    .auth-panel.active { display:block; }
-    
-    .form-group { margin-bottom:16px; }
-    .form-label { display:block; font-size:.82rem; font-weight:700; text-transform:uppercase; letter-spacing:.06em; color:var(--text-muted); margin-bottom:7px; }
-    .form-control, .form-select {
-      width:100%; padding:14px 16px; border-radius:12px; border:1px solid var(--border-color);
-      background:var(--bg-input) !important; color:var(--text-primary) !important; font-family:inherit; font-size:.95rem; transition:all .2s;
-    }
-    .form-control:focus, .form-select:focus { border-color:var(--clr-primary); outline:none; background:var(--bg-input-focus) !important; color:var(--text-primary) !important; box-shadow:0 0 0 4px rgba(224,154,103,.15); }
-    .is-invalid { border-color: var(--clr-danger) !important; box-shadow: 0 0 0 4px rgba(239,68,68,.15) !important; }
 
-    /* TOAST NOTIFICATION */
-    .toast-container { position:fixed; top:20px; right:20px; z-index:99999; display:flex; flex-direction:column; gap:10px; }
-    .toast {
-      background:#fff; color:#333; padding:16px 20px; border-radius:12px; box-shadow:0 10px 30px rgba(0,0,0,.15);
-      display:flex; align-items:center; gap:12px; min-width:300px; transform:translateX(120%); transition:transform .4s cubic-bezier(0.175, 0.885, 0.32, 1.275);
-      border-left:4px solid var(--clr-primary); font-weight:500; font-size:.95rem;
+    .auth-header {
+      padding: 22px 28px 16px; 
+      display: flex; align-items: center; justify-content: space-between;
+      border-bottom: 1.5px solid var(--border-color);
+      position: relative;
     }
-    .toast.show { transform:translateX(0); }
-    .toast.danger { border-left-color:var(--clr-danger); }
-    .toast.danger i { color:var(--clr-danger); }
-    .toast i { font-size:1.2rem; color:var(--clr-primary); }
-    [data-theme="dark"] .toast { background:var(--bg-card); color:var(--text-primary); border:1px solid var(--border-color); border-left:4px solid var(--clr-primary); }
-    [data-theme="dark"] .toast.danger { border-left-color:var(--clr-danger); }
+    .auth-title-wrap { display: flex; align-items: center; gap: 14px; }
+    .auth-brand-emblem {
+      width: 50px; height: 50px; border-radius: 16px;
+      background: #FFFFFF;
+      border: 1.5px solid rgba(0, 173, 239, 0.35);
+      box-shadow: 0 6px 18px rgba(0, 173, 239, 0.25), inset 0 1px 0 #FFFFFF;
+      display: flex; align-items: center; justify-content: center;
+      padding: 6px; flex-shrink: 0;
+    }
+    .auth-brand-emblem img {
+      max-width: 100%; max-height: 100%; object-fit: contain;
+    }
+    .auth-title { font-size: 1.35rem; font-weight: 800; margin: 0; color: #0F172A; letter-spacing: -0.02em; }
+    [data-theme="dark"] .auth-title { color: #FFFFFF; }
+    .auth-sub { font-size: 0.88rem; color: #475569; margin: 3px 0 0; font-weight: 600; }
+    [data-theme="dark"] .auth-sub { color: #94A3B8; }
+
+    .close-btn {
+      background: #F1F5F9; border: 1.5px solid #CBD5E1; color: #475569;
+      width: 38px; height: 38px; border-radius: 50%; cursor: pointer; transition: all .2s;
+      display: flex; align-items: center; justify-content: center; font-size: .95rem;
+    }
+    [data-theme="dark"] .close-btn {
+      background: rgba(255, 255, 255, 0.1); border-color: rgba(255, 255, 255, 0.2); color: #FFFFFF;
+    }
+    .close-btn:hover { background: var(--clr-danger); border-color: var(--clr-danger); color: #fff; transform: rotate(90deg) scale(1.06); }
     
-    .btn-primary {
-      width:100%; padding:14px; border-radius:12px; border:none;
-      background:linear-gradient(135deg,var(--clr-primary),var(--clr-secondary));
-      color:#fff; font-family:'Plus Jakarta Sans','Poppins',sans-serif; font-size:.95rem; font-weight:700;
-      cursor:pointer; transition:all .2s; box-shadow:0 8px 20px rgba(224,154,103,.3);
+    /* MODERN SEGMENTED PILL TABS */
+    .auth-tabs {
+      display: flex; gap: 8px; padding: 6px; margin: 18px 28px 0;
+      background: rgba(15, 23, 42, 0.7);
+      border-radius: 16px;
+      border: 1.5px solid rgba(255, 255, 255, 0.16);
+      box-shadow: inset 0 2px 6px rgba(0, 0, 0, 0.25);
     }
-    .btn-primary:hover { transform:translateY(-2px); box-shadow:0 12px 24px rgba(224,154,103,.45); }
+    [data-theme="light"] .auth-tabs {
+      background: #F1F5F9;
+      border: 1.5px solid #CBD5E1;
+      box-shadow: inset 0 1px 3px rgba(0, 0, 0, 0.06);
+    }
+    .auth-tab {
+      flex: 1; padding: 12px 18px; text-align: center; cursor: pointer; font-size: 1.0rem; font-weight: 800;
+      color: #94A3B8; background: transparent; border: none; border-radius: 12px;
+      font-family: inherit; transition: all .2s cubic-bezier(0.16, 1, 0.3, 1);
+      display: flex; align-items: center; justify-content: center; gap: 8px;
+    }
+    [data-theme="light"] .auth-tab { color: #475569; }
+    .auth-tab:hover { color: var(--text-primary); }
+    .auth-tab.active {
+      color: #fff;
+      background: linear-gradient(135deg, #00ADEF 0%, #235EAE 100%);
+      box-shadow: 0 4px 16px rgba(0, 173, 239, 0.45), inset 0 1px 0 rgba(255, 255, 255, 0.4);
+    }
+    [data-theme="light"] .auth-tab.active {
+      background: #FFFFFF;
+      color: #0284C7;
+      border: 1.5px solid rgba(0, 173, 239, 0.45);
+      box-shadow: 0 4px 14px rgba(0, 0, 0, 0.08);
+    }
+    
+    .auth-panel { padding: 22px 28px 26px; display: none; }
+    .auth-panel.active { display: block; animation: panelFade .2s ease; }
+    @keyframes panelFade { from{opacity:0; transform:translateY(3px);} to{opacity:1; transform:translateY(0);} }
+    
+    .auth-panel-sub { font-size: .96rem; color: #CBD5E1; margin-bottom: 18px; line-height: 1.6; font-weight: 500; }
+    [data-theme="light"] .auth-panel-sub { color: #334155; }
+
+    .form-group { margin-bottom: 18px; }
+    .form-row-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; }
+    @media (max-width: 440px) { .form-row-2 { grid-template-columns: 1fr; gap: 12px; } }
+
+    .form-label {
+      display: flex; align-items: center; font-size: .92rem; font-weight: 800; letter-spacing: .01em; color: #F8FAFC; margin-bottom: 8px;
+    }
+    [data-theme="light"] .form-label { color: #0F172A; }
+    .form-label i { color: #00ADEF; font-size: 1.02rem; margin-right: 7px; }
+    
+    .form-control, .form-select {
+      width: 100%; height: 52px; padding: 12px 18px; border-radius: 14px; 
+      font-family: inherit; font-size: 1.05rem; font-weight: 600; transition: all .2s;
+    }
+    [data-theme="dark"] .form-control, [data-theme="dark"] .form-select {
+      background: rgba(15, 23, 42, 0.8) !important;
+      border: 2px solid rgba(255, 255, 255, 0.22) !important;
+      color: #FFFFFF !important;
+    }
+    [data-theme="dark"] .form-control::placeholder {
+      color: #94A3B8 !important; font-weight: 500; font-size: 1.02rem; opacity: 1 !important;
+    }
+    [data-theme="dark"] .form-control:focus, [data-theme="dark"] .form-select:focus {
+      background: rgba(15, 23, 42, 0.95) !important;
+      border-color: #00ADEF !important; outline: none;
+      box-shadow: 0 0 0 4px rgba(0, 173, 239, 0.35) !important;
+    }
+    [data-theme="light"] .form-control, [data-theme="light"] .form-select {
+      background: #FFFFFF !important;
+      border: 2px solid #94A3B8 !important;
+      color: #0F172A !important;
+      box-shadow: 0 2px 4px rgba(0, 0, 0, 0.02);
+    }
+    [data-theme="light"] .form-control::placeholder {
+      color: #64748B !important; font-weight: 500; font-size: 1.02rem; opacity: 1 !important;
+    }
+    [data-theme="light"] .form-control:focus, [data-theme="light"] .form-select:focus {
+      background: #FFFFFF !important;
+      border-color: #00ADEF !important; outline: none;
+      box-shadow: 0 0 0 4px rgba(0, 173, 239, 0.25) !important;
+    }
+    .is-invalid { border-color: #EF4444 !important; box-shadow: 0 0 0 4px rgba(239, 68, 68, 0.25) !important; }
+
+    .auth-forgot-link {
+      font-size: .92rem; color: #38BDF8; text-decoration: none; font-weight: 700;
+      transition: color 0.2s;
+    }
+    [data-theme="light"] .auth-forgot-link { color: #0284C7; }
+    .auth-forgot-link:hover { text-decoration: underline; color: #00ADEF; }
+
+    /* MODERN CENTERED TOAST NOTIFICATION (DYNAMIC ISLAND / LUXURY FLOATING PILL) */
+    .toast-container { 
+      position: fixed; 
+      top: 24px; 
+      left: 50%; 
+      transform: translateX(-50%); 
+      z-index: 200050; 
+      display: flex; 
+      flex-direction: column; 
+      align-items: center; 
+      gap: 10px; 
+      pointer-events: none;
+      width: 100%;
+      max-width: 520px;
+      padding: 0 16px;
+    }
+    .toast {
+      pointer-events: auto;
+      background: #FFFFFF;
+      color: #0F172A;
+      padding: 11px 16px 11px 12px;
+      border-radius: 16px;
+      box-shadow: 0 20px 45px -8px rgba(35, 94, 174, 0.22), 0 4px 16px rgba(0, 0, 0, 0.06), inset 0 1px 0 #FFFFFF;
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      width: auto;
+      max-width: 100%;
+      border: 1px solid rgba(0, 0, 0, 0.08);
+      font-size: .88rem;
+      font-weight: 600;
+      opacity: 0;
+      transform: translateY(-20px) scale(0.95);
+      transition: all .35s cubic-bezier(0.16, 1, 0.3, 1);
+    }
+    .toast.show {
+      opacity: 1;
+      transform: translateY(0) scale(1);
+    }
+    [data-theme="dark"] .toast {
+      background: rgba(22, 34, 56, 0.96);
+      backdrop-filter: blur(16px);
+      -webkit-backdrop-filter: blur(16px);
+      color: #F8FAFC;
+      border: 1px solid rgba(255, 255, 255, 0.14);
+      box-shadow: 0 25px 60px -10px rgba(0, 0, 0, 0.85), 0 0 25px rgba(0, 173, 239, 0.2), inset 0 1px 0 rgba(255, 255, 255, 0.2);
+    }
+    .toast-badge {
+      width: 30px;
+      height: 30px;
+      border-radius: 9px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      color: #fff;
+      font-size: .90rem;
+      flex-shrink: 0;
+    }
+    .toast.danger .toast-badge {
+      background: linear-gradient(135deg, #EF4444 0%, #DC2626 100%);
+      box-shadow: 0 4px 12px rgba(239, 68, 68, 0.4);
+    }
+    .toast.success .toast-badge {
+      background: linear-gradient(135deg, #10B981 0%, #059669 100%);
+      box-shadow: 0 4px 12px rgba(16, 185, 129, 0.4);
+    }
+    .toast.info .toast-badge, .toast:not(.danger):not(.success) .toast-badge {
+      background: linear-gradient(135deg, #00ADEF 0%, #235EAE 100%);
+      box-shadow: 0 4px 12px rgba(0, 173, 239, 0.4);
+    }
+    .toast-msg {
+      flex: 1;
+      line-height: 1.45;
+      font-weight: 600;
+    }
+    .toast-close {
+      background: none;
+      border: none;
+      color: var(--text-muted);
+      cursor: pointer;
+      font-size: .82rem;
+      padding: 4px;
+      border-radius: 50%;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      opacity: 0.65;
+      transition: all .2s;
+    }
+    .toast-close:hover {
+      opacity: 1;
+      color: var(--clr-danger);
+    }
+    .toast.danger {
+      border-color: rgba(239, 68, 68, 0.4);
+    }
+    [data-theme="dark"] .toast.danger {
+      border-color: rgba(239, 68, 68, 0.45);
+      box-shadow: 0 25px 60px -10px rgba(0, 0, 0, 0.85), 0 0 30px rgba(239, 68, 68, 0.25), inset 0 1px 0 rgba(255, 255, 255, 0.2);
+    }
+    
+    /* PRIMARY SUBMIT BUTTON */
+    .btn-primary {
+      width: 100%; height: 54px; border-radius: 14px; border: none;
+      background: linear-gradient(135deg, #00ADEF 0%, #235EAE 100%);
+      color: #fff; font-family: inherit; font-size: 1.06rem; font-weight: 800;
+      cursor: pointer; transition: all .2s cubic-bezier(0.16, 1, 0.3, 1);
+      box-shadow: 0 8px 24px -2px rgba(0, 173, 239, 0.45),
+                  inset 0 1px 0 rgba(255, 255, 255, 0.4);
+      display: flex; align-items: center; justify-content: center; gap: 10px;
+      margin-top: 8px; margin-bottom: 4px;
+    }
+    .btn-primary:hover {
+      transform: translateY(-2px);
+      box-shadow: 0 12px 30px -2px rgba(0, 173, 239, 0.65),
+                  inset 0 1px 0 rgba(255, 255, 255, 0.5);
+    }
+    .btn-primary:active {
+      transform: translateY(1px);
+      box-shadow: 0 3px 10px rgba(0, 173, 239, 0.35);
+    }
     
     .form-pass-wrap { position:relative; }
     .pass-toggle {
-      position:absolute; right:14px; top:50%; transform:translateY(-50%);
-      background:none; border:none; color:var(--text-muted); cursor:pointer; font-size:.9rem;
+      position: absolute; right: 12px; top: 50%; transform: translateY(-50%);
+      width: 38px; height: 38px; border-radius: 10px; border: none; background: transparent;
+      display: flex; align-items: center; justify-content: center;
+      color: #475569; cursor: pointer; font-size: 1.15rem;
+      transition: all .2s;
+    }
+    [data-theme="dark"] .pass-toggle { color: #94A3B8; }
+    .pass-toggle:hover { color: #00ADEF; background: rgba(0, 173, 239, 0.12); }
+    [data-theme="dark"] .pass-toggle:hover { color: #38BDF8; background: rgba(0, 173, 239, 0.2); }
+
+    /* Hide native browser password reveal eye (prevents duplicate redundant eye in Edge/Chromium) */
+    input[type="password"]::-ms-reveal,
+    input[type="password"]::-ms-clear,
+    input::-ms-reveal,
+    input::-ms-clear {
+      display: none !important;
+      width: 0 !important;
+      height: 0 !important;
+      pointer-events: none !important;
     }
 
-    /* MODERN DATA PRIVACY MODAL */
+    /* DIVIDER */
+    .auth-divider {
+      display: flex; align-items: center; text-align: center;
+      margin: 18px 0 16px; color: #475569; font-size: .88rem; font-weight: 800;
+      text-transform: uppercase; letter-spacing: .1em;
+    }
+    [data-theme="dark"] .auth-divider { color: #94A3B8; }
+    .auth-divider::before, .auth-divider::after {
+      content: ''; flex: 1; border-bottom: 2px solid #CBD5E1;
+    }
+    [data-theme="dark"] .auth-divider::before, [data-theme="dark"] .auth-divider::after {
+      border-bottom: 2px solid rgba(255, 255, 255, 0.15);
+    }
+    .auth-divider span { padding: 0 16px; }
+
+    /* GOOGLE AUTH BUTTON (AT BOTTOM) */
+    .btn-google-auth {
+      display: flex; align-items: center; justify-content: center; gap: 12px;
+      width: 100%; height: 54px; border-radius: 14px;
+      background: #FFFFFF; color: #0F172A; border: 2px solid #94A3B8;
+      font-size: 1.02rem; font-weight: 800; text-decoration: none !important;
+      cursor: pointer; transition: all .2s cubic-bezier(0.16, 1, 0.3, 1);
+      box-shadow: 0 2px 8px rgba(0, 0, 0, 0.04);
+      margin-bottom: 0;
+    }
+    .btn-google-auth:hover {
+      background: #F8FAFC; border-color: #00ADEF; color: #0284C7;
+      transform: translateY(-2px);
+      box-shadow: 0 8px 22px rgba(0, 173, 239, 0.2);
+    }
+    .btn-google-auth:active {
+      transform: translateY(1px);
+    }
+    [data-theme="dark"] .btn-google-auth {
+      background: #FFFFFF; color: #0F172A; 
+      border-color: rgba(255, 255, 255, 0.3);
+      box-shadow: 0 4px 16px rgba(0, 0, 0, 0.35);
+    }
+    [data-theme="dark"] .btn-google-auth:hover {
+      background: #F1F5F9; border-color: #00ADEF; color: #0284C7;
+      transform: translateY(-2px);
+      box-shadow: 0 8px 24px rgba(0, 173, 239, 0.35);
+    }
+    .google-svg { flex-shrink: 0; }
+
+    /* ============================================================
+       SWEETALERT2 POPUP MODAL (MATCHING ADMIN & LUXURY GLASS)
+       ============================================================ */
+    .swal2-container {
+      z-index: 200000 !important;
+      backdrop-filter: blur(8px) !important;
+      -webkit-backdrop-filter: blur(8px) !important;
+    }
+    .swal2-popup.patient-swal-popup {
+      border-radius: 22px !important;
+      font-family: 'Plus Jakarta Sans', 'Poppins', sans-serif !important;
+      padding: 28px 24px 24px !important;
+      border: 1.5px solid var(--border-color) !important;
+      background: #FFFFFF !important;
+      color: #0F172A !important;
+      box-shadow: 0 25px 60px -8px rgba(0, 0, 0, 0.4) !important;
+    }
+    [data-theme="dark"] .swal2-popup.patient-swal-popup {
+      background: #162238 !important;
+      border: 1.5px solid rgba(56, 189, 248, 0.3) !important;
+      box-shadow: 0 30px 80px -10px rgba(0, 0, 0, 0.9), 0 0 35px rgba(56, 189, 248, 0.15) !important;
+    }
+    .patient-swal-popup .swal2-title {
+      font-size: 1.35rem !important;
+      font-weight: 800 !important;
+      letter-spacing: -0.02em !important;
+      color: #0F172A !important;
+      padding: 0 0 6px !important;
+    }
+    [data-theme="dark"] .patient-swal-popup .swal2-title {
+      color: #FFFFFF !important;
+    }
+    .patient-swal-popup .swal2-html-container {
+      font-size: .92rem !important;
+      color: #64748B !important;
+      line-height: 1.55 !important;
+      margin: 4px 0 16px !important;
+    }
+    [data-theme="dark"] .patient-swal-popup .swal2-html-container {
+      color: #CBD5E1 !important;
+    }
+    .patient-swal-popup .swal2-actions {
+      gap: 12px !important;
+      margin-top: 14px !important;
+    }
+    .patient-swal-popup .swal2-confirm {
+      border-radius: 12px !important;
+      padding: 11px 28px !important;
+      font-size: .90rem !important;
+      font-weight: 700 !important;
+      border: none !important;
+      color: #FFFFFF !important;
+      box-shadow: 0 4px 14px rgba(35, 94, 174, 0.3) !important;
+      transition: all .15s ease !important;
+    }
+    .patient-swal-popup .swal2-confirm:hover {
+      transform: translateY(-2px) !important;
+      box-shadow: 0 6px 18px rgba(35, 94, 174, 0.45) !important;
+    }
+    .patient-swal-popup.patient-swal-danger .swal2-confirm {
+      background: #EF4444 !important;
+      box-shadow: 0 4px 14px rgba(239, 68, 68, 0.35) !important;
+    }
+    .patient-swal-popup.patient-swal-danger .swal2-confirm:hover {
+      box-shadow: 0 6px 18px rgba(239, 68, 68, 0.5) !important;
+    }
+    .patient-swal-popup.patient-swal-success .swal2-confirm {
+      background: #10B981 !important;
+      box-shadow: 0 4px 14px rgba(16, 185, 129, 0.35) !important;
+    }
+    .patient-swal-popup.patient-swal-success .swal2-confirm:hover {
+      box-shadow: 0 6px 18px rgba(16, 185, 129, 0.5) !important;
+    }
+    .patient-swal-popup .swal2-cancel {
+      border-radius: 12px !important;
+      padding: 11px 22px !important;
+      font-size: .88rem !important;
+      font-weight: 800 !important;
+      border: 1.5px solid rgba(125, 125, 125, 0.25) !important;
+      background: transparent !important;
+      color: #64748B !important;
+      transition: all .15s ease !important;
+    }
+    .patient-swal-popup .swal2-cancel:hover {
+      color: #0F172A !important;
+      border-color: #94A3B8 !important;
+      transform: translateY(-2px) !important;
+    }
+    [data-theme="dark"] .patient-swal-popup .swal2-cancel {
+      border-color: rgba(255, 255, 255, 0.15) !important;
+      color: #94A3B8 !important;
+    }
+    [data-theme="dark"] .patient-swal-popup .swal2-cancel:hover {
+      color: #FFFFFF !important;
+      border-color: rgba(255, 255, 255, 0.3) !important;
+    }
+
+    /* ============================================================
+       HIGH-VISIBILITY OPTICAL TERMS & CONDITIONS MODAL
+       Engineered for patients with low visual acuity / presbyopia
+       ============================================================ */
     .privacy-card {
       background: var(--bg-card);
-      border: 1px solid rgba(224,154,103,0.3);
+      border: 1.5px solid rgba(0, 173, 239, 0.4);
       border-radius: 28px;
       width: 100%;
-      max-width: 680px;
-      box-shadow: 0 30px 80px rgba(0, 0, 0, 0.55), 0 0 25px rgba(224,154,103,0.12);
+      max-width: 860px;
+      box-shadow: 0 35px 90px rgba(0, 0, 0, 0.65), 0 0 30px rgba(0, 173, 239, 0.18);
       overflow: hidden;
       display: flex;
       flex-direction: column;
       max-height: 88vh;
-      backdrop-filter: blur(24px);
+      backdrop-filter: blur(28px);
+      -webkit-backdrop-filter: blur(28px);
       animation: modalIn .3s cubic-bezier(0.16, 1, 0.3, 1);
     }
     .privacy-header {
-      padding: 24px 28px;
-      border-bottom: 1px solid var(--border-color);
-      background: linear-gradient(135deg, rgba(224, 154, 103, 0.1), rgba(194, 99, 37, 0.05));
+      padding: 22px 30px;
+      border-bottom: 1.5px solid var(--border-color);
+      background: linear-gradient(135deg, rgba(35, 94, 174, 0.15), rgba(0, 173, 239, 0.08));
       display: flex;
       align-items: center;
       justify-content: space-between;
+      gap: 16px;
       flex-shrink: 0;
     }
     .privacy-icon-box {
-      width: 48px;
-      height: 48px;
-      border-radius: 14px;
+      width: 52px;
+      height: 52px;
+      border-radius: 16px;
       background: linear-gradient(135deg, var(--clr-primary), var(--clr-secondary));
       display: flex;
       align-items: center;
       justify-content: center;
       color: #fff;
-      font-size: 1.3rem;
-      box-shadow: 0 8px 20px rgba(224, 154, 103, 0.35);
+      font-size: 1.45rem;
+      box-shadow: 0 8px 22px rgba(0, 173, 239, 0.4);
       flex-shrink: 0;
     }
-    .privacy-body {
-      padding: 24px 28px;
-      overflow-y: auto;
-      flex: 1;
-      display: flex;
-      flex-direction: column;
-      gap: 16px;
-      scrollbar-width: thin;
-      scrollbar-color: rgba(224, 154, 103, 0.5) transparent;
+    .privacy-header-title {
+      font-size: 1.38rem;
+      font-weight: 800;
+      color: #0F172A;
+      letter-spacing: -0.02em;
+      margin: 0;
+      line-height: 1.25;
     }
-    .privacy-body::-webkit-scrollbar {
-      width: 6px;
+    [data-theme="dark"] .privacy-header-title {
+      color: #FFFFFF;
     }
-    .privacy-body::-webkit-scrollbar-thumb {
-      background: rgba(224, 154, 103, 0.4);
-      border-radius: 10px;
+    .privacy-header-sub {
+      font-size: 0.92rem;
+      color: #334155;
+      font-weight: 600;
+      margin-top: 3px;
     }
-    .privacy-body::-webkit-scrollbar-track {
-      background: transparent;
+    [data-theme="dark"] .privacy-header-sub {
+      color: #94A3B8;
     }
     .privacy-badge {
       display: inline-flex;
       align-items: center;
       gap: 6px;
-      padding: 4px 12px;
+      padding: 5px 14px;
       border-radius: 100px;
-      background: rgba(16, 185, 129, 0.12);
-      border: 1px solid rgba(16, 185, 129, 0.3);
-      color: #10B981;
-      font-size: 0.75rem;
-      font-weight: 700;
-      letter-spacing: 0.03em;
+      background: rgba(16, 185, 129, 0.14);
+      border: 1.5px solid rgba(16, 185, 129, 0.35);
+      color: #059669;
+      font-size: 0.78rem;
+      font-weight: 800;
+      letter-spacing: 0.04em;
       text-transform: uppercase;
     }
-    .privacy-section-card {
-      background: rgba(255, 255, 255, 0.03);
-      border: 1px solid var(--border-color);
-      border-radius: 16px;
-      padding: 18px 20px;
-      transition: all 0.2s ease;
+    [data-theme="dark"] .privacy-badge {
+      color: #34D399;
+      background: rgba(16, 185, 129, 0.2);
     }
-    .privacy-section-card:hover {
-      border-color: rgba(224, 154, 103, 0.35);
-      background: rgba(224, 154, 103, 0.04);
-    }
-    .privacy-sec-head {
-      display: flex;
+    /* Quick Text Resizer for Optical Patients */
+    .optical-zoom-ctrl {
+      display: inline-flex;
       align-items: center;
-      gap: 12px;
-      margin-bottom: 10px;
+      gap: 3px;
+      background: rgba(0, 173, 239, 0.1);
+      border: 1px solid rgba(0, 173, 239, 0.3);
+      border-radius: 12px;
+      padding: 3px 6px;
     }
-    .privacy-sec-icon {
-      width: 34px;
-      height: 34px;
+    .optical-zoom-label {
+      font-size: 0.76rem;
+      font-weight: 800;
+      color: var(--clr-primary);
+      text-transform: uppercase;
+      letter-spacing: 0.04em;
+      margin-right: 4px;
+    }
+    .optical-zoom-btn {
+      background: transparent;
+      border: none;
+      padding: 4px 9px;
+      border-radius: 8px;
+      color: var(--text-primary);
+      font-weight: 800;
+      cursor: pointer;
+      font-size: 0.82rem;
+      transition: all 0.2s;
+    }
+    .optical-zoom-btn:hover, .optical-zoom-btn.active {
+      background: var(--clr-primary);
+      color: #FFFFFF;
+      box-shadow: 0 2px 8px rgba(35, 94, 174, 0.3);
+    }
+    
+    .privacy-body {
+      padding: 28px 34px;
+      overflow-y: auto;
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+      gap: 20px;
+      scrollbar-width: thin;
+      scrollbar-color: rgba(0, 173, 239, 0.6) rgba(0, 0, 0, 0.05);
+    }
+    .privacy-body::-webkit-scrollbar {
+      width: 8px;
+    }
+    .privacy-body::-webkit-scrollbar-thumb {
+      background: rgba(0, 173, 239, 0.5);
       border-radius: 10px;
+    }
+    .privacy-body::-webkit-scrollbar-track {
+      background: rgba(0, 0, 0, 0.04);
+      border-radius: 10px;
+    }
+
+    /* Font Scale Modes for Optical Patients */
+    .privacy-card.font-large .terms-sec-intro,
+    .privacy-card.font-large .terms-list-item,
+    .privacy-card.font-large .terms-callout {
+      font-size: 1.15rem !important;
+      line-height: 1.78 !important;
+    }
+    .privacy-card.font-large .terms-sec-title {
+      font-size: 1.38rem !important;
+    }
+    .privacy-card.font-xlarge .terms-sec-intro,
+    .privacy-card.font-xlarge .terms-list-item,
+    .privacy-card.font-xlarge .terms-callout {
+      font-size: 1.28rem !important;
+      line-height: 1.88 !important;
+    }
+    .privacy-card.font-xlarge .terms-sec-title {
+      font-size: 1.50rem !important;
+    }
+
+    /* Callout Card */
+    .terms-callout {
+      background: linear-gradient(135deg, rgba(35, 94, 174, 0.10), rgba(0, 173, 239, 0.06));
+      border: 1.5px solid rgba(0, 173, 239, 0.35);
+      border-radius: 20px;
+      padding: 18px 22px;
+      font-size: 1.04rem;
+      font-weight: 600;
+      color: #0F172A;
+      line-height: 1.65;
+      display: flex;
+      gap: 16px;
+      align-items: flex-start;
+    }
+    [data-theme="dark"] .terms-callout {
+      background: rgba(35, 94, 174, 0.18);
+      color: #F8FAFC;
+    }
+    .terms-callout-icon {
+      width: 42px;
+      height: 42px;
+      border-radius: 12px;
+      background: var(--clr-primary);
+      color: #FFFFFF;
       display: flex;
       align-items: center;
       justify-content: center;
-      font-size: 0.95rem;
+      font-size: 1.25rem;
       flex-shrink: 0;
+      box-shadow: 0 4px 14px rgba(35, 94, 174, 0.35);
     }
-    .sec-blue   { background: rgba(224, 154, 103, 0.16); color: #FDBA74; }
-    .sec-purple { background: rgba(217, 119, 6, 0.16);   color: #FBBF24; }
-    .sec-teal   { background: rgba(14, 165, 233, 0.16);  color: #38BDF8; }
-    .sec-amber  { background: rgba(16, 185, 129, 0.16);  color: #34D399; }
-    .privacy-sec-title {
-      font-size: 0.96rem;
-      font-weight: 700;
-      color: var(--text-primary);
-      margin: 0;
+
+    /* Section Cards - Clean & Highly Legible */
+    .terms-section {
+      background: #FFFFFF;
+      border: 1.5px solid #E2E8F0;
+      border-radius: 20px;
+      padding: 24px 28px;
+      box-shadow: 0 4px 16px rgba(0, 0, 0, 0.04);
+      transition: all 0.2s ease;
     }
-    .privacy-sec-desc {
-      font-size: 0.85rem;
-      color: var(--text-secondary);
-      line-height: 1.6;
-      margin: 0 0 10px 0;
+    [data-theme="dark"] .terms-section {
+      background: rgba(22, 26, 52, 0.92);
+      border-color: rgba(255, 255, 255, 0.12);
+      box-shadow: 0 8px 24px rgba(0, 0, 0, 0.35);
     }
-    .privacy-pill-group {
-      display: flex;
-      flex-wrap: wrap;
-      gap: 6px;
+    .terms-section:hover {
+      border-color: rgba(0, 173, 239, 0.5);
+      box-shadow: 0 8px 28px rgba(0, 173, 239, 0.14);
     }
-    .privacy-pill {
-      font-size: 0.72rem;
-      padding: 4px 10px;
-      border-radius: 6px;
-      background: var(--bg-hover);
-      border: 1px solid var(--border-color);
-      color: var(--text-muted);
-      font-weight: 500;
-    }
-    .privacy-rights-grid {
-      display: grid;
-      grid-template-columns: 1fr 1fr;
-      gap: 10px;
-      margin-top: 8px;
-    }
-    @media (max-width: 576px) {
-      .privacy-rights-grid {
-        grid-template-columns: 1fr;
-      }
-    }
-    .privacy-right-item {
-      background: var(--bg-hover);
-      border: 1px solid var(--border-color);
-      border-radius: 10px;
-      padding: 10px 12px;
-      font-size: 0.8rem;
-    }
-    .privacy-right-title {
-      font-weight: 700;
-      color: var(--text-primary);
-      margin-bottom: 2px;
+
+    .terms-sec-head {
       display: flex;
       align-items: center;
-      gap: 6px;
+      gap: 14px;
+      margin-bottom: 14px;
+      flex-wrap: wrap;
     }
-    .privacy-right-desc {
-      color: var(--text-muted);
-      font-size: 0.74rem;
-      line-height: 1.4;
+    .terms-sec-num {
+      font-size: 0.82rem;
+      font-weight: 800;
+      padding: 4px 12px;
+      border-radius: 100px;
+      background: rgba(0, 173, 239, 0.15);
+      color: #0284C7;
+      border: 1px solid rgba(0, 173, 239, 0.3);
+      letter-spacing: 0.04em;
+    }
+    [data-theme="dark"] .terms-sec-num {
+      background: rgba(0, 173, 239, 0.25);
+      color: #38BDF8;
+      border-color: rgba(56, 189, 248, 0.4);
+    }
+    .terms-sec-title {
+      font-size: 1.25rem;
+      font-weight: 800;
+      color: #0F172A;
       margin: 0;
+      letter-spacing: -0.01em;
     }
+    [data-theme="dark"] .terms-sec-title {
+      color: #FFFFFF;
+    }
+
+    .terms-sec-intro {
+      font-size: 1.02rem;
+      color: #0F172A;
+      line-height: 1.65;
+      font-weight: 600;
+      margin-bottom: 14px;
+    }
+    [data-theme="dark"] .terms-sec-intro {
+      color: #E2E8F0;
+    }
+
+    .terms-list {
+      list-style: none;
+      padding: 0;
+      margin: 0;
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
+    }
+    .terms-list-item {
+      display: flex;
+      gap: 12px;
+      align-items: flex-start;
+      font-size: 0.98rem;
+      color: #1E293B;
+      line-height: 1.65;
+      font-weight: 500;
+    }
+    [data-theme="dark"] .terms-list-item {
+      color: #CBD5E1;
+    }
+    .terms-bullet-icon {
+      width: 22px;
+      height: 22px;
+      border-radius: 50%;
+      background: rgba(0, 173, 239, 0.15);
+      color: #00ADEF;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 0.72rem;
+      flex-shrink: 0;
+      margin-top: 3px;
+    }
+    [data-theme="dark"] .terms-bullet-icon {
+      background: rgba(0, 173, 239, 0.25);
+      color: #38BDF8;
+    }
+    .terms-list-item strong {
+      color: #0F172A;
+      font-weight: 700;
+    }
+    [data-theme="dark"] .terms-list-item strong {
+      color: #F8FAFC;
+    }
+
+    /* Highlight Banner inside Section */
+    .terms-highlight {
+      background: rgba(16, 185, 129, 0.10);
+      border: 1.5px solid rgba(16, 185, 129, 0.35);
+      border-radius: 14px;
+      padding: 14px 18px;
+      font-size: 0.98rem;
+      color: #065F46;
+      font-weight: 700;
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      margin-top: 14px;
+    }
+    [data-theme="dark"] .terms-highlight {
+      background: rgba(16, 185, 129, 0.18);
+      border-color: rgba(16, 185, 129, 0.4);
+      color: #6EE7B7;
+    }
+
+    /* Footer Controls */
     .privacy-footer {
-      padding: 18px 28px;
-      border-top: 1px solid var(--border-color);
-      background: rgba(255, 255, 255, 0.02);
+      padding: 20px 32px;
+      border-top: 1.5px solid var(--border-color);
+      background: linear-gradient(180deg, rgba(255, 255, 255, 0) 0%, rgba(255, 255, 255, 0.05) 100%);
       display: flex;
       justify-content: space-between;
       align-items: center;
-      gap: 12px;
+      gap: 16px;
+      flex-wrap: wrap;
       flex-shrink: 0;
+    }
+    .btn-terms-close {
+      padding: 13px 26px;
+      font-size: 0.96rem;
+      font-weight: 700;
+      border-radius: 14px;
+      border: 1.5px solid #CBD5E1;
+      background: transparent;
+      color: #475569;
+      cursor: pointer;
+      transition: all 0.2s;
+    }
+    .btn-terms-close:hover {
+      background: #F1F5F9;
+      color: #0F172A;
+    }
+    [data-theme="dark"] .btn-terms-close {
+      border-color: rgba(255, 255, 255, 0.2);
+      color: #E2E8F0;
+    }
+    [data-theme="dark"] .btn-terms-close:hover {
+      background: rgba(255, 255, 255, 0.1);
+      color: #FFFFFF;
+    }
+    .btn-terms-agree {
+      padding: 13px 32px;
+      font-size: 1.02rem;
+      font-weight: 800;
+      border-radius: 14px;
+      background: linear-gradient(135deg, #00ADEF 0%, #235EAE 100%);
+      color: #FFFFFF;
+      border: none;
+      box-shadow: 0 8px 24px rgba(0, 173, 239, 0.4);
+      cursor: pointer;
+      display: inline-flex;
+      align-items: center;
+      gap: 10px;
+      transition: all 0.25s ease;
+    }
+    .btn-terms-agree:hover {
+      transform: translateY(-2px);
+      box-shadow: 0 12px 30px rgba(0, 173, 239, 0.55);
     }
 
     @media(max-width:992px){
@@ -767,6 +1521,239 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action']) && $_POST['
       .hero p { margin:0 auto 40px; }
       .stats { justify-content:center; }
       .details { grid-template-columns:1fr; }
+    }
+
+    /* ============================================================
+       FAQ SECTION (HIGH CONTRAST & OPTICAL ACCESSIBILITY)
+       ============================================================ */
+    html {
+      scroll-behavior: smooth;
+      scroll-padding-top: 95px;
+    }
+    .faq-section {
+      max-width: 1100px;
+      margin: 0 auto 100px;
+      padding: 0 24px;
+    }
+    .faq-header {
+      text-align: center;
+      margin-bottom: 45px;
+    }
+    .faq-badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      padding: 6px 18px;
+      border-radius: 100px;
+      background: rgba(0, 173, 239, 0.12);
+      border: 1px solid rgba(0, 173, 239, 0.35);
+      color: var(--clr-primary);
+      font-size: 0.82rem;
+      font-weight: 800;
+      letter-spacing: 0.05em;
+      text-transform: uppercase;
+      margin-bottom: 14px;
+    }
+    [data-theme="dark"] .faq-badge {
+      color: #38BDF8;
+      background: rgba(0, 173, 239, 0.18);
+      border-color: rgba(56, 189, 248, 0.4);
+    }
+    .faq-title {
+      font-size: 2.25rem;
+      font-weight: 800;
+      letter-spacing: -0.02em;
+      color: var(--text-primary);
+      margin-bottom: 12px;
+      line-height: 1.25;
+    }
+    .faq-title span {
+      background: linear-gradient(135deg, #00ADEF 0%, #235EAE 100%);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+    }
+    .faq-subtitle {
+      font-size: 1.05rem;
+      color: var(--text-secondary);
+      max-width: 680px;
+      margin: 0 auto;
+      line-height: 1.6;
+    }
+    .faq-grid {
+      display: flex;
+      flex-direction: column;
+      gap: 16px;
+    }
+    .faq-card {
+      background: var(--bg-card);
+      border: 1.5px solid var(--border-color);
+      border-radius: 20px;
+      overflow: hidden;
+      backdrop-filter: blur(16px);
+      transition: all 0.25s cubic-bezier(0.16, 1, 0.3, 1);
+      box-shadow: 0 4px 18px rgba(0, 0, 0, 0.03);
+    }
+    .faq-card:hover {
+      border-color: rgba(0, 173, 239, 0.5);
+      transform: translateY(-2px);
+      box-shadow: 0 8px 25px rgba(0, 173, 239, 0.12);
+    }
+    .faq-card.active {
+      border-color: rgba(0, 173, 239, 0.65);
+      box-shadow: 0 12px 35px rgba(0, 173, 239, 0.18);
+    }
+    .faq-trigger {
+      width: 100%;
+      background: transparent;
+      border: none;
+      padding: 22px 28px;
+      text-align: left;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 18px;
+      user-select: none;
+    }
+    .faq-q-wrap {
+      display: flex;
+      align-items: center;
+      gap: 16px;
+    }
+    .faq-q-icon {
+      width: 44px;
+      height: 44px;
+      border-radius: 14px;
+      background: rgba(0, 173, 239, 0.12);
+      border: 1px solid rgba(0, 173, 239, 0.28);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      color: var(--clr-primary);
+      font-size: 1.15rem;
+      flex-shrink: 0;
+      transition: all 0.25s;
+    }
+    .faq-card.active .faq-q-icon {
+      background: linear-gradient(135deg, var(--clr-primary), var(--clr-secondary));
+      color: #FFFFFF;
+      box-shadow: 0 4px 14px rgba(35, 94, 174, 0.4);
+      border-color: transparent;
+    }
+    .faq-q-text {
+      font-size: 1.12rem;
+      font-weight: 700;
+      color: var(--text-primary);
+      margin: 0;
+      line-height: 1.45;
+    }
+    .faq-arrow {
+      width: 36px;
+      height: 36px;
+      border-radius: 50%;
+      background: rgba(0, 0, 0, 0.04);
+      border: 1px solid rgba(0, 0, 0, 0.06);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      color: var(--text-muted);
+      font-size: 0.9rem;
+      flex-shrink: 0;
+      transition: transform 0.3s cubic-bezier(0.16, 1, 0.3, 1), background-color 0.2s, color 0.2s;
+    }
+    [data-theme="dark"] .faq-arrow {
+      background: rgba(255, 255, 255, 0.08);
+      border-color: rgba(255, 255, 255, 0.1);
+    }
+    .faq-card.active .faq-arrow {
+      transform: rotate(180deg);
+      background: var(--clr-primary);
+      color: #FFFFFF;
+      border-color: var(--clr-primary);
+    }
+    .faq-content {
+      max-height: 0;
+      overflow: hidden;
+      transition: max-height 0.35s cubic-bezier(0.16, 1, 0.3, 1), opacity 0.25s ease;
+      opacity: 0;
+    }
+    .faq-card.active .faq-content {
+      max-height: 600px;
+      opacity: 1;
+    }
+    .faq-inner {
+      padding: 0 28px 24px 88px;
+      font-size: 1.02rem;
+      color: var(--text-secondary);
+      line-height: 1.7;
+    }
+    .faq-inner p {
+      margin: 0 0 10px 0;
+    }
+    .faq-inner p:last-child {
+      margin-bottom: 0;
+    }
+    .faq-inner strong {
+      color: var(--text-primary);
+    }
+
+    /* FAQ Bottom CTA */
+    .faq-cta-box {
+      margin-top: 36px;
+      background: linear-gradient(135deg, rgba(35, 94, 174, 0.09), rgba(0, 173, 239, 0.05));
+      border: 1.5px dashed rgba(0, 173, 239, 0.35);
+      border-radius: 20px;
+      padding: 24px 30px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 20px;
+      flex-wrap: wrap;
+    }
+    .faq-cta-info {
+      display: flex;
+      align-items: center;
+      gap: 16px;
+    }
+    .faq-cta-icon {
+      width: 48px;
+      height: 48px;
+      border-radius: 14px;
+      background: var(--clr-primary);
+      color: #fff;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 1.3rem;
+      flex-shrink: 0;
+      box-shadow: 0 4px 14px rgba(35, 94, 174, 0.35);
+    }
+    .faq-cta-title {
+      font-size: 1.08rem;
+      font-weight: 800;
+      color: var(--text-primary);
+      margin: 0 0 3px 0;
+    }
+    .faq-cta-desc {
+      font-size: 0.92rem;
+      color: var(--text-secondary);
+      margin: 0;
+    }
+    .faq-cta-btns {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      flex-wrap: wrap;
+    }
+
+    @media (max-width: 768px) {
+      .faq-title { font-size: 1.85rem; }
+      .faq-trigger { padding: 18px 20px; gap: 14px; }
+      .faq-inner { padding: 0 20px 20px 20px; }
+      .faq-q-text { font-size: 1.02rem; }
+      .faq-cta-box { flex-direction: column; align-items: flex-start; }
+      .faq-cta-btns { width: 100%; }
+      .faq-cta-btns .btn-primary, .faq-cta-btns .btn { width: 100%; text-align: center; justify-content: center; }
     }
   </style>
 </head>
@@ -785,7 +1772,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action']) && $_POST['
   <div class="nav-links d-none d-md-flex align-items-center">
     <a href="#about">About Us</a>
     <a href="#services">Services</a>
-    <a href="javascript:void(0)" onclick="openPrivacyModal()"><i class="fas fa-shield-alt me-1" style="color:var(--clr-primary)"></i>Data Privacy</a>
+    <a href="#faq">FAQs</a>
+    <a href="javascript:void(0)" onclick="openPrivacyModal()"><i class="fas fa-file-contract me-1" style="color:var(--clr-primary)"></i>Terms &amp; Conditions</a>
     <?php if($isPatient): ?>
       <a href="patient/dashboard.php" style="color:var(--clr-primary); font-weight:700;">My Dashboard</a>
     <?php endif; ?>
@@ -793,8 +1781,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action']) && $_POST['
   </div>
   <!-- Mobile quick actions -->
   <div class="d-flex d-md-none align-items-center gap-2">
+    <a href="#faq" class="btn btn-sm btn-outline-secondary" style="font-size:0.75rem; padding:4px 9px; border-radius:8px; font-weight:600; text-decoration:none; color:var(--text-secondary); border-color:var(--border-color);">FAQs</a>
     <button type="button" onclick="openPrivacyModal()" class="btn btn-sm btn-outline-primary" style="font-size:0.75rem; padding:4px 10px; border-radius:8px; font-weight:600; border-color:var(--clr-primary); color:var(--clr-primary);">
-      <i class="fas fa-shield-alt"></i> Privacy
+      <i class="fas fa-file-contract"></i> Terms
     </button>
     <button class="theme-btn" id="themeToggleMobile" style="margin-left:0;" title="Toggle Theme"><i class="fas fa-moon" id="themeIconMobile"></i></button>
   </div>
@@ -823,13 +1812,11 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action']) && $_POST['
     </div>
   </div>
   <div class="hero-image">
-    <!-- Luxury Vision Care Card -->
-    <div style="width:100%;aspect-ratio:4/3;background:linear-gradient(135deg,var(--bg-card),rgba(10,10,13,0.95));border-radius:32px;display:flex;align-items:center;justify-content:center;border:1px solid rgba(224,154,103,0.3);position:relative;z-index:2;box-shadow:0 30px 60px rgba(0,0,0,.5), 0 0 30px rgba(224,154,103,0.12);overflow:hidden;">
-      <i class="fas fa-glasses" style="font-size:8rem;color:rgba(224,154,103,.05);position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);"></i>
-      <div style="text-align:center;position:relative;z-index:3;">
-        <img src="assets/images/logo.png?v=2" alt="Logo" style="width:120px; height:120px; object-fit:contain; border-radius:50%; margin-bottom:16px; background:rgba(255,255,255,0.95); box-shadow:0 8px 24px rgba(224,154,103,0.35); padding:4px;">
-        <h2 style="font-size:2rem;font-weight:800;margin:0;letter-spacing:-0.5px;color:var(--text-primary);">Gueco Optical</h2>
-        <p style="color:var(--clr-primary);font-weight:700;text-transform:uppercase;letter-spacing:.2em;margin-top:8px;font-size:0.85rem;">Vision Care Center</p>
+    <div class="hero-logo-container">
+      <div class="hero-logo-aura"></div>
+      <div class="hero-logo-ring"></div>
+      <div class="hero-3d-logo-card" onclick="openAuthModal()" title="Gueco Optical Clinic">
+        <img src="assets/images/logo.png?v=3" alt="Gueco Optical Logo" class="hero-pure-logo">
       </div>
     </div>
   </div>
@@ -856,22 +1843,187 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action']) && $_POST['
   </div>
 </section>
 
-<!-- TRUST & DATA PRIVACY BANNER -->
-<section style="max-width:1200px; margin:0 auto 80px; padding:0 24px;">
-  <div style="background:linear-gradient(135deg,rgba(224,154,103,0.12),rgba(194,99,37,0.06)); border:1px solid rgba(224,154,103,0.3); border-radius:24px; padding:32px 36px; display:flex; align-items:center; justify-content:space-between; flex-wrap:wrap; gap:20px; backdrop-filter:blur(16px); box-shadow:0 12px 30px rgba(0,0,0,0.25);">
-    <div style="display:flex; align-items:center; gap:20px; max-width:720px;">
-      <div style="width:56px; height:56px; border-radius:16px; background:linear-gradient(135deg,var(--clr-primary),var(--clr-secondary)); display:flex; align-items:center; justify-content:center; color:#fff; font-size:1.6rem; flex-shrink:0; box-shadow:0 8px 20px rgba(224,154,103,0.35);">
-        <i class="fas fa-shield-alt"></i>
+<!-- FREQUENTLY ASKED QUESTIONS (FAQS) -->
+<section class="faq-section" id="faq">
+  <div class="faq-header">
+    <div class="faq-badge">
+      <i class="fas fa-circle-question"></i> Help &amp; Information
+    </div>
+    <h2 class="faq-title">Frequently Asked <span>Questions</span></h2>
+    <p class="faq-subtitle">
+      Everything you need to know about professional eye examinations, eyewear fabrication, warranties, and clinic policies at Gueco Optical Clinic.
+    </p>
+  </div>
+
+  <div class="faq-grid">
+    <!-- FAQ 1 (Open by default) -->
+    <div class="faq-card active" onclick="toggleFaqCard(this)">
+      <button type="button" class="faq-trigger" aria-expanded="true">
+        <div class="faq-q-wrap">
+          <div class="faq-q-icon"><i class="fas fa-eye"></i></div>
+          <h3 class="faq-q-text">How often should I have a comprehensive eye examination?</h3>
+        </div>
+        <div class="faq-arrow"><i class="fas fa-chevron-down"></i></div>
+      </button>
+      <div class="faq-content">
+        <div class="faq-inner">
+          <p>
+            Both adults and children are recommended to undergo a professional eye examination <strong>at least once every 12 months</strong>. Routine checkups ensure your optical prescription remains accurate and help detect subtle vision changes early.
+          </p>
+          <p>
+            Patients who wear contact lenses, spend long hours on digital screens, or have pre-existing health conditions such as diabetes or hypertension may benefit from semi-annual checkups to prevent eye strain and preserve ocular health.
+          </p>
+        </div>
+      </div>
+    </div>
+
+    <!-- FAQ 2 -->
+    <div class="faq-card" onclick="toggleFaqCard(this)">
+      <button type="button" class="faq-trigger" aria-expanded="false">
+        <div class="faq-q-wrap">
+          <div class="faq-q-icon"><i class="fas fa-calendar-check"></i></div>
+          <h3 class="faq-q-text">How do I schedule an appointment through the patient portal?</h3>
+        </div>
+        <div class="faq-arrow"><i class="fas fa-chevron-down"></i></div>
+      </button>
+      <div class="faq-content">
+        <div class="faq-inner">
+          <p>
+            Booking an appointment is seamless! Simply click the <strong>"Book an Appointment"</strong> button anywhere on this page. You can log in or register in seconds using your email address or Google Account.
+          </p>
+          <p>
+            Once inside, select your preferred clinic date, convenient time slot, and reason for visit (such as <em>Comprehensive Eye Exam</em>, <em>Frame &amp; Lens Fitting</em>, or <em>Follow-up Consultation</em>). You will receive immediate booking confirmation and appointment reminders.
+          </p>
+        </div>
+      </div>
+    </div>
+
+    <!-- FAQ 3 -->
+    <div class="faq-card" onclick="toggleFaqCard(this)">
+      <button type="button" class="faq-trigger" aria-expanded="false">
+        <div class="faq-q-wrap">
+          <div class="faq-q-icon"><i class="fas fa-clipboard-list"></i></div>
+          <h3 class="faq-q-text">What should I bring to my optical appointment?</h3>
+        </div>
+        <div class="faq-arrow"><i class="fas fa-chevron-down"></i></div>
+      </button>
+      <div class="faq-content">
+        <div class="faq-inner">
+          <p>
+            To help our optometrists provide the most accurate assessment, please bring:
+          </p>
+          <ul style="padding-left:20px; margin:0 0 10px 0;">
+            <li>Your <strong>current eyeglasses</strong> or contact lens prescription details (if any).</li>
+            <li>A valid photo ID for patient identification.</li>
+            <li>A list of any current medications, eye drops, or chronic conditions (e.g., allergies, diabetes).</li>
+            <li>Your sunglasses, in case your eyes feel slightly sensitive to bright light following ophthalmic screening.</li>
+          </ul>
+        </div>
+      </div>
+    </div>
+
+    <!-- FAQ 4 -->
+    <div class="faq-card" onclick="toggleFaqCard(this)">
+      <button type="button" class="faq-trigger" aria-expanded="false">
+        <div class="faq-q-wrap">
+          <div class="faq-q-icon"><i class="fas fa-glasses"></i></div>
+          <h3 class="faq-q-text">How long does it take to prepare my new prescription eyewear?</h3>
+        </div>
+        <div class="faq-arrow"><i class="fas fa-chevron-down"></i></div>
+      </button>
+      <div class="faq-content">
+        <div class="faq-inner">
+          <p>
+            Standard single-vision prescription lenses and in-stock frames are typically crafted, precision-edged, and ready for dispensing within <strong>1 to 2 business days</strong>.
+          </p>
+          <p>
+            Custom specialty orders—including progressive multifocal lenses, ultra-thin high-index materials, blue-light blocking filters, and photochromic transition lenses—typically require <strong>3 to 5 business days</strong> for optical surfacing and quality inspection.
+          </p>
+        </div>
+      </div>
+    </div>
+
+    <!-- FAQ 5 -->
+    <div class="faq-card" onclick="toggleFaqCard(this)">
+      <button type="button" class="faq-trigger" aria-expanded="false">
+        <div class="faq-q-wrap">
+          <div class="faq-q-icon"><i class="fas fa-shield-halved"></i></div>
+          <h3 class="faq-q-text">Do you offer warranties and aftercare on eyeglasses?</h3>
+        </div>
+        <div class="faq-arrow"><i class="fas fa-chevron-down"></i></div>
+      </button>
+      <div class="faq-content">
+        <div class="faq-inner">
+          <p>
+            Yes! All authentic designer frames and premium prescription lens coatings purchased at Gueco Optical Clinic include <strong>manufacturer warranty coverage</strong> against verified factory defects.
+          </p>
+          <p>
+            In addition, every patient receives <strong>Free Lifetime Maintenance</strong>—including complimentary ultrasonic cleaning, screw tightening, nose pad replacements, and custom frame adjustments whenever you visit our clinic in Capas, Tarlac.
+          </p>
+        </div>
+      </div>
+    </div>
+
+    <!-- FAQ 6 -->
+    <div class="faq-card" onclick="toggleFaqCard(this)">
+      <button type="button" class="faq-trigger" aria-expanded="false">
+        <div class="faq-q-wrap">
+          <div class="faq-q-icon"><i class="fas fa-user-shield"></i></div>
+          <h3 class="faq-q-text">Is my personal and medical health information kept private?</h3>
+        </div>
+        <div class="faq-arrow"><i class="fas fa-chevron-down"></i></div>
+      </button>
+      <div class="faq-content">
+        <div class="faq-inner">
+          <p>
+            Your health privacy is our utmost priority. All patient records, clinical charts, refraction results, and contact information are strictly protected under the <strong>Philippine Data Privacy Act of 2012 (RA 10173)</strong>.
+          </p>
+          <p>
+            We adhere to strict medical confidentiality. We never sell, rent, or distribute your personal details to outside advertisers or third parties.
+          </p>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- FAQ Bottom Assistance Box -->
+  <div class="faq-cta-box">
+    <div class="faq-cta-info">
+      <div class="faq-cta-icon">
+        <i class="fas fa-headset"></i>
       </div>
       <div>
-        <h4 style="margin:0 0 6px 0; font-weight:800; font-size:1.2rem; color:var(--text-primary);">Data Privacy &amp; Patient Confidentiality</h4>
+        <h4 class="faq-cta-title">Still have questions or ready for your eye check?</h4>
+        <p class="faq-cta-desc">Our optometrists and friendly clinic staff are ready to help you achieve your best vision.</p>
+      </div>
+    </div>
+    <div class="faq-cta-btns">
+      <button type="button" onclick="openAuthModal()" class="btn btn-primary" style="padding:11px 22px; border-radius:12px; font-weight:700; display:inline-flex; align-items:center; gap:8px;">
+        <i class="fas fa-calendar-check"></i> Book an Appointment
+      </button>
+      <button type="button" onclick="openPrivacyModal()" class="btn btn-outline-secondary" style="padding:11px 20px; border-radius:12px; font-weight:700; display:inline-flex; align-items:center; gap:8px;">
+        <i class="fas fa-file-contract"></i> Read Terms &amp; Policies
+      </button>
+    </div>
+  </div>
+</section>
+
+<!-- TRUST & CLINIC TERMS BANNER -->
+<section style="max-width:1200px; margin:0 auto 80px; padding:0 24px;">
+  <div style="background:linear-gradient(135deg,rgba(35,94,174,0.12),rgba(0,173,239,0.06)); border:1px solid rgba(0,173,239,0.3); border-radius:24px; padding:32px 36px; display:flex; align-items:center; justify-content:space-between; flex-wrap:wrap; gap:20px; backdrop-filter:blur(16px); box-shadow:0 12px 30px rgba(0,0,0,0.25);">
+    <div style="display:flex; align-items:center; gap:20px; max-width:720px;">
+      <div style="width:56px; height:56px; border-radius:16px; background:linear-gradient(135deg,var(--clr-primary),var(--clr-secondary)); display:flex; align-items:center; justify-content:center; color:#fff; font-size:1.6rem; flex-shrink:0; box-shadow:0 8px 20px rgba(0,173,239,0.35);">
+        <i class="fas fa-file-contract"></i>
+      </div>
+      <div>
+        <h4 style="margin:0 0 6px 0; font-weight:800; font-size:1.2rem; color:var(--text-primary);">Clinic Terms &amp; Patient Care Quality</h4>
         <p style="margin:0; font-size:0.92rem; color:var(--text-secondary); line-height:1.5;">
-          Gueco Optical Clinic strictly complies with the <strong>Philippine Data Privacy Act of 2012 (Republic Act No. 10173)</strong>. Your medical records, optical prescriptions, and personal info are safe, encrypted, and kept confidential.
+          Gueco Optical Clinic is dedicated to clinical excellence and transparency under the <strong>Philippine Data Privacy Act of 2012 (RA 10173)</strong>. View our terms for appointments, eyewear warranties, and patient rights.
         </p>
       </div>
     </div>
     <button type="button" onclick="openPrivacyModal()" class="btn btn-outline-primary" style="padding:12px 24px; border-radius:12px; font-weight:700; font-size:0.92rem; display:inline-flex; align-items:center; gap:8px; white-space:nowrap; border-width:1.5px; border-color:var(--clr-primary); color:var(--clr-primary);">
-      <i class="fas fa-file-shield"></i> Read Data Privacy Notice
+      <i class="fas fa-file-contract"></i> Read Terms &amp; Conditions
     </button>
   </div>
 </section>
@@ -881,7 +2033,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action']) && $_POST['
   <div style="max-width:1200px; margin:0 auto; display:grid; grid-template-columns:repeat(auto-fit, minmax(260px, 1fr)); gap:40px; margin-bottom:40px;">
     <div>
       <div style="display:flex; align-items:center; gap:12px; margin-bottom:16px;">
-        <img src="assets/images/logo.png?v=2" alt="Logo" style="width:44px; height:44px; border-radius:50%; background:#fff; padding:2px; box-shadow:0 2px 10px rgba(224,154,103,0.35);">
+        <img src="assets/images/logo.png?v=2" alt="Logo" style="width:44px; height:44px; border-radius:50%; background:#fff; padding:2px; box-shadow:0 2px 10px rgba(0,173,239,0.35);">
         <div>
           <h5 style="margin:0; font-weight:800; font-size:1.15rem; color:var(--text-primary);">Gueco Optical Clinic</h5>
           <small style="color:var(--text-muted); font-size:0.8rem;">Professional Eye Care &amp; Optical Services</small>
@@ -890,8 +2042,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action']) && $_POST['
       <p style="font-size:0.88rem; color:var(--text-secondary); line-height:1.6; max-width:400px; margin-bottom:16px;">
         Dedicated to delivering comprehensive, high-quality eye examinations and premium optical eyewear to the Capas, Tarlac community since 1986.
       </p>
-      <div style="display:inline-flex; align-items:center; gap:8px; background:rgba(224,154,103,0.12); border:1px solid rgba(224,154,103,0.3); border-radius:8px; padding:6px 12px; font-size:0.8rem; color:var(--clr-primary); font-weight:600;">
-        <i class="fas fa-shield-alt"></i> RA 10173 Data Privacy Compliant
+      <div style="display:inline-flex; align-items:center; gap:8px; background:rgba(0,173,239,0.12); border:1px solid rgba(0,173,239,0.3); border-radius:8px; padding:6px 12px; font-size:0.8rem; color:var(--clr-primary); font-weight:600;">
+        <i class="fas fa-check-circle"></i> Licensed &amp; RA 10173 Compliant
       </div>
     </div>
     
@@ -900,7 +2052,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action']) && $_POST['
       <ul style="list-style:none; padding:0; margin:0; display:flex; flex-direction:column; gap:10px; font-size:0.9rem;">
         <li><a href="#about" style="color:var(--text-secondary); text-decoration:none; transition:color 0.2s;">About Us</a></li>
         <li><a href="#services" style="color:var(--text-secondary); text-decoration:none; transition:color 0.2s;">Services &amp; Eyewear</a></li>
-        <li><a href="javascript:void(0)" onclick="openPrivacyModal()" style="color:var(--clr-primary); text-decoration:none; font-weight:600;"><i class="fas fa-shield-alt me-1"></i>Data Privacy Notice (RA 10173)</a></li>
+        <li><a href="#faq" style="color:var(--text-secondary); text-decoration:none; transition:color 0.2s;">Frequently Asked Questions (FAQs)</a></li>
+        <li><a href="javascript:void(0)" onclick="openPrivacyModal()" style="color:var(--clr-primary); text-decoration:none; font-weight:600;"><i class="fas fa-file-contract me-1"></i>Terms &amp; Conditions</a></li>
         <li><a href="javascript:void(0)" onclick="openAuthModal()" style="color:var(--text-secondary); text-decoration:none;">Patient Login / Register</a></li>
       </ul>
     </div>
@@ -918,7 +2071,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action']) && $_POST['
   <div style="max-width:1200px; margin:0 auto; padding-top:20px; border-top:1px solid var(--border-color); display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:12px; font-size:0.8rem; color:var(--text-muted);">
     <div>&copy; <?= date('Y') ?> Gueco Optical Clinic. All rights reserved.</div>
     <div>
-      <a href="javascript:void(0)" onclick="openPrivacyModal()" style="color:var(--text-muted); text-decoration:underline;">Data Privacy Policy &amp; Consent Notice (RA 10173)</a>
+      <a href="javascript:void(0)" onclick="openPrivacyModal()" style="color:var(--text-muted); text-decoration:underline;">Terms &amp; Conditions</a>
     </div>
   </div>
 </footer>
@@ -940,83 +2093,109 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action']) && $_POST['
 <div class="modal-overlay <?= $showModal ? 'open' : '' ?>" id="authModal">
   <div class="auth-card">
     <div class="auth-header">
-      <h2 class="auth-title">Patient Portal</h2>
-      <button class="close-btn" onclick="closeAuthModal()"><i class="fas fa-times"></i></button>
+      <div class="auth-title-wrap">
+        <div class="auth-brand-emblem">
+          <img src="assets/images/logo.png" alt="Gueco Optical Logo">
+        </div>
+        <div>
+          <h2 class="auth-title">Patient Portal</h2>
+          <p class="auth-sub">Gueco Optical Clinic &bull; Appointments &amp; Care</p>
+        </div>
+      </div>
+      <button class="close-btn" onclick="closeAuthModal()" title="Close"><i class="fas fa-times"></i></button>
     </div>
     
     <div class="auth-tabs">
       <button class="auth-tab <?= $tab === 'login' ? 'active' : '' ?>" onclick="switchTab('login')">
-        <i class="fas fa-sign-in-alt me-1"></i> Login
+        <i class="fas fa-sign-in-alt"></i> Login
       </button>
       <button class="auth-tab <?= $tab === 'register' ? 'active' : '' ?>" onclick="switchTab('register')">
-        <i class="fas fa-user-plus me-1"></i> Register
+        <i class="fas fa-user-plus"></i> Register
       </button>
     </div>
 
     <!-- LOGIN PANEL -->
     <div class="auth-panel <?= $tab === 'login' ? 'active' : '' ?>" id="panel-login">
-      <p style="font-size:.85rem;color:var(--text-muted);margin-bottom:20px;">
-        Sign in to your patient account to book and manage appointments.
+      <p class="auth-panel-sub">
+        Sign in to your patient account to schedule and manage optical appointments.
       </p>
+
       <form method="POST">
         <input type="hidden" name="action" value="login">
         <input type="hidden" name="csrf_token" value="<?= generateCsrfToken() ?>">
         <div class="form-group">
-          <label class="form-label"><i class="fas fa-envelope me-1"></i>Email Address</label>
-          <input type="email" name="email" class="form-control" placeholder="Enter your email" required>
+          <label class="form-label"><i class="fas fa-envelope"></i>Email Address</label>
+          <input type="email" name="email" class="form-control" placeholder="name@example.com" value="<?= (isset($_POST['action']) && $_POST['action'] === 'login') ? htmlspecialchars($_POST['email'] ?? '') : '' ?>" required autocomplete="email">
         </div>
         <div class="form-group">
-          <label class="form-label"><i class="fas fa-lock me-1"></i>Password</label>
+          <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:8px;">
+            <label class="form-label" style="margin-bottom:0;"><i class="fas fa-lock"></i>Password</label>
+            <a href="#" onclick="switchTab('forgot')" class="auth-forgot-link">Forgot Password?</a>
+          </div>
           <div class="form-pass-wrap">
-            <input type="password" id="loginPass" name="password" class="form-control" placeholder="Enter password" required style="padding-right:44px">
-            <button type="button" class="pass-toggle" data-toggle-pass="loginPass">
+            <input type="password" id="loginPass" name="password" class="form-control" placeholder="Enter your password" required autocomplete="current-password" style="padding-right:48px">
+            <button type="button" class="pass-toggle" data-toggle-pass="loginPass" title="Toggle password visibility">
               <i class="fas fa-eye"></i>
             </button>
           </div>
-          <div style="text-align: right; margin-top: 8px;">
-            <a href="#" onclick="switchTab('forgot')" style="font-size: .85rem; color: var(--clr-primary); text-decoration: none;">Forgot Password?</a>
-          </div>
         </div>
-        <button type="submit" class="btn-primary">
-          <i class="fas fa-sign-in-alt"></i> Sign In
+        <button type="submit" class="btn-primary" style="margin-top:6px;">
+          <span>Sign In</span>
+          <i class="fas fa-arrow-right"></i>
         </button>
       </form>
+
+      <div class="auth-divider">
+        <span>or</span>
+      </div>
+
+      <!-- Continue with Google at BOTTOM -->
+      <a href="google-auth.php" class="btn-google-auth">
+        <svg class="google-svg" viewBox="0 0 48 48" width="22" height="22">
+          <path fill="#EA4335" d="M24 9.5c3.54 0 6.71 1.22 9.21 3.6l6.85-6.85C35.9 2.38 30.47 0 24 0 14.62 0 6.51 5.38 2.56 13.22l7.98 6.19C12.43 13.72 17.74 9.5 24 9.5z"/>
+          <path fill="#4285F4" d="M46.98 24.55c0-1.57-.15-3.09-.38-4.55H24v9.02h12.94c-.58 2.96-2.26 5.48-4.78 7.18l7.73 6c4.51-4.18 7.09-10.36 7.09-17.65z"/>
+          <path fill="#FBBC05" d="M10.53 28.59c-.48-1.45-.76-2.99-.76-4.59s.27-3.14.76-4.59l-7.98-6.19C.92 16.46 0 20.12 0 24c0 3.88.92 7.54 2.55 10.78l7.98-6.19z"/>
+          <path fill="#34A853" d="M24 48c6.48 0 11.93-2.13 15.89-5.81l-7.73-6c-2.15 1.45-4.92 2.3-8.16 2.3-6.26 0-11.57-4.22-13.47-9.91l-7.98 6.19C6.51 42.62 14.62 48 24 48z"/>
+          <path fill="none" d="M0 0h48v48H0z"/>
+        </svg>
+        <span>Continue with Google</span>
+      </a>
     </div>
 
     <!-- FORGOT PASSWORD PANEL -->
     <div class="auth-panel <?= $tab === 'forgot' ? 'active' : '' ?>" id="panel-forgot">
-      <p style="font-size:.85rem;color:var(--text-muted);margin-bottom:20px;">
-        Enter your email address and we'll send you an OTP to reset your password.
+      <p class="auth-panel-sub">
+        Enter your email address to receive an OTP code to reset your password.
       </p>
       <form method="POST">
         <input type="hidden" name="action" value="forgot">
         <input type="hidden" name="csrf_token" value="<?= generateCsrfToken() ?>">
         <div class="form-group">
-          <label class="form-label"><i class="fas fa-envelope me-1"></i>Email Address</label>
-          <input type="email" name="email" class="form-control" placeholder="Enter your email" required value="<?= htmlspecialchars($_POST['email'] ?? '') ?>">
+          <label class="form-label"><i class="fas fa-envelope"></i>Email Address</label>
+          <input type="email" name="email" class="form-control" placeholder="Enter your email" required value="<?= (isset($_POST['action']) && $_POST['action'] === 'forgot') ? htmlspecialchars($_POST['email'] ?? '') : '' ?>">
         </div>
-        <button type="submit" class="btn-primary">
-          <i class="fas fa-paper-plane"></i> Send OTP
+        <button type="submit" class="btn-primary" style="margin-top:6px;">
+          <i class="fas fa-paper-plane"></i> Send OTP Code
         </button>
-        <div style="text-align: center; margin-top: 15px;">
-          <a href="#" onclick="switchTab('login')" style="font-size: .85rem; color: var(--text-muted); text-decoration: none;"><i class="fas fa-arrow-left"></i> Back to Login</a>
+        <div style="text-align: center; margin-top: 16px;">
+          <a href="#" onclick="switchTab('login')" style="font-size: .94rem; color: var(--text-secondary); text-decoration: none; font-weight: 700;"><i class="fas fa-arrow-left me-1"></i> Back to Login</a>
         </div>
       </form>
     </div>
 
     <!-- OTP PANEL -->
     <div class="auth-panel <?= $tab === 'otp' ? 'active' : '' ?>" id="panel-otp">
-      <p style="font-size:.85rem;color:var(--text-muted);margin-bottom:20px;">
-        Enter the 6-digit OTP sent to your email.
+      <p class="auth-panel-sub">
+        Enter the 6-digit OTP code sent to your email.
       </p>
       <form method="POST">
         <input type="hidden" name="action" value="otp">
         <input type="hidden" name="csrf_token" value="<?= generateCsrfToken() ?>">
         <div class="form-group">
-          <label class="form-label"><i class="fas fa-key me-1"></i>OTP</label>
-          <input type="text" name="otp" class="form-control" placeholder="Enter OTP" required maxlength="6">
+          <label class="form-label"><i class="fas fa-key"></i>Verification Code</label>
+          <input type="text" name="otp" class="form-control" placeholder="6-digit code" required maxlength="6" style="letter-spacing:6px; font-size:1.35rem; font-weight:800; text-align:center;">
         </div>
-        <button type="submit" class="btn-primary">
+        <button type="submit" class="btn-primary" style="margin-top:6px;">
           <i class="fas fa-check"></i> Verify OTP
         </button>
       </form>
@@ -1024,261 +2203,362 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action']) && $_POST['
 
     <!-- NEW PASSWORD PANEL -->
     <div class="auth-panel <?= $tab === 'new-password' ? 'active' : '' ?>" id="panel-new-password">
-      <p style="font-size:.85rem;color:var(--text-muted);margin-bottom:20px;">
-        Create a new password for your account.
+      <p class="auth-panel-sub">
+        Create a new secure password for your account.
       </p>
       <form method="POST">
         <input type="hidden" name="action" value="new-password">
         <input type="hidden" name="csrf_token" value="<?= generateCsrfToken() ?>">
         <div class="form-group">
-          <label class="form-label"><i class="fas fa-lock me-1"></i>New Password <span style="color:var(--clr-danger)">*</span></label>
+          <label class="form-label"><i class="fas fa-lock"></i>New Password <span style="color:var(--clr-danger)">*</span></label>
           <div class="form-pass-wrap">
-            <input type="password" id="newPass" name="password" class="form-control" placeholder="At least 8 characters" required style="padding-right:44px">
+            <input type="password" id="newPass" name="password" class="form-control" placeholder="At least 8 characters" required minlength="8" style="padding-right:48px">
             <button type="button" class="pass-toggle" data-toggle-pass="newPass">
               <i class="fas fa-eye"></i>
             </button>
           </div>
         </div>
         <div class="form-group">
-          <label class="form-label"><i class="fas fa-lock me-1"></i>Confirm Password <span style="color:var(--clr-danger)">*</span></label>
-          <input type="password" name="confirm_password" class="form-control" placeholder="Repeat password" required>
+          <label class="form-label"><i class="fas fa-lock"></i>Confirm Password <span style="color:var(--clr-danger)">*</span></label>
+          <input type="password" name="confirm_password" class="form-control" placeholder="Repeat password" required minlength="8">
         </div>
-        <button type="submit" class="btn-primary">
-          <i class="fas fa-save"></i> Reset Password
+        <button type="submit" class="btn-primary" style="margin-top:6px;">
+          <i class="fas fa-save"></i> Save New Password
         </button>
       </form>
     </div>
 
     <!-- REGISTER PANEL -->
     <div class="auth-panel <?= $tab === 'register' ? 'active' : '' ?>" id="panel-register">
-      <p style="font-size:.85rem;color:var(--text-muted);margin-bottom:20px;">
-        Create a free account to schedule appointments online and manage your visit history.
-      </p>
       <form method="POST">
         <input type="hidden" name="action" value="register">
         <input type="hidden" name="csrf_token" value="<?= generateCsrfToken() ?>">
+        
         <div class="form-group">
-          <label class="form-label"><i class="fas fa-user me-1"></i>Full Name <span style="color:var(--clr-danger)">*</span></label>
-          <input type="text" name="full_name" class="form-control <?= $errorField === 'full_name' ? 'is-invalid' : '' ?>" placeholder="e.g. Juan Dela Cruz" value="<?= htmlspecialchars($_POST['full_name'] ?? '') ?>" required onblur="this.value = this.value.replace(/([a-z])([A-Z])/g, '$1 $2').replace(/\s+/g, ' ').trim().replace(/\b\w/g, c => c.toUpperCase());">
+          <label class="form-label"><i class="fas fa-envelope"></i>Email Address <span style="color:var(--clr-danger)">*</span></label>
+          <input type="email" name="email" class="form-control <?= $errorField === 'email' ? 'is-invalid' : '' ?>" placeholder="e.g. yourname@gmail.com" value="<?= (isset($_POST['action']) && $_POST['action'] === 'register') ? htmlspecialchars($_POST['email'] ?? '') : '' ?>" required autocomplete="email">
         </div>
-        <div style="display:flex;gap:12px;">
-          <div class="form-group" style="flex:1;">
-            <label class="form-label"><i class="fas fa-envelope me-1"></i>Email <span style="color:var(--clr-danger)">*</span></label>
-            <input type="email" name="email" class="form-control <?= $errorField === 'email' ? 'is-invalid' : '' ?>" placeholder="your@email.com" value="<?= htmlspecialchars($_POST['email'] ?? '') ?>" required>
+
+        <div class="form-row-2">
+          <div class="form-group">
+            <label class="form-label"><i class="fas fa-lock"></i>Password <span style="color:var(--clr-danger)">*</span></label>
+            <div class="form-pass-wrap">
+              <input type="password" id="regPass" name="password" class="form-control <?= $errorField === 'password' ? 'is-invalid' : '' ?>" placeholder="Password" required minlength="8" autocomplete="new-password" style="padding-right:48px">
+              <button type="button" class="pass-toggle" data-toggle-pass="regPass" title="Toggle password visibility">
+                <i class="fas fa-eye"></i>
+              </button>
+            </div>
           </div>
-          <div class="form-group" style="flex:1;">
-            <label class="form-label"><i class="fas fa-phone me-1"></i>Phone</label>
-            <input type="tel" pattern="[0-9]*" maxlength="11" minlength="11" oninput="this.value = this.value.replace(/[^0-9]/g, '')" name="phone" class="form-control <?= $errorField === 'phone' ? 'is-invalid' : '' ?>" placeholder="09XX-XXX-XXXX" value="<?= htmlspecialchars($_POST['phone'] ?? '') ?>">
+
+          <div class="form-group">
+            <label class="form-label"><i class="fas fa-shield-alt"></i>Confirm <span style="color:var(--clr-danger)">*</span></label>
+            <div class="form-pass-wrap">
+              <input type="password" id="regConfirmPass" name="confirm_password" class="form-control <?= $errorField === 'confirm_password' ? 'is-invalid' : '' ?>" placeholder="Confirm Password" required minlength="8" autocomplete="new-password" style="padding-right:48px">
+              <button type="button" class="pass-toggle" data-toggle-pass="regConfirmPass" title="Toggle password visibility">
+                <i class="fas fa-eye"></i>
+              </button>
+            </div>
           </div>
-        </div>
-        <div style="display:flex;gap:12px;">
-          <div class="form-group" style="flex:1;">
-            <label class="form-label"><i class="fas fa-birthday-cake me-1"></i>Birthdate</label>
-            <input type="date" name="birthdate" max="<?= date('Y-m-d') ?>" class="form-control <?= $errorField === 'birthdate' ? 'is-invalid' : '' ?>" value="<?= htmlspecialchars($_POST['birthdate'] ?? '') ?>">
-          </div>
-          <div class="form-group" style="flex:1;">
-            <label class="form-label"><i class="fas fa-venus-mars me-1"></i>Gender</label>
-            <select name="gender" class="form-select <?= $errorField === 'gender' ? 'is-invalid' : '' ?>">
-              <option value="">Select</option>
-              <option value="male" <?= ($_POST['gender'] ?? '') === 'male' ? 'selected' : '' ?>>Male</option>
-              <option value="female" <?= ($_POST['gender'] ?? '') === 'female' ? 'selected' : '' ?>>Female</option>
-              <option value="other" <?= ($_POST['gender'] ?? '') === 'other' ? 'selected' : '' ?>>Other</option>
-            </select>
-          </div>
-        </div>
-        <div class="form-group">
-          <label class="form-label"><i class="fas fa-map-marker-alt me-1"></i>Address</label>
-          <input type="text" name="address" class="form-control <?= $errorField === 'address' ? 'is-invalid' : '' ?>" placeholder="Barangay, Municipality, Province" value="<?= htmlspecialchars($_POST['address'] ?? '') ?>">
-        </div>
-        <div class="form-group">
-          <label class="form-label"><i class="fas fa-lock me-1"></i>Password <span style="color:var(--clr-danger)">*</span></label>
-          <div class="form-pass-wrap">
-            <input type="password" id="regPass" name="password" class="form-control <?= $errorField === 'password' ? 'is-invalid' : '' ?>" placeholder="At least 8 characters" required style="padding-right:44px">
-            <button type="button" class="pass-toggle" data-toggle-pass="regPass">
-              <i class="fas fa-eye"></i>
-            </button>
-          </div>
-        </div>
-        <div class="form-group">
-          <label class="form-label"><i class="fas fa-lock me-1"></i>Confirm Password <span style="color:var(--clr-danger)">*</span></label>
-          <input type="password" name="confirm_password" class="form-control <?= $errorField === 'confirm_password' ? 'is-invalid' : '' ?>" placeholder="Repeat password" required>
         </div>
         
-        <!-- Data Privacy Consent (RA 10173) -->
-        <div class="form-group" style="margin-top: 14px; margin-bottom: 18px;">
-          <div style="display: flex; align-items: flex-start; gap: 8px; font-size: 0.81rem; color: var(--text-muted); line-height: 1.45;">
-            <input type="checkbox" name="privacy_consent" id="privacyConsent" class="<?= $errorField === 'privacy_consent' ? 'is-invalid' : '' ?>" value="1" required style="margin-top: 3px; cursor: pointer; accent-color: var(--clr-primary);">
+        <!-- Terms and Conditions Consent -->
+        <div class="form-group" style="margin-top: 6px; margin-bottom: 16px;">
+          <div style="display: flex; align-items: flex-start; gap: 10px; font-size: 0.92rem; color: var(--text-secondary); line-height: 1.5; font-weight: 500;">
+            <input type="checkbox" name="privacy_consent" id="privacyConsent" class="<?= $errorField === 'privacy_consent' ? 'is-invalid' : '' ?>" value="1" required style="margin-top: 3px; cursor: pointer; accent-color: var(--clr-primary); width: 18px; height: 18px; flex-shrink: 0;">
             <label for="privacyConsent" style="cursor: pointer;">
-              I agree to the <a href="javascript:void(0)" onclick="openPrivacyModal()" style="color: var(--clr-primary); font-weight: 600; text-decoration: underline;">Data Privacy Policy</a> in accordance with the <strong>Philippine Data Privacy Act of 2012 (RA 10173)</strong> for the processing and storage of my personal and optical health records. <span style="color:var(--clr-danger)">*</span>
+              I agree to the <a href="javascript:void(0)" onclick="openPrivacyModal()" style="color: var(--clr-primary); font-weight: 700; text-decoration: underline;">Terms and Conditions</a> for optical care services and portal access. <span style="color:var(--clr-danger)">*</span>
             </label>
           </div>
         </div>
 
-        <button type="submit" class="btn-primary">
-          <i class="fas fa-user-plus"></i> Create Account
+        <button type="submit" class="btn-primary" style="margin-bottom: 2px;">
+          <span>Create Account & Verify Email</span>
+          <i class="fas fa-arrow-right"></i>
         </button>
       </form>
+
+      <div class="auth-divider">
+        <span>or</span>
+      </div>
+
+      <!-- Continue with Google at BOTTOM -->
+      <a href="google-auth.php" class="btn-google-auth">
+        <svg class="google-svg" viewBox="0 0 48 48" width="22" height="22">
+          <path fill="#EA4335" d="M24 9.5c3.54 0 6.71 1.22 9.21 3.6l6.85-6.85C35.9 2.38 30.47 0 24 0 14.62 0 6.51 5.38 2.56 13.22l7.98 6.19C12.43 13.72 17.74 9.5 24 9.5z"/>
+          <path fill="#4285F4" d="M46.98 24.55c0-1.57-.15-3.09-.38-4.55H24v9.02h12.94c-.58 2.96-2.26 5.48-4.78 7.18l7.73 6c4.51-4.18 7.09-10.36 7.09-17.65z"/>
+          <path fill="#FBBC05" d="M10.53 28.59c-.48-1.45-.76-2.99-.76-4.59s.27-3.14.76-4.59l-7.98-6.19C.92 16.46 0 20.12 0 24c0 3.88.92 7.54 2.55 10.78l7.98-6.19z"/>
+          <path fill="#34A853" d="M24 48c6.48 0 11.93-2.13 15.89-5.81l-7.73-6c-2.15 1.45-4.92 2.3-8.16 2.3-6.26 0-11.57-4.22-13.47-9.91l-7.98 6.19C6.51 42.62 14.62 48 24 48z"/>
+          <path fill="none" d="M0 0h48v48H0z"/>
+        </svg>
+        <span>Sign up with Google</span>
+      </a>
     </div>
 
   </div>
 </div>
 
-<!-- DATA PRIVACY NOTICE MODAL (RA 10173 MODERN) -->
+<!-- TERMS AND CONDITIONS MODAL -->
 <div class="modal-overlay" id="privacyModal" style="z-index: 100000;">
   <div class="privacy-card">
     <!-- Header -->
     <div class="privacy-header">
       <div style="display:flex; align-items:center; gap:16px;">
         <div class="privacy-icon-box">
-          <i class="fas fa-shield-halved"></i>
+          <i class="fas fa-file-contract"></i>
         </div>
         <div>
-          <div style="display:flex; align-items:center; gap:8px; margin-bottom:4px; flex-wrap:wrap;">
-            <h3 class="privacy-sec-title" style="font-size:1.25rem; font-weight:800; color:var(--text-primary);">Data Privacy Notice</h3>
-            <span class="privacy-badge"><i class="fas fa-check-circle"></i> RA 10173 Compliant</span>
+          <div style="display:flex; align-items:center; gap:10px; margin-bottom:4px; flex-wrap:wrap;">
+            <h3 class="privacy-header-title">Terms &amp; Conditions</h3>
+            <span class="privacy-badge"><i class="fas fa-shield-check"></i> Patient Agreement</span>
           </div>
-          <div style="font-size:0.8rem; color:var(--text-muted); font-weight:500;">
-            Gueco Optical Clinic &middot; Patient Rights &amp; Optical Health Records Protection
+          <div class="privacy-header-sub">
+            Gueco Optical Clinic &bull; Clinical Care &amp; Patient Portal Policies
           </div>
         </div>
       </div>
-      <button class="close-btn" onclick="closePrivacyModal()" title="Close"><i class="fas fa-times"></i></button>
+      <div style="display:flex; align-items:center; gap:12px;">
+        <div class="optical-zoom-ctrl" title="Adjust text size for easier reading">
+          <span class="optical-zoom-label"><i class="fas fa-eye me-1"></i>Text</span>
+          <button type="button" class="optical-zoom-btn active" onclick="setTermsFontSize('normal')" title="Standard Size">A</button>
+          <button type="button" class="optical-zoom-btn" onclick="setTermsFontSize('large')" title="Large Size (Clear Vision)">A+</button>
+          <button type="button" class="optical-zoom-btn" onclick="setTermsFontSize('xlarge')" title="Extra Large Size (Maximum Clarity)">A++</button>
+        </div>
+        <button class="close-btn" onclick="closePrivacyModal()" title="Close"><i class="fas fa-times"></i></button>
+      </div>
     </div>
 
     <!-- Body -->
     <div class="privacy-body">
       <!-- Callout Notice -->
-      <div style="background:linear-gradient(135deg,rgba(37,99,235,0.08),rgba(124,58,237,0.05)); border:1px solid rgba(37,99,235,0.2); border-radius:14px; padding:14px 16px; font-size:0.85rem; color:var(--text-secondary); line-height:1.5; display:flex; gap:12px; align-items:flex-start;">
-        <i class="fas fa-certificate" style="color:var(--clr-primary); font-size:1.1rem; margin-top:2px; flex-shrink:0;"></i>
+      <div class="terms-callout">
+        <div class="terms-callout-icon">
+          <i class="fas fa-glasses"></i>
+        </div>
         <div>
-          Gueco Optical Clinic is dedicated to protecting the privacy, confidentiality, and integrity of your optical and personal data in strict adherence to <strong>Republic Act No. 10173 (Philippine Data Privacy Act of 2012)</strong>.
+          Welcome to <strong>Gueco Optical Clinic</strong>. By booking appointments, receiving optometric consultations, or ordering prescription eyewear through our clinic and patient portal, you agree to the care and service terms outlined below.
         </div>
       </div>
 
       <!-- Section 1 -->
-      <div class="privacy-section-card">
-        <div class="privacy-sec-head">
-          <div class="privacy-sec-icon sec-blue"><i class="fas fa-id-card-clip"></i></div>
-          <h5 class="privacy-sec-title">1. Information We Collect</h5>
+      <div class="terms-section">
+        <div class="terms-sec-head">
+          <span class="terms-sec-num">01</span>
+          <h4 class="terms-sec-title">Appointments &amp; Clinic Visits</h4>
         </div>
-        <p class="privacy-sec-desc">
-          To provide accurate clinical examinations and tailored optical care, we collect essential patient demographics and clinical records during appointment bookings and eye consultations:
+        <p class="terms-sec-intro">
+          We respect your time and provide focused clinical attention during every eye consultation:
         </p>
-        <div class="privacy-pill-group">
-          <span class="privacy-pill"><i class="fas fa-user me-1 text-primary"></i>Full Name &amp; Demographics</span>
-          <span class="privacy-pill"><i class="fas fa-phone me-1 text-primary"></i>Contact Phone &amp; Email</span>
-          <span class="privacy-pill"><i class="fas fa-location-dot me-1 text-primary"></i>Residential Address</span>
-          <span class="privacy-pill"><i class="fas fa-glasses me-1 text-primary"></i>Refraction Data (OD/OS SPH, CYL, AXIS, PD)</span>
-          <span class="privacy-pill"><i class="fas fa-notes-medical me-1 text-primary"></i>Doctor Clinical Notes</span>
-        </div>
+        <ul class="terms-list">
+          <li class="terms-list-item">
+            <span class="terms-bullet-icon"><i class="fas fa-check"></i></span>
+            <div><strong>Prompt Arrival:</strong> Please arrive at least 10 minutes prior to your scheduled slot. A 15-minute grace period is observed before slot reallocation.</div>
+          </li>
+          <li class="terms-list-item">
+            <span class="terms-bullet-icon"><i class="fas fa-check"></i></span>
+            <div><strong>Notice for Rescheduling:</strong> If you cannot make your appointment, please reschedule or cancel at least 24 hours in advance via your patient portal.</div>
+          </li>
+          <li class="terms-list-item">
+            <span class="terms-bullet-icon"><i class="fas fa-check"></i></span>
+            <div><strong>Emergency Schedule Changes:</strong> In rare cases of optometrist emergencies or urgent medical referrals, our clinic staff will contact you immediately to reschedule.</div>
+          </li>
+        </ul>
       </div>
 
       <!-- Section 2 -->
-      <div class="privacy-section-card">
-        <div class="privacy-sec-head">
-          <div class="privacy-sec-icon sec-purple"><i class="fas fa-stethoscope"></i></div>
-          <h5 class="privacy-sec-title">2. Purpose &amp; Use of Information</h5>
+      <div class="terms-section">
+        <div class="terms-sec-head">
+          <span class="terms-sec-num">02</span>
+          <h4 class="terms-sec-title">Eye Examinations &amp; Prescriptions</h4>
         </div>
-        <p class="privacy-sec-desc">
-          Your personal and medical information is processed solely for legitimate medical and optical services, including:
+        <p class="terms-sec-intro">
+          All vision exams, refractions, and ophthalmic assessments are performed by licensed professional optometrists:
         </p>
-        <ul style="font-size:0.83rem; color:var(--text-secondary); padding-left:20px; margin:0 0 10px 0; line-height:1.6;">
-          <li>Scheduling, confirming, and managing clinical optometric appointments.</li>
-          <li>Accurate prescription lens fitting, frame customization, and optical dispensing.</li>
-          <li>Maintaining continuous, lifetime ophthalmic patient history.</li>
+        <ul class="terms-list">
+          <li class="terms-list-item">
+            <span class="terms-bullet-icon"><i class="fas fa-check"></i></span>
+            <div><strong>Accurate Medical History:</strong> Patients must disclose complete ocular and medical history (e.g., hypertension, diabetes, medications, eye trauma, previous surgeries) to ensure precise diagnostic care.</div>
+          </li>
+          <li class="terms-list-item">
+            <span class="terms-bullet-icon"><i class="fas fa-check"></i></span>
+            <div><strong>Prescription Validity:</strong> Optical prescriptions are certified at the examination date. Routine annual vision evaluations are recommended to monitor optical changes.</div>
+          </li>
+          <li class="terms-list-item">
+            <span class="terms-bullet-icon"><i class="fas fa-check"></i></span>
+            <div><strong>Specialist Referrals:</strong> Routine exams focus on refractive accuracy and primary eye wellness. Pathological conditions requiring surgical intervention will be referred to trusted ophthalmologists.</div>
+          </li>
         </ul>
-        <div style="background:rgba(5,150,105,0.08); border:1px solid rgba(5,150,105,0.2); border-radius:8px; padding:8px 12px; font-size:0.78rem; color:#34D399; display:flex; align-items:center; gap:8px;">
-          <i class="fas fa-lock"></i>
-          <span><strong>Zero Marketing Policy:</strong> We never sell, lease, or distribute your personal data to external advertisers.</span>
-        </div>
       </div>
 
       <!-- Section 3 -->
-      <div class="privacy-section-card">
-        <div class="privacy-sec-head">
-          <div class="privacy-sec-icon sec-teal"><i class="fas fa-user-shield"></i></div>
-          <h5 class="privacy-sec-title">3. Confidentiality &amp; Security Measures</h5>
+      <div class="terms-section">
+        <div class="terms-sec-head">
+          <span class="terms-sec-num">03</span>
+          <h4 class="terms-sec-title">Eyewear Crafting, Dispensing &amp; Warranties</h4>
         </div>
-        <p class="privacy-sec-desc">
-          Access to medical files is strictly confined to licensed optometrists and authenticated clinic personnel on a strict need-to-know basis. Our systems enforce database session encryption, brute-force rate limiting, and technical access controls to protect your data against unauthorized access.
+        <p class="terms-sec-intro">
+          Prescription lenses and frames are customized to your individual optical measurements:
         </p>
+        <ul class="terms-list">
+          <li class="terms-list-item">
+            <span class="terms-bullet-icon"><i class="fas fa-check"></i></span>
+            <div><strong>Custom Tailored Lenses:</strong> Lenses are precision-cut according to your Pupillary Distance (PD), cylinder axes, and ocular focal heights.</div>
+          </li>
+          <li class="terms-list-item">
+            <span class="terms-bullet-icon"><i class="fas fa-check"></i></span>
+            <div><strong>Factory Material Warranty:</strong> Authentic frames and premium anti-glare/blue-shield lens coatings carry manufacturer warranties covering verified factory defects.</div>
+          </li>
+          <li class="terms-list-item">
+            <span class="terms-bullet-icon"><i class="fas fa-check"></i></span>
+            <div><strong>Exclusions:</strong> Scratches from rough cleaning, chemical exposure, or damage from drops and physical mishandling are not covered under warranty.</div>
+          </li>
+        </ul>
+        <div class="terms-highlight">
+          <i class="fas fa-sparkles" style="font-size:1.15rem; flex-shrink:0;"></i>
+          <div><strong>Free Lifetime Maintenance:</strong> All patients enjoy complimentary nose pad replacements, screw tightening, ultrasonic cleaning, and frame adjustments anytime at our clinic.</div>
+        </div>
       </div>
 
       <!-- Section 4 -->
-      <div class="privacy-section-card">
-        <div class="privacy-sec-head">
-          <div class="privacy-sec-icon sec-amber"><i class="fas fa-scale-balanced"></i></div>
-          <h5 class="privacy-sec-title">4. Your Patient Rights (RA 10173)</h5>
+      <div class="terms-section">
+        <div class="terms-sec-head">
+          <span class="terms-sec-num">04</span>
+          <h4 class="terms-sec-title">Data Privacy &amp; Medical Record Protection</h4>
         </div>
-        <p class="privacy-sec-desc">
-          As a registered patient and data subject under Philippine Law, you are entitled to the following statutory rights:
+        <p class="terms-sec-intro">
+          Your personal data and health information are strictly safeguarded in compliance with the <strong>Philippine Data Privacy Act of 2012 (RA 10173)</strong>:
         </p>
-        <div class="privacy-rights-grid">
-          <div class="privacy-right-item">
-            <div class="privacy-right-title"><i class="fas fa-eye text-primary"></i> Right to Access</div>
-            <p class="privacy-right-desc">View your prescription history and recorded visits anytime in your patient portal.</p>
-          </div>
-          <div class="privacy-right-item">
-            <div class="privacy-right-title"><i class="fas fa-pen-to-square text-success"></i> Right to Rectify</div>
-            <p class="privacy-right-desc">Update contact details or request corrections to inaccurate medical records.</p>
-          </div>
-          <div class="privacy-right-item">
-            <div class="privacy-right-title"><i class="fas fa-hand text-warning"></i> Right to Object</div>
-            <p class="privacy-right-desc">Withdraw processing consent or request record deactivation subject to medical retention rules.</p>
-          </div>
-          <div class="privacy-right-item">
-            <div class="privacy-right-title"><i class="fas fa-shield-heart text-info"></i> Right to Security</div>
-            <p class="privacy-right-desc">Be protected against unlawful processing and security breaches.</p>
-          </div>
-        </div>
+        <ul class="terms-list">
+          <li class="terms-list-item">
+            <span class="terms-bullet-icon"><i class="fas fa-check"></i></span>
+            <div><strong>Strict Medical Confidentiality:</strong> Your diagnostic records, refraction measurements, and personal contacts are encrypted and accessible only to authorized clinic personnel.</div>
+          </li>
+          <li class="terms-list-item">
+            <span class="terms-bullet-icon"><i class="fas fa-check"></i></span>
+            <div><strong>Zero Commercial Sharing:</strong> We never sell, lease, or distribute patient records or phone numbers to third-party marketing entities.</div>
+          </li>
+          <li class="terms-list-item">
+            <span class="terms-bullet-icon"><i class="fas fa-check"></i></span>
+            <div><strong>Full Patient Access:</strong> You hold the legal right to review, update, or request copies of your optical history and examination records anytime through your patient account.</div>
+          </li>
+        </ul>
       </div>
 
-      <!-- Contact Note -->
-      <div style="font-size:0.78rem; color:var(--text-muted); text-align:center; padding:6px 0;">
-        For privacy questions or data requests, visit <strong>Gueco Optical Clinic</strong> in Capas, Tarlac or contact our clinic staff.
+      <!-- Section 5 -->
+      <div class="terms-section">
+        <div class="terms-sec-head">
+          <span class="terms-sec-num">05</span>
+          <h4 class="terms-sec-title">Patient Portal Security &amp; Conduct</h4>
+        </div>
+        <p class="terms-sec-intro">
+          To ensure clinical safety and convenient scheduling for everyone:
+        </p>
+        <ul class="terms-list">
+          <li class="terms-list-item">
+            <span class="terms-bullet-icon"><i class="fas fa-check"></i></span>
+            <div><strong>Account Protection:</strong> Do not share your login credentials or OTP security verification codes with anyone.</div>
+          </li>
+          <li class="terms-list-item">
+            <span class="terms-bullet-icon"><i class="fas fa-check"></i></span>
+            <div><strong>Respectful Environment:</strong> Mutual respect and courteous interaction are expected between patients and staff at all times, online and in-clinic.</div>
+          </li>
+          <li class="terms-list-item">
+            <span class="terms-bullet-icon"><i class="fas fa-check"></i></span>
+            <div><strong>Booking Integrity:</strong> Repeated fake appointments or fraudulent reservations may result in temporary or permanent portal suspension.</div>
+          </li>
+        </ul>
+      </div>
+
+      <!-- Support Notice -->
+      <div style="font-size:0.92rem; color:var(--text-muted); text-align:center; padding:8px 0; font-weight:600;">
+        Have questions about our terms or clinic policies? Visit <strong>Gueco Optical Clinic</strong> in Capas, Tarlac or contact our eye care team.
       </div>
     </div>
 
     <!-- Footer -->
     <div class="privacy-footer">
-      <button type="button" class="btn btn-outline-secondary" onclick="closePrivacyModal()" style="padding:10px 20px; font-size:0.88rem; font-weight:600; border-radius:12px;">
-        Close
+      <button type="button" class="btn-terms-close" onclick="closePrivacyModal()">
+        <i class="fas fa-times me-1"></i> Close
       </button>
-      <button type="button" class="btn-primary" onclick="acceptPrivacyAndClose()" style="padding:10px 28px; font-size:0.92rem; width:auto; border-radius:12px; display:inline-flex; align-items:center; gap:8px;">
-        <i class="fas fa-check-circle"></i> I Understand &amp; Agree
+      <button type="button" class="btn-terms-agree" onclick="acceptPrivacyAndClose()">
+        <i class="fas fa-check-circle"></i> I Understand &amp; Agree to Terms
       </button>
     </div>
   </div>
 </div>
 
 <script>
-// Toast logic
+// Prevent browser "Resubmit the form?" dialog on page refresh after POST
+if (window.history.replaceState) {
+  window.history.replaceState(null, null, window.location.href);
+}
+
+// Pop-up Modal Notification (Matching Admin Portal & SweetAlert2)
+function showPopModal(title, msg, type = 'error') {
+  if (typeof Swal !== 'undefined') {
+    const isDark = document.documentElement.getAttribute('data-theme') === 'dark';
+    const isErr = type === 'danger' || type === 'error' || type === true;
+    const isSucc = type === 'success';
+    const icon = isErr ? 'error' : (isSucc ? 'success' : (type === 'warning' ? 'warning' : 'info'));
+    const header = title || (isErr ? 'Notice' : (isSucc ? 'Success!' : 'Notice'));
+    const btnColor = isErr ? '#EF4444' : (isSucc ? '#10B981' : '#235EAE');
+    const customCls = 'patient-swal-popup' + (isErr ? ' patient-swal-danger' : (isSucc ? ' patient-swal-success' : ''));
+
+    Swal.fire({
+      title: header,
+      text: msg,
+      icon: icon,
+      confirmButtonText: 'OK',
+      confirmButtonColor: btnColor,
+      background: isDark ? '#162238' : '#FFFFFF',
+      color: isDark ? '#FFFFFF' : '#0F172A',
+      timer: isSucc ? 3500 : undefined,
+      timerProgressBar: isSucc,
+      customClass: {
+        popup: customCls
+      }
+    });
+  } else {
+    alert(msg);
+  }
+}
+
+// Fallback / Alias helper so any showToast calls invoke pop-up modal
 function showToast(msg, isError = false) {
-  const container = document.getElementById('toastContainer');
-  const toast = document.createElement('div');
-  toast.className = 'toast' + (isError ? ' danger' : '');
-  const icon = isError ? 'fa-exclamation-circle' : 'fa-check-circle';
-  toast.innerHTML = `<i class="fas ${icon}"></i> <div>${msg}</div>`;
-  container.appendChild(toast);
-  
-  setTimeout(() => toast.classList.add('show'), 100);
-  setTimeout(() => {
-    toast.classList.remove('show');
-    setTimeout(() => toast.remove(), 400);
-  }, 4000);
+  const type = isError ? 'error' : 'success';
+  const title = isError ? 'Notice' : 'Success!';
+  showPopModal(title, msg, type);
 }
 
 <?php if ($error): ?>
-  setTimeout(() => showToast(<?= json_encode($error) ?>, true), 300);
+  setTimeout(() => showPopModal('Notice', <?= json_encode($error) ?>, 'error'), 300);
 <?php endif; ?>
 
 <?php if (isset($_SESSION['flash_msg'])): ?>
-  setTimeout(() => showToast(<?= json_encode($_SESSION['flash_msg']) ?>, <?= $_SESSION['flash_type'] === 'error' ? 'true' : 'false' ?>), 300);
+  setTimeout(() => showPopModal(
+    <?= json_encode($_SESSION['flash_type'] === 'error' ? 'Notice' : ($_SESSION['flash_type'] === 'success' ? 'Success!' : 'Notice')) ?>,
+    <?= json_encode($_SESSION['flash_msg']) ?>,
+    <?= json_encode($_SESSION['flash_type'] === 'error' ? 'error' : 'success') ?>
+  ), 300);
   <?php 
     unset($_SESSION['flash_msg']);
     unset($_SESSION['flash_type']);
   ?>
 <?php endif; ?>
+
+// FAQ Accordion logic
+function toggleFaqCard(card) {
+  const isAlreadyActive = card.classList.contains('active');
+  document.querySelectorAll('.faq-card').forEach(c => {
+    c.classList.remove('active');
+    const btn = c.querySelector('.faq-trigger');
+    if (btn) btn.setAttribute('aria-expanded', 'false');
+  });
+  if (!isAlreadyActive) {
+    card.classList.add('active');
+    const btn = card.querySelector('.faq-trigger');
+    if (btn) btn.setAttribute('aria-expanded', 'true');
+  }
+}
 
 // Privacy Modal logic
 function openPrivacyModal() {
@@ -1295,6 +2575,17 @@ function acceptPrivacyAndClose() {
   }
   closePrivacyModal();
 }
+function setTermsFontSize(scale) {
+  const card = document.querySelector('.privacy-card');
+  if (!card) return;
+  card.classList.remove('font-large', 'font-xlarge');
+  if (scale === 'large') card.classList.add('font-large');
+  if (scale === 'xlarge') card.classList.add('font-xlarge');
+  document.querySelectorAll('.optical-zoom-btn').forEach(btn => btn.classList.remove('active'));
+  if (window.event && window.event.currentTarget) {
+    window.event.currentTarget.classList.add('active');
+  }
+}
 document.getElementById('privacyModal')?.addEventListener('click', function(e) {
   if (e.target === this) {
     closePrivacyModal();
@@ -1304,38 +2595,118 @@ document.getElementById('privacyModal')?.addEventListener('click', function(e) {
 // Modal logic
 function openAuthModal() {
   document.getElementById('authModal').classList.add('open');
+  document.body.style.overflow = 'hidden';
   switchTab('login'); // Always default to login tab when opening
 }
-function closeAuthModal() {
-  const regPanel = document.getElementById('panel-register');
-  if (regPanel && regPanel.classList.contains('active')) {
-    const inputs = regPanel.querySelectorAll('input:not([type="hidden"]), select');
-    let hasData = false;
-    inputs.forEach(input => {
-      if (input.value.trim() !== '') hasData = true;
-    });
+function clearAuthModalInputs() {
+  const modal = document.getElementById('authModal');
+  if (!modal) return;
+  const inputs = modal.querySelectorAll('input:not([type="hidden"]), select, textarea');
+  inputs.forEach(input => {
+    if (input.type === 'checkbox' || input.type === 'radio') {
+      input.checked = false;
+    } else {
+      input.value = '';
+    }
+    input.classList.remove('is-invalid');
+  });
 
-    if (hasData) {
-      if (!confirm('Are you sure you want to close? All inputted data will be cleared.')) {
-        return; // Stop closing if they click cancel
-      }
-      // Clear data if they click OK
-      inputs.forEach(input => {
-        input.value = '';
-        input.classList.remove('is-invalid');
+  // Reset any toggled password fields back to password type
+  const passInputs = modal.querySelectorAll('input[type="text"]');
+  passInputs.forEach(input => {
+    if (input.id && input.id.toLowerCase().includes('pass')) {
+      input.type = 'password';
+    }
+  });
+  modal.querySelectorAll('.pass-toggle').forEach(btn => {
+    btn.innerHTML = '<i class="fas fa-eye"></i>';
+  });
+}
+
+function closeAuthModal() {
+  const modal = document.getElementById('authModal');
+  if (!modal) return;
+
+  const allInputs = modal.querySelectorAll('input:not([type="hidden"]), select, textarea');
+  let hasData = false;
+
+  allInputs.forEach(input => {
+    if (input.type === 'checkbox' || input.type === 'radio') {
+      if (input.checked) hasData = true;
+    } else if (input.value && input.value.trim() !== '') {
+      hasData = true;
+    }
+  });
+
+  if (hasData) {
+    const isDark = document.documentElement.getAttribute('data-theme') === 'dark';
+    if (typeof Swal !== 'undefined') {
+      Swal.fire({
+        title: 'Discard Inputted Data?',
+        text: 'Are you sure you want to close? All inputted data will be cleared.',
+        icon: 'warning',
+        showCancelButton: true,
+        confirmButtonText: 'Yes, Close',
+        cancelButtonText: 'Keep Editing',
+        confirmButtonColor: '#EF4444',
+        cancelButtonColor: isDark ? '#334155' : '#94A3B8',
+        background: isDark ? '#162238' : '#FFFFFF',
+        color: isDark ? '#FFFFFF' : '#0F172A',
+        customClass: {
+          popup: 'patient-swal-popup patient-swal-danger'
+        }
+      }).then((result) => {
+        if (result.isConfirmed) {
+          clearAuthModalInputs();
+          modal.classList.remove('open');
+          document.body.style.overflow = '';
+          switchTab('login');
+          if (window.history.replaceState) {
+            const cleanUrl = window.location.pathname + (window.location.hash || '');
+            window.history.replaceState(null, document.title, cleanUrl);
+          }
+        }
       });
+      return;
+    } else {
+      if (!confirm('Are you sure you want to close? All inputted data will be cleared.')) {
+        return;
+      }
+      clearAuthModalInputs();
     }
   }
-  
-  // Also clear login panel if needed (optional, but requested for register)
-  document.getElementById('authModal').classList.remove('open');
+
+  clearAuthModalInputs();
+  modal.classList.remove('open');
+  document.body.style.overflow = '';
+  switchTab('login');
+  if (window.history.replaceState) {
+    const cleanUrl = window.location.pathname + (window.location.hash || '');
+    window.history.replaceState(null, document.title, cleanUrl);
+  }
 }
+
 // Close on outside click
 document.getElementById('authModal').addEventListener('click', function(e) {
   if (e.target === this) {
     closeAuthModal();
   }
 });
+
+// Close on Escape key
+document.addEventListener('keydown', function(e) {
+  if (e.key === 'Escape') {
+    const authModal = document.getElementById('authModal');
+    if (authModal && authModal.classList.contains('open')) {
+      closeAuthModal();
+    }
+  }
+});
+
+// If modal is open on page load (e.g. from validation error)
+if (document.getElementById('authModal').classList.contains('open')) {
+  document.body.style.overflow = 'hidden';
+}
 
 // Tab logic
 function switchTab(tab) {
@@ -1367,24 +2738,34 @@ document.querySelectorAll('.pass-toggle').forEach(btn => {
 
 // Theme logic
 function updateThemeIcons(theme) {
-  const iconClass = theme === 'dark' ? 'fas fa-sun' : 'fas fa-moon';
+  const iconClass = (theme === 'dark') ? 'fas fa-sun' : 'fas fa-moon';
   const icon = document.getElementById('themeIcon');
   if (icon) icon.className = iconClass;
   const iconMobile = document.getElementById('themeIconMobile');
   if (iconMobile) iconMobile.className = iconClass;
 }
 
-const savedTheme = localStorage.getItem('gueco_theme') || localStorage.getItem('gueco-theme') || localStorage.getItem('guecoTheme') || localStorage.getItem('theme') || 'dark';
-document.documentElement.setAttribute('data-theme', savedTheme);
-updateThemeIcons(savedTheme);
+function applyLandingTheme(theme) {
+  if (theme !== 'light' && theme !== 'dark') theme = 'dark';
+  document.documentElement.setAttribute('data-theme', theme);
+  try {
+    localStorage.setItem('gueco_theme', theme);
+    localStorage.setItem('gueco-theme', theme);
+    localStorage.setItem('guecoTheme', theme);
+    localStorage.setItem('theme', theme);
+    document.cookie = "gueco_theme=" + theme + "; path=/; max-age=31536000; SameSite=Lax";
+    document.cookie = "theme=" + theme + "; path=/; max-age=31536000; SameSite=Lax";
+  } catch(e) {}
+  updateThemeIcons(theme);
+}
+
+const savedTheme = localStorage.getItem('gueco_theme') || localStorage.getItem('gueco-theme') || localStorage.getItem('theme') || localStorage.getItem('guecoTheme') || '<?= $currentTheme ?>';
+applyLandingTheme(savedTheme);
 
 function toggleTheme() {
-  const current = document.documentElement.getAttribute('data-theme');
+  const current = document.documentElement.getAttribute('data-theme') || 'dark';
   const next = current === 'dark' ? 'light' : 'dark';
-  document.documentElement.setAttribute('data-theme', next);
-  localStorage.setItem('gueco_theme', next);
-  localStorage.setItem('guecoTheme', next);
-  updateThemeIcons(next);
+  applyLandingTheme(next);
 }
 
 document.getElementById('themeToggle')?.addEventListener('click', toggleTheme);

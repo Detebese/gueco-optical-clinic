@@ -54,14 +54,33 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         }
     }
 }
+$userTheme = $_COOKIE['gueco_theme'] ?? ($_COOKIE['theme'] ?? 'dark');
+$currentTheme = ($userTheme === 'light') ? 'light' : 'dark';
 ?>
 <!DOCTYPE html>
-<html lang="en" data-theme="dark">
+<html lang="en" data-theme="<?= $currentTheme ?>">
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Staff Login — Gueco Optical Clinic</title>
   <meta name="description" content="Gueco Optical Clinic Staff Management Portal">
+
+  <!-- Immediate Theme Initialization -->
+  <script>
+    (function() {
+      try {
+        var theme = localStorage.getItem("gueco_theme") || localStorage.getItem("gueco-theme") || localStorage.getItem("theme") || localStorage.getItem("guecoTheme");
+        if (!theme) {
+          var m = document.cookie.match(/(?:^|;\s*)gueco_theme=([^;]+)/);
+          theme = m ? m[1] : "<?= $currentTheme ?>";
+        }
+        if (theme !== "light" && theme !== "dark") theme = "dark";
+        document.documentElement.setAttribute("data-theme", theme);
+      } catch (e) {
+        document.documentElement.setAttribute("data-theme", "<?= $currentTheme ?>");
+      }
+    })();
+  </script>
   <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css">
   <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -71,12 +90,12 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
 
     :root {
-      --clr-bronze-light: #FDBA74;
-      --clr-bronze:       #E09A67;
-      --clr-bronze-dark:  #B86B35;
-      --clr-gold:         #F59E0B;
-      --clr-primary:      #E09A67;
-      --clr-accent:       #FBBF24;
+      --clr-bronze-light: #27AAE2;
+      --clr-bronze:       #235EAE;
+      --clr-bronze-dark:  #272264;
+      --clr-gold:         #00ADEF;
+      --clr-primary:      #235EAE;
+      --clr-accent:       #00ADEF;
       --clr-danger:       #EF4444;
     }
 
@@ -89,29 +108,29 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
       --text-muted:    #9CA3AF;
       --text-subtle:   #6B7280;
       --border-color:  rgba(255, 255, 255, 0.08);
-      --border-glow:   rgba(224, 154, 103, 0.3);
+      --border-glow:   rgba(0, 173, 239, 0.3);
       --pill-bg:       rgba(255, 255, 255, 0.04);
       --pill-border:   rgba(255, 255, 255, 0.08);
-      --badge-bg:      rgba(224, 154, 103, 0.1);
-      --badge-border:  rgba(224, 154, 103, 0.25);
+      --badge-bg:      rgba(35, 94, 174, 0.12);
+      --badge-border:  rgba(0, 173, 239, 0.25);
       --card-shadow:   0 32px 80px -16px rgba(0,0,0,0.85), 0 0 0 1px rgba(255,255,255,0.06) inset;
     }
 
     [data-theme="light"] {
-      --bg-body:       #F8F7F5;
+      --bg-body:       #F0F4F9;
       --bg-card:       rgba(255, 255, 255, 0.85);
       --bg-card-hover: rgba(255, 255, 255, 0.95);
-      --bg-input:      rgba(245, 243, 240, 0.9);
+      --bg-input:      rgba(229, 238, 248, 0.9);
       --text-primary:  #18181B;
       --text-muted:    #71717A;
       --text-subtle:   #A1A1AA;
       --border-color:  rgba(0, 0, 0, 0.08);
-      --border-glow:   rgba(184, 107, 53, 0.3);
+      --border-glow:   rgba(35, 94, 174, 0.25);
       --pill-bg:       rgba(255, 255, 255, 0.8);
       --pill-border:   rgba(0, 0, 0, 0.06);
-      --badge-bg:      rgba(184, 107, 53, 0.08);
-      --badge-border:  rgba(184, 107, 53, 0.2);
-      --card-shadow:   0 24px 60px -12px rgba(184, 107, 53, 0.12), 0 0 0 1px rgba(255,255,255,0.8) inset;
+      --badge-bg:      rgba(35, 94, 174, 0.08);
+      --badge-border:  rgba(35, 94, 174, 0.2);
+      --card-shadow:   0 24px 60px -12px rgba(35, 94, 174, 0.12), 0 0 0 1px rgba(255,255,255,0.8) inset;
     }
 
     body {
@@ -124,7 +143,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
       transition: background 0.3s ease, color 0.3s ease;
     }
 
-    /* Ambient Warm Luxury Glows */
+    /* Ambient Blue Luxury Glows */
     .bg-ambient {
       position: fixed;
       inset: 0;
@@ -139,7 +158,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
       border-radius: 50%;
       top: -150px;
       left: -100px;
-      background: radial-gradient(circle, rgba(224, 154, 103, 0.14) 0%, rgba(184, 107, 53, 0.05) 45%, transparent 70%);
+      background: radial-gradient(circle, rgba(0, 173, 239, 0.14) 0%, rgba(39, 34, 100, 0.08) 45%, transparent 70%);
       filter: blur(80px);
       animation: ambientPulse 12s ease-in-out infinite alternate;
     }
@@ -150,7 +169,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
       border-radius: 50%;
       bottom: -100px;
       right: 5%;
-      background: radial-gradient(circle, rgba(245, 158, 11, 0.12) 0%, rgba(224, 154, 103, 0.06) 40%, transparent 70%);
+      background: radial-gradient(circle, rgba(35, 94, 174, 0.14) 0%, rgba(0, 173, 239, 0.06) 40%, transparent 70%);
       filter: blur(90px);
       animation: ambientPulse 15s ease-in-out infinite alternate-reverse;
     }
@@ -161,14 +180,14 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
       border-radius: 50%;
       top: 40%;
       right: 35%;
-      background: radial-gradient(circle, rgba(251, 191, 36, 0.06) 0%, transparent 70%);
+      background: radial-gradient(circle, rgba(39, 170, 226, 0.06) 0%, transparent 70%);
       filter: blur(60px);
     }
     [data-theme="light"] .glow-1 {
-      background: radial-gradient(circle, rgba(224, 154, 103, 0.22) 0%, transparent 70%);
+      background: radial-gradient(circle, rgba(0, 173, 239, 0.18) 0%, transparent 70%);
     }
     [data-theme="light"] .glow-2 {
-      background: radial-gradient(circle, rgba(245, 158, 11, 0.18) 0%, transparent 70%);
+      background: radial-gradient(circle, rgba(35, 94, 174, 0.14) 0%, transparent 70%);
     }
 
     @keyframes ambientPulse {
@@ -260,7 +279,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     }
     .clinic-badge:hover {
       transform: translateY(-1px);
-      border-color: rgba(224, 154, 103, 0.45);
+      border-color: rgba(0, 173, 239, 0.45);
     }
     .clinic-badge-dot {
       width: 32px; height: 32px;
@@ -291,7 +310,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
       color: var(--text-primary);
     }
     .gradient-word {
-      background: linear-gradient(135deg, #FDBA74 0%, #E09A67 50%, #C87A48 100%);
+      background: linear-gradient(135deg, #00ADEF 0%, #27AAE2 50%, #235EAE 100%);
       -webkit-background-clip: text;
       -webkit-text-fill-color: transparent;
       background-clip: text;
@@ -299,7 +318,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
       position: relative;
     }
     [data-theme="light"] .gradient-word {
-      background: linear-gradient(135deg, #C26325 0%, #E09A67 50%, #9A4310 100%);
+      background: linear-gradient(135deg, #235EAE 0%, #1E74BD 50%, #272264 100%);
       -webkit-background-clip: text;
       -webkit-text-fill-color: transparent;
       background-clip: text;
@@ -338,13 +357,13 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
       content: '';
       position: absolute;
       inset: 0;
-      background: linear-gradient(135deg, rgba(224, 154, 103, 0.08), transparent);
+      background: linear-gradient(135deg, rgba(0, 173, 239, 0.08), transparent);
       opacity: 0;
       transition: opacity 0.25s ease;
     }
     .feature-pill:hover {
       transform: translateY(-3px);
-      border-color: rgba(224, 154, 103, 0.35);
+      border-color: rgba(0, 173, 239, 0.35);
       background: var(--bg-card-hover);
       box-shadow: 0 12px 30px -10px rgba(0,0,0,0.3);
     }
@@ -360,10 +379,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     }
     .feature-pill:hover .fp-icon { transform: scale(1.08); }
 
-    .fp-icon.bronze { background: rgba(224, 154, 103, 0.15); color: #FDBA74; border: 1px solid rgba(224, 154, 103, 0.25); }
-    .fp-icon.gold   { background: rgba(245, 158, 11, 0.15);  color: #FCD34D; border: 1px solid rgba(245, 158, 11, 0.25); }
-    .fp-icon.amber  { background: rgba(217, 119, 6, 0.15);   color: #FB923C; border: 1px solid rgba(217, 119, 6, 0.25); }
-    .fp-icon.warm   { background: rgba(234, 88, 12, 0.15);   color: #FED7AA; border: 1px solid rgba(234, 88, 12, 0.25); }
+    .fp-icon.bronze { background: rgba(0, 173, 239, 0.15); color: #00ADEF; border: 1px solid rgba(0, 173, 239, 0.25); }
+    .fp-icon.gold   { background: rgba(35, 94, 174, 0.15);  color: #27AAE2; border: 1px solid rgba(35, 94, 174, 0.25); }
+    .fp-icon.amber  { background: rgba(30, 116, 189, 0.15); color: #1E74BD; border: 1px solid rgba(30, 116, 189, 0.25); }
+    .fp-icon.warm   { background: rgba(39, 34, 100, 0.15);  color: #268FC8; border: 1px solid rgba(39, 34, 100, 0.25); }
 
     .fp-label { font-size: 0.86rem; font-weight: 700; color: var(--text-primary); letter-spacing: -0.01em; }
     .fp-desc  { font-size: 0.74rem; color: var(--text-muted); margin-top: 2px; }
@@ -469,7 +488,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     .field-control:focus {
       border-color: var(--clr-bronze);
       background: var(--bg-card-hover);
-      box-shadow: 0 0 0 4px rgba(224, 154, 103, 0.18);
+      box-shadow: 0 0 0 4px rgba(0, 173, 239, 0.18);
     }
     .field-control:focus ~ .field-icon,
     .field-input-wrap:has(.field-control:focus) .field-icon {
@@ -556,7 +575,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
       100% { background-position: 200% center; }
     }
     .btn-login.loading {
-      background: linear-gradient(90deg, #E09A67 25%, #FDBA74 50%, #E09A67 75%);
+      background: linear-gradient(90deg, #235EAE 25%, #00ADEF 50%, #235EAE 75%);
       background-size: 200% auto;
       color: #FFFFFF;
       animation: shimmer 1.2s linear infinite;
@@ -752,19 +771,33 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     const html = document.documentElement;
     const themeBtn  = document.getElementById('themeToggle');
     const themeIcon = document.getElementById('themeIcon');
-    const saved = localStorage.getItem('gueco_theme') || localStorage.getItem('gueco-theme') || localStorage.getItem('theme') || 'dark';
-    html.setAttribute('data-theme', saved);
-    themeIcon.className = saved === 'dark' ? 'fas fa-sun' : 'fas fa-moon';
 
-    themeBtn.addEventListener('click', () => {
-      const cur = html.getAttribute('data-theme') || 'dark';
-      const next = cur === 'dark' ? 'light' : 'dark';
-      html.setAttribute('data-theme', next);
-      localStorage.setItem('gueco_theme', next);
-      localStorage.setItem('gueco-theme', next);
-      localStorage.setItem('theme', next);
-      themeIcon.className = next === 'dark' ? 'fas fa-sun' : 'fas fa-moon';
-    });
+    function applyLoginTheme(theme) {
+      if (theme !== 'light' && theme !== 'dark') theme = 'dark';
+      html.setAttribute('data-theme', theme);
+      try {
+        localStorage.setItem('gueco_theme', theme);
+        localStorage.setItem('gueco-theme', theme);
+        localStorage.setItem('guecoTheme', theme);
+        localStorage.setItem('theme', theme);
+        document.cookie = "gueco_theme=" + theme + "; path=/; max-age=31536000; SameSite=Lax";
+        document.cookie = "theme=" + theme + "; path=/; max-age=31536000; SameSite=Lax";
+      } catch(e) {}
+      if (themeIcon) {
+        themeIcon.className = (theme === 'dark') ? 'fas fa-sun' : 'fas fa-moon';
+      }
+    }
+
+    const saved = localStorage.getItem('gueco_theme') || localStorage.getItem('gueco-theme') || localStorage.getItem('theme') || localStorage.getItem('guecoTheme') || '<?= $currentTheme ?>';
+    applyLoginTheme(saved);
+
+    if (themeBtn) {
+      themeBtn.addEventListener('click', () => {
+        const cur = html.getAttribute('data-theme') || 'dark';
+        const next = cur === 'dark' ? 'light' : 'dark';
+        applyLoginTheme(next);
+      });
+    }
 
     // Password toggle
     function togglePass() {

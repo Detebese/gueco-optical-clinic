@@ -9,11 +9,15 @@ document.addEventListener('DOMContentLoaded', function () {
   const html = document.documentElement;
 
   function applyTheme(theme) {
+    if (theme !== 'light' && theme !== 'dark') theme = 'dark';
     html.setAttribute('data-theme', theme);
     try {
       localStorage.setItem('gueco_theme', theme);
       localStorage.setItem('gueco-theme', theme);
+      localStorage.setItem('guecoTheme', theme);
       localStorage.setItem('theme', theme);
+      document.cookie = "gueco_theme=" + theme + "; path=/; max-age=31536000; SameSite=Lax";
+      document.cookie = "theme=" + theme + "; path=/; max-age=31536000; SameSite=Lax";
     } catch(e) {}
     const icon = document.getElementById('themeIcon');
     if (icon) {
@@ -23,7 +27,7 @@ document.addEventListener('DOMContentLoaded', function () {
   }
 
   // Sync icon and state with already initialized attribute
-  const activeTheme = html.getAttribute('data-theme') || localStorage.getItem('gueco_theme') || localStorage.getItem('gueco-theme') || localStorage.getItem('theme') || 'dark';
+  const activeTheme = html.getAttribute('data-theme') || localStorage.getItem('gueco_theme') || localStorage.getItem('gueco-theme') || localStorage.getItem('theme') || localStorage.getItem('guecoTheme') || 'dark';
   applyTheme(activeTheme);
 
   // Toggle button

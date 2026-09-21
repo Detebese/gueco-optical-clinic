@@ -1,6 +1,6 @@
 /* Auto-extracted styles for inventory.php */
 
-.inv-b6b6a8 { color:var(--clr-primary) }
+.inv-b6b6a8 { color:var(--clr-primary-light) }
 
 .inv-96b971 { display:flex;gap:8px;flex-wrap:wrap; }
 
@@ -39,3 +39,124 @@
 .inv-a833a4 { max-width:400px; }
 
 .inv-8c7aac { font-size:.85rem;color:var(--text-muted);margin-bottom:16px; }
+
+/* Low Stock & Out of Stock Red Border & Alert Badges */
+.product-card {
+  background: var(--bg-card);
+  border: 1px solid var(--border-color);
+  border-radius: 12px;
+  padding: 15px;
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  transition: border-color 0.2s ease, box-shadow 0.2s ease, transform 0.2s ease;
+}
+
+.product-card:hover {
+  transform: translateY(-2px);
+  box-shadow: var(--shadow-md);
+}
+
+.product-card.card-low-stock,
+.card-low-stock {
+  border: 2px solid #EF4444 !important;
+  box-shadow: 0 0 14px rgba(239, 68, 68, 0.25) !important;
+}
+
+.product-card.card-low-stock:hover,
+.card-low-stock:hover {
+  border-color: #DC2626 !important;
+  box-shadow: 0 0 20px rgba(239, 68, 68, 0.4) !important;
+}
+
+.product-card.card-out-stock,
+.card-out-stock {
+  border: 2px solid #DC2626 !important;
+  box-shadow: 0 0 14px rgba(220, 38, 38, 0.28) !important;
+}
+
+.product-card.card-out-stock:hover,
+.card-out-stock:hover {
+  border-color: #B91C1C !important;
+  box-shadow: 0 0 20px rgba(220, 38, 38, 0.45) !important;
+}
+
+.badge-low-alert {
+  background: rgba(239, 68, 68, 0.18) !important;
+  color: #EF4444 !important;
+  border: 1.5px solid #EF4444 !important;
+  font-weight: 700 !important;
+  font-size: 0.8rem !important;
+  padding: 4px 10px !important;
+  border-radius: 20px !important;
+  display: inline-flex !important;
+  align-items: center !important;
+  gap: 4px !important;
+  letter-spacing: 0.02em !important;
+  box-shadow: 0 0 8px rgba(239, 68, 68, 0.2) !important;
+}
+
+[data-theme="light"] .badge-low-alert {
+  background: #FEE2E2 !important;
+  color: #DC2626 !important;
+  border: 1.5px solid #EF4444 !important;
+}
+
+.badge-out-alert {
+  background: #DC2626 !important;
+  color: #FFFFFF !important;
+  border: 1.5px solid #DC2626 !important;
+  font-weight: 700 !important;
+  font-size: 0.8rem !important;
+  padding: 4px 10px !important;
+  border-radius: 20px !important;
+  display: inline-flex !important;
+  align-items: center !important;
+  gap: 4px !important;
+  letter-spacing: 0.02em !important;
+  box-shadow: 0 0 8px rgba(220, 38, 38, 0.28) !important;
+}
+
+.table-row-low td:first-child {
+  border-left: 3.5px solid #EF4444 !important;
+}
+
+.table-row-out td:first-child {
+  border-left: 3.5px solid #DC2626 !important;
+}
+
+/* View Toggle Button (Grid View / List View) */
+.btn-view-toggle {
+  background: rgba(168, 85, 247, 0.18) !important;
+  color: #C084FC !important;
+  border: 1.5px solid rgba(168, 85, 247, 0.45) !important;
+  font-weight: 600 !important;
+  border-radius: 10px !important;
+  padding: 6px 14px !important;
+  display: inline-flex !important;
+  align-items: center !important;
+  gap: 6px !important;
+  transition: all 0.2s ease !important;
+}
+
+.btn-view-toggle:hover {
+  background: #A855F7 !important;
+  color: #FFFFFF !important;
+  border-color: #A855F7 !important;
+  box-shadow: 0 4px 14px rgba(168, 85, 247, 0.35) !important;
+  transform: translateY(-1px);
+}
+
+[data-theme="light"] .btn-view-toggle,
+html:not([data-theme="dark"]) .btn-view-toggle {
+  background: #F3E8FF !important;
+  color: #7E22CE !important;
+  border-color: #DDD6FE !important;
+}
+
+[data-theme="light"] .btn-view-toggle:hover {
+  background: #7E22CE !important;
+  color: #FFFFFF !important;
+}
+
+

@@ -111,7 +111,7 @@ include __DIR__ . '/../includes/header.php';
 <div class="appt-stats-container">
   <?php
   $statCfg = [
-      'pending'   => ['type' => 'pending',   'color' => '#F59E0B', 'rgb' => '245, 158, 11',  'icon' => 'clock',        'label' => 'Pending'],
+      'pending'   => ['type' => 'pending',   'color' => '#268FC8', 'rgb' => '38, 143, 200',  'icon' => 'clock',        'label' => 'Pending'],
       'confirmed' => ['type' => 'confirmed', 'color' => '#0EA5E9', 'rgb' => '14, 165, 233',  'icon' => 'check-circle', 'label' => 'Confirmed'],
       'completed' => ['type' => 'completed', 'color' => '#10B981', 'rgb' => '16, 185, 129',  'icon' => 'check-double', 'label' => 'Completed'],
       'cancelled' => ['type' => 'cancelled', 'color' => '#EF4444', 'rgb' => '239, 68, 68',   'icon' => 'times-circle', 'label' => 'Cancelled'],
@@ -197,11 +197,11 @@ include __DIR__ . '/../includes/header.php';
 
 <!-- View Toggles -->
 <div class="appt-ef4f51">
-  <div class="btn-group" role="group" aria-label="View Toggle">
-    <button type="button" class="btn btn-outline-primary active" id="btnListView">
+  <div class="view-toggle-group" role="group" aria-label="View Toggle">
+    <button type="button" class="view-toggle-btn active" id="btnListView">
       <i class="fas fa-list me-1"></i> List View
     </button>
-    <button type="button" class="btn btn-outline-primary" id="btnCalView">
+    <button type="button" class="view-toggle-btn" id="btnCalView">
       <i class="fas fa-calendar-alt me-1"></i> Calendar View
     </button>
   </div>

@@ -7,35 +7,17 @@ $pageTitle  = 'Point of Sale';
 $breadcrumb = ['Saleslady', 'POS'];
 $db = getDB();
 
-// Fetch Patient Prescription AJAX
-if (isset($_GET['action']) && $_GET['action'] === 'get_patient_rx') {
-    $patId = (int)($_GET['patient_id'] ?? 0);
-    $rx = $db->prepare("
-        SELECT rx.*, u.full_name as doctor_name 
-        FROM prescriptions rx 
-        LEFT JOIN users u ON u.id = rx.doctor_id 
-        WHERE rx.patient_id = ? 
-        ORDER BY rx.created_at DESC LIMIT 1
-    ");
-    $rx->execute([$patId]);
-    $rxData = $rx->fetch(PDO::FETCH_ASSOC);
-    header('Content-Type: application/json');
-    echo json_encode(['success' => true, 'rx' => $rxData ?: null]);
-    exit;
-}
-
 // Process sale submission
-if (($_SERVER['REQUEST_METHOD'] ?? '') === 'POST' && ($_POST['action'] ?? '') === 'process_sale') {
+if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action'] ?? '') === 'process_sale') {
     if (!verifyCsrfToken($_POST['csrf_token'] ?? '')) {
         echo json_encode(['success' => false, 'error' => 'Security validation failed (CSRF). Please refresh the page.']);
         exit;
     }
-    $patientId     = (int)($_POST['patient_id'] ?? 0) ?: null;
-    $appointmentId = (int)($_POST['appointment_id'] ?? 0) ?: null;
-    $items         = json_decode($_POST['items'] ?? '[]', true);
-    $payMethod     = $_POST['payment_method'] ?? 'cash';
-    $discount      = (float)($_POST['discount'] ?? 0);
-    $amountPaid    = (float)($_POST['amount_paid'] ?? 0);
+    $patientId  = (int)($_POST['patient_id'] ?? 0) ?: null;
+    $items      = json_decode($_POST['items'] ?? '[]', true);
+    $payMethod  = $_POST['payment_method'] ?? 'cash';
+    $discount   = (float)($_POST['discount'] ?? 0);
+    $amountPaid = (float)($_POST['amount_paid'] ?? 0);
 
     if (empty($items)) {
         echo json_encode(['success'=>false,'error'=>'Cart is empty. Please add items to proceed.']);
@@ -45,51 +27,30 @@ if (($_SERVER['REQUEST_METHOD'] ?? '') === 'POST' && ($_POST['action'] ?? '') ==
     // Calculate subtotal and build item details
     $subtotal = 0;
     $itemsDetailed = [];
-    foreach ($items as &$item) {
-        $isService = !empty($item['is_service']);
-        $itemType  = $item['item_type'] ?? ($isService ? 'service' : 'product');
-        
-        if ($isService) {
-            $price = (float)($item['price'] ?? 0);
-            $qty   = max(1, (int)($item['qty'] ?? 1));
-            $lineTotal = $price * $qty;
-            $subtotal += $lineTotal;
-
-            $itemsDetailed[] = [
-                'id'         => $item['id'],
-                'name'       => sanitize($item['name']),
-                'qty'        => $qty,
-                'price'      => $price,
-                'total'      => $lineTotal,
-                'is_service' => true,
-                'item_type'  => $itemType
-            ];
-        } else {
-            $prod = $db->prepare("SELECT * FROM products WHERE id=? AND status='active'");
-            $prod->execute([$item['id']]); $prod = $prod->fetch();
-            if (!$prod) { 
-                echo json_encode(['success'=>false,'error'=>'Product not found or inactive: ID #'.$item['id']]); 
-                exit; 
-            }
-            if ($prod['stock_quantity'] < $item['qty']) {
-                echo json_encode(['success'=>false,'error'=>"Insufficient stock for: {$prod['name']}. Available stock: {$prod['stock_quantity']}"]); 
-                exit;
-            }
-            $price = (float)$prod['price'];
-            $qty   = (int)$item['qty'];
-            $lineTotal = $price * $qty;
-            $subtotal += $lineTotal;
-
-            $itemsDetailed[] = [
-                'id'         => (int)$item['id'],
-                'name'       => $prod['name'],
-                'qty'        => $qty,
-                'price'      => $price,
-                'total'      => $lineTotal,
-                'is_service' => false,
-                'item_type'  => 'product'
-            ];
+    foreach ($items as $rawItem) {
+        $prod = $db->prepare("SELECT * FROM products WHERE id=? AND status='active'");
+        $prod->execute([$rawItem['id']]); 
+        $prod = $prod->fetch();
+        if (!$prod) { 
+            echo json_encode(['success'=>false,'error'=>'Product not found or inactive: ID #'.$rawItem['id']]); 
+            exit; 
         }
+        if ($prod['stock_quantity'] < $rawItem['qty']) {
+            echo json_encode(['success'=>false,'error'=>"Insufficient stock for: {$prod['name']}. Available stock: {$prod['stock_quantity']}"]); 
+            exit; 
+        }
+        $itemPrice = (float)$prod['price'];
+        $itemQty   = (int)$rawItem['qty'];
+        $itemTotal = (float)($itemPrice * $itemQty);
+        $subtotal += $itemTotal;
+
+        $itemsDetailed[] = [
+            'id'    => (int)$rawItem['id'],
+            'name'  => $prod['name'],
+            'qty'   => $itemQty,
+            'price' => $itemPrice,
+            'total' => $itemTotal
+        ];
     }
 
     $total = max(0, $subtotal - $discount);
@@ -118,34 +79,24 @@ if (($_SERVER['REQUEST_METHOD'] ?? '') === 'POST' && ($_POST['action'] ?? '') ==
     $db->beginTransaction();
     try {
         // Insert sale
-        $saleStmt = $db->prepare("INSERT INTO sales (invoice_no,patient_id,cashier_id,appointment_id,subtotal,discount,total,payment_method,amount_paid,change_amount,status) VALUES (?,?,?,?,?,?,?,?,?,?,'completed')");
-        $saleStmt->execute([$invoiceNo,$patientId,$_SESSION['user_id'],$appointmentId,$subtotal,$discount,$total,$dbPaymentMethod,$amountPaid,$change]);
+        $saleStmt = $db->prepare("INSERT INTO sales (invoice_no,patient_id,cashier_id,subtotal,discount,total,payment_method,amount_paid,change_amount,status) VALUES (?,?,?,?,?,?,?,?,?,'completed')");
+        $saleStmt->execute([$invoiceNo,$patientId,$_SESSION['user_id'],$subtotal,$discount,$total,$dbPaymentMethod,$amountPaid,$change]);
         $saleId = $db->lastInsertId();
 
-        // Insert items + deduct stock if physical product
+        // Insert items + deduct stock
         foreach ($itemsDetailed as $item) {
-            if ($item['is_service']) {
-                $db->prepare("INSERT INTO sale_items (sale_id,product_id,item_name,item_type,quantity,unit_price,total_price) VALUES (?,NULL,?,?,?,?,?)")
-                   ->execute([$saleId, $item['name'], $item['item_type'], $item['qty'], $item['price'], $item['total']]);
-            } else {
-                $db->prepare("INSERT INTO sale_items (sale_id,product_id,item_name,item_type,quantity,unit_price,total_price) VALUES (?,?,?, 'product', ?,?,?)")
-                   ->execute([$saleId,$item['id'],$item['name'],$item['qty'],$item['price'],$item['total']]);
+            $db->prepare("INSERT INTO sale_items (sale_id,product_id,item_name,item_type,quantity,unit_price,total_price) VALUES (?,?,?, 'product', ?,?,?)")
+               ->execute([$saleId,$item['id'],$item['name'],$item['qty'],$item['price'],$item['total']]);
 
-                // Deduct stock
-                $prevStock = $db->prepare("SELECT stock_quantity FROM products WHERE id=?"); 
-                $prevStock->execute([$item['id']]); 
-                $prevStock = (int)$prevStock->fetch()['stock_quantity'];
-                $newStock = max(0, $prevStock - $item['qty']);
-                
-                $db->prepare("UPDATE products SET stock_quantity=? WHERE id=?")->execute([$newStock,$item['id']]);
-                $db->prepare("INSERT INTO inventory_logs (product_id,type,quantity,previous_stock,new_stock,reason,reference_id,user_id) VALUES (?,?,?,?,?,?,?,?)")
-                   ->execute([$item['id'],'stock_out',$item['qty'],$prevStock,$newStock,"Sale: $invoiceNo",$saleId,$_SESSION['user_id']]);
-            }
-        }
-
-        // If sale is linked to an appointment, mark appointment as completed
-        if ($appointmentId > 0) {
-            $db->prepare("UPDATE appointments SET status='completed' WHERE id=?")->execute([$appointmentId]);
+            // Deduct stock
+            $prevStock = $db->prepare("SELECT stock_quantity FROM products WHERE id=?"); 
+            $prevStock->execute([$item['id']]); 
+            $prevStock = (int)$prevStock->fetch()['stock_quantity'];
+            $newStock = max(0, $prevStock - $item['qty']);
+            
+            $db->prepare("UPDATE products SET stock_quantity=? WHERE id=?")->execute([$newStock,$item['id']]);
+            $db->prepare("INSERT INTO inventory_logs (product_id,type,quantity,previous_stock,new_stock,reason,reference_id,user_id) VALUES (?,?,?,?,?,?,?,?)")
+               ->execute([$item['id'],'stock_out',$item['qty'],$prevStock,$newStock,"Sale: $invoiceNo",$saleId,$_SESSION['user_id']]);
         }
 
         $db->commit();
@@ -184,47 +135,10 @@ if (isset($_GET['search_products'])) {
 
 // Get all products by category for initial load
 $categories = $db->query("SELECT c.*, (SELECT COUNT(*) FROM products p WHERE p.category_id=c.id AND p.status='active' AND p.stock_quantity>0) as prod_count FROM categories c WHERE c.status='active' ORDER BY c.name")->fetchAll();
-$allProducts = $db->query("SELECT p.id,p.name,p.price,p.stock_quantity,c.name as category FROM products p JOIN categories c ON c.id=p.category_id WHERE p.status='active' AND p.stock_quantity>0 ORDER BY c.name,p.name")->fetchAll();
+$allProducts = $db->query("SELECT p.id,p.name,p.price,p.stock_quantity,p.tier,c.name as category FROM products p JOIN categories c ON c.id=p.category_id WHERE p.status='active' AND p.stock_quantity>0 ORDER BY c.name,p.name")->fetchAll();
 
 $patients = $db->query("SELECT id, full_name, phone FROM patients WHERE status='active' ORDER BY full_name")->fetchAll();
 $selectedPatientId = (int)($_GET['patient_id'] ?? 0);
-$selectedApptId    = (int)($_GET['appt_id'] ?? 0);
-
-// Detect if linked appointment is pending consultation
-$linkedAppt    = null;
-$isExamPending = false;
-if ($selectedApptId > 0) {
-    $apptStmt = $db->prepare("SELECT * FROM appointments WHERE id=?");
-    $apptStmt->execute([$selectedApptId]);
-    $linkedAppt = $apptStmt->fetch(PDO::FETCH_ASSOC);
-
-    if ($linkedAppt) {
-        $purpose = strtolower($linkedAppt['purpose'] ?? '');
-        $isConsultation = str_contains($purpose, 'consultation') || str_contains($purpose, 'eye_exam') || str_contains($purpose, 'checkup');
-        
-        if ($isConsultation && $linkedAppt['status'] !== 'completed') {
-            $hasRxStmt = $db->prepare("SELECT COUNT(*) FROM prescriptions WHERE patient_id=?");
-            $hasRxStmt->execute([$linkedAppt['patient_id']]);
-            if ((int)$hasRxStmt->fetchColumn() === 0) {
-                $isExamPending = true;
-            }
-        }
-    }
-}
-
-// If pre-selected patient, fetch optical prescription
-$selectedPatientRx = null;
-if ($selectedPatientId > 0) {
-    $rxStmt = $db->prepare("
-        SELECT rx.*, u.full_name as doctor_name 
-        FROM prescriptions rx 
-        LEFT JOIN users u ON u.id = rx.doctor_id 
-        WHERE rx.patient_id = ? 
-        ORDER BY rx.created_at DESC LIMIT 1
-    ");
-    $rxStmt->execute([$selectedPatientId]);
-    $selectedPatientRx = $rxStmt->fetch(PDO::FETCH_ASSOC);
-}
 
 include __DIR__ . '/../includes/header.php';
 ?>
@@ -335,118 +249,22 @@ include __DIR__ . '/../includes/header.php';
 
 <div class="pos-layout">
 
-  <!-- LEFT: Products & Services Panel -->
+  <!-- LEFT: Products Panel -->
   <div style="display:flex;flex-direction:column;gap:14px;">
-    
-    <!-- Walk-in / Direct Retail Mode Banner -->
-    <?php if (isset($_GET['mode']) && $_GET['mode'] === 'retail'): ?>
-    <div class="alert alert-info d-flex align-items-center justify-content-between gap-3 mb-0 p-3" style="border-radius:12px;background:rgba(6,182,212,0.08);border:1px solid rgba(6,182,212,0.25);">
-      <div class="d-flex align-items-center gap-2">
-        <i class="fas fa-bolt fa-lg text-info"></i>
-        <div>
-          <strong style="color:var(--clr-info);">⚡ Walk-in & Direct Retail Mode:</strong> Ring up frames, sunglasses, solutions, and accessories immediately without scheduling.
-        </div>
-      </div>
-      <a href="appointments.php" class="btn btn-outline-primary btn-sm text-nowrap" style="font-size:.78rem;">
-        <i class="fas fa-calendar-check me-1"></i> View Scheduled Patients
-      </a>
-    </div>
-    <?php endif; ?>
-
-    <!-- Examination Pending Warning Banner -->
-    <?php if ($isExamPending): ?>
-    <div class="alert alert-warning d-flex align-items-center justify-content-between gap-3 mb-0 p-3" style="border-radius:12px;border:1.5px solid #f59e0b;background:rgba(245,158,11,0.09);">
-      <div class="d-flex align-items-center gap-2">
-        <i class="fas fa-lock fa-lg text-warning flex-shrink-0"></i>
-        <div>
-          <strong style="color:#b45309;">Consultation in Progress with Doctor:</strong> Patient #<?= $linkedAppt['patient_id'] ?> is currently in the queue for a medical eye examination. Prescribed lenses will unlock once the Optometrist records the prescription.
-        </div>
-      </div>
-      <a href="pos.php?mode=retail" class="btn btn-sm btn-outline-warning text-nowrap fw-bold" style="font-size:.78rem;">
-        <i class="fas fa-bolt me-1"></i> Switch to Walk-in Retail
-      </a>
-    </div>
-    <?php endif; ?>
-
-    <!-- Hidden Appointment ID Tracker -->
-    <input type="hidden" id="selectedApptId" value="<?= $selectedApptId ?>">
-
-    <!-- Doctor's Optical Prescription Banner -->
-    <div id="patientRxBox" style="<?= $selectedPatientRx ? '' : 'display:none;' ?>background:linear-gradient(135deg,rgba(37,99,235,0.06),rgba(8,145,178,0.08));border:1.5px solid rgba(37,99,235,0.25);border-radius:14px;padding:14px 18px;position:relative;">
-      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px;">
-        <div style="font-weight:700;font-size:.88rem;color:var(--clr-primary);display:flex;align-items:center;gap:8px;">
-          <i class="fas fa-glasses fa-lg"></i>
-          <span>Doctor's Optical Prescription</span>
-          <span id="rxDoctorBadge" class="badge bg-primary" style="font-size:.68rem;padding:3px 8px;"><?= $selectedPatientRx ? 'Dr. ' . sanitize($selectedPatientRx['doctor_name'] ?? 'Optometrist') : 'Doctor Prescription' ?></span>
-        </div>
-        <div class="dropdown">
-          <button type="button" class="btn btn-primary btn-sm dropdown-toggle" data-bs-toggle="dropdown" style="font-size:.75rem;padding:4px 12px;border-radius:8px;">
-            <i class="fas fa-plus me-1"></i> Add Prescribed Lenses
-          </button>
-          <ul class="dropdown-menu dropdown-menu-end" style="font-size:.82rem;">
-            <li><a class="dropdown-item" href="#" onclick="addServiceToCart('Single Vision CR-39 Lens', 800, 'service');return false;">Single Vision CR-39 &middot; ₱800.00</a></li>
-            <li><a class="dropdown-item" href="#" onclick="addServiceToCart('Multicoated Anti-Radiation Lens', 1200, 'service');return false;">Multicoated Anti-Radiation &middot; ₱1,200.00</a></li>
-            <li><a class="dropdown-item" href="#" onclick="addServiceToCart('Photochromic Transitions Lens', 1800, 'service');return false;">Photochromic Transitions &middot; ₱1,800.00</a></li>
-            <li><a class="dropdown-item" href="#" onclick="addServiceToCart('Progressive Multifocal Lens', 2500, 'service');return false;">Progressive Multifocal &middot; ₱2,500.00</a></li>
-          </ul>
-        </div>
-      </div>
-
-      <!-- OD / OS Prescription Grid -->
-      <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:8px;">
-        <div style="background:var(--bg-card);border:1px solid var(--border-color);border-radius:10px;padding:8px 12px;font-size:.78rem;">
-          <div style="font-weight:700;color:var(--clr-primary);margin-bottom:2px;">OD (Right Eye):</div>
-          <div id="rxOdDisplay" style="font-family:monospace;color:var(--text-primary);">
-            SPH: <?= $selectedPatientRx ? sanitize($selectedPatientRx['od_sphere'] ?: '0.00') : '0.00' ?> &middot; 
-            CYL: <?= $selectedPatientRx ? sanitize($selectedPatientRx['od_cylinder'] ?: '0.00') : '0.00' ?> &middot; 
-            AXIS: <?= $selectedPatientRx ? sanitize($selectedPatientRx['od_axis'] ?: '—') : '—' ?>
-          </div>
-        </div>
-        <div style="background:var(--bg-card);border:1px solid var(--border-color);border-radius:10px;padding:8px 12px;font-size:.78rem;">
-          <div style="font-weight:700;color:var(--clr-primary);margin-bottom:2px;">OS (Left Eye):</div>
-          <div id="rxOsDisplay" style="font-family:monospace;color:var(--text-primary);">
-            SPH: <?= $selectedPatientRx ? sanitize($selectedPatientRx['os_sphere'] ?: '0.00') : '0.00' ?> &middot; 
-            CYL: <?= $selectedPatientRx ? sanitize($selectedPatientRx['os_cylinder'] ?: '0.00') : '0.00' ?> &middot; 
-            AXIS: <?= $selectedPatientRx ? sanitize($selectedPatientRx['os_axis'] ?: '—') : '—' ?>
-          </div>
-        </div>
-      </div>
-
-      <div style="display:flex;justify-content:space-between;align-items:center;font-size:.75rem;color:var(--text-muted);">
-        <div>
-          <strong>PD:</strong> <span id="rxPdDisplay"><?= $selectedPatientRx ? sanitize($selectedPatientRx['pd'] ?: '—') : '—' ?></span> &middot; 
-          <strong>ADD:</strong> <span id="rxAddDisplay"><?= $selectedPatientRx ? sanitize($selectedPatientRx['add_power'] ?: '—') : '—' ?></span>
-        </div>
-        <div id="rxNotesDisplay" style="font-style:italic;max-width:50%;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">
-          <?= $selectedPatientRx && !empty($selectedPatientRx['notes']) ? 'Notes: ' . sanitize($selectedPatientRx['notes']) : '' ?>
-        </div>
-      </div>
-    </div>
-
-    <!-- Quick Optical Services Ribbon -->
-    <div style="display:flex;gap:8px;overflow-x:auto;padding-bottom:2px;flex-shrink:0;">
-      <button type="button" class="btn btn-sm btn-outline-primary" onclick="addServiceToCart('Eye Examination / Consultation Fee', 0, 'consultation_fee')" style="font-size:.75rem;border-radius:8px;white-space:nowrap;">
-        <i class="fas fa-stethoscope me-1"></i> + Eye Exam
-      </button>
-      <button type="button" class="btn btn-sm btn-outline-info" onclick="addServiceToCart('Contact Lens Fitting & Instruction', 0, 'service')" style="font-size:.75rem;border-radius:8px;white-space:nowrap;">
-        <i class="fas fa-eye me-1"></i> + Lens Fitting
-      </button>
-      <button type="button" class="btn btn-sm btn-outline-secondary" onclick="addServiceToCart('Frame Adjustment & Repair', 150, 'service')" style="font-size:.75rem;border-radius:8px;white-space:nowrap;">
-        <i class="fas fa-tools me-1"></i> + Frame Repair (₱150)
-      </button>
-      <button type="button" class="btn btn-sm btn-outline-success" onclick="addServiceToCart('Multicoated Anti-Radiation Lens', 1200, 'service')" style="font-size:.75rem;border-radius:8px;white-space:nowrap;">
-        <i class="fas fa-shield-alt me-1"></i> + Anti-Rad Lens (₱1.2k)
-      </button>
-    </div>
-
     <!-- Search + Filter Bar -->
-    <div style="display:flex;gap:10px;flex-shrink:0;">
-      <input type="text" id="productSearch" class="form-control" placeholder="🔍 Search frames, lenses, accessories..." style="flex:1;">
-      <select id="catFilter" class="form-select" style="width:180px;">
+    <div style="display:flex;gap:10px;flex-shrink:0;flex-wrap:wrap;">
+      <input type="text" id="productSearch" class="form-control" placeholder="🔍 Search products by name..." style="flex:1;min-width:180px;">
+      <select id="catFilter" class="form-select" style="width:160px;">
         <option value="">All Categories</option>
         <?php foreach ($categories as $cat): ?>
         <option value="<?= htmlspecialchars($cat['name'], ENT_QUOTES, 'UTF-8') ?>"><?= htmlspecialchars($cat['name']) ?> (<?= $cat['prod_count'] ?>)</option>
         <?php endforeach; ?>
+      </select>
+      <select id="tierFilter" class="form-select" style="width:140px;">
+        <option value="">All Tiers</option>
+        <option value="budget">⚪ Budget</option>
+        <option value="mid">🔵 Mid</option>
+        <option value="high">🟣 High</option>
       </select>
     </div>
 
@@ -459,17 +277,21 @@ include __DIR__ . '/../includes/header.php';
            data-price="<?= $prod['price'] ?>" 
            data-stock="<?= $prod['stock_quantity'] ?>" 
            data-cat="<?= htmlspecialchars($prod['category'], ENT_QUOTES, 'UTF-8') ?>"
+           data-tier="<?= htmlspecialchars($prod['tier'] ?? 'budget', ENT_QUOTES, 'UTF-8') ?>"
            onclick="addToCart(this)"
            style="background:var(--bg-card);border:1px solid var(--border-color);border-radius:12px;padding:14px;cursor:pointer;transition:all .2s ease;"
            onmouseover="this.style.borderColor='var(--clr-primary)';this.style.boxShadow='0 4px 20px rgba(37,99,235,.15)'"
            onmouseout="this.style.borderColor='var(--border-color)';this.style.boxShadow='none'">
-        <div style="width:36px;height:36px;background:linear-gradient(135deg,var(--clr-primary),var(--clr-secondary));border-radius:10px;display:flex;align-items:center;justify-content:center;margin-bottom:10px;">
-          <i class="fas fa-glasses" style="color:#fff;font-size:.85rem;"></i>
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px;">
+          <div style="width:36px;height:36px;background:linear-gradient(135deg,var(--clr-primary),var(--clr-secondary));border-radius:10px;display:flex;align-items:center;justify-content:center;">
+            <i class="fas fa-glasses" style="color:#fff;font-size:.85rem;"></i>
+          </div>
+          <?= tierBadge($prod['tier'] ?? 'budget') ?>
         </div>
         <div style="font-weight:700;font-size:.82rem;margin-bottom:4px;line-height:1.3"><?= sanitize($prod['name']) ?></div>
         <div style="font-size:.7rem;color:var(--text-muted);margin-bottom:8px"><?= sanitize($prod['category']) ?></div>
         <div style="display:flex;justify-content:space-between;align-items:center;">
-          <div style="font-weight:800;color:var(--clr-primary);font-size:.9rem">₱<?= number_format($prod['price'],2) ?></div>
+          <div style="font-weight:800;color:var(--clr-success);font-size:.9rem">₱<?= number_format($prod['price'],2) ?></div>
           <div style="font-size:.68rem;color:<?= $prod['stock_quantity']<=5?'var(--clr-warning)':'var(--text-muted)' ?>"><?= $prod['stock_quantity'] ?> left</div>
         </div>
       </div>
@@ -493,7 +315,7 @@ include __DIR__ . '/../includes/header.php';
     <div id="cartItems" class="pos-cart-list">
       <div id="emptyCart" style="text-align:center;padding:40px 16px;color:var(--text-muted);">
         <i class="fas fa-shopping-cart" style="font-size:2rem;margin-bottom:10px;display:block;opacity:.3"></i>
-        <p style="font-size:.82rem;margin:0">Cart is empty.<br>Click products or services to add them.</p>
+        <p style="font-size:.82rem;margin:0">Cart is empty.<br>Click products to add them.</p>
       </div>
     </div>
 
@@ -502,7 +324,7 @@ include __DIR__ . '/../includes/header.php';
       <!-- Patient Selection -->
       <div style="margin-bottom:10px;">
         <label style="font-size:.72rem;font-weight:600;color:var(--text-muted);margin-bottom:4px;display:block;">PATIENT (Optional)</label>
-        <select id="patientSelect" class="form-select form-select-sm" style="font-size:.82rem;" onchange="onPatientSelectChange(this.value)">
+        <select id="patientSelect" class="form-select form-select-sm" style="font-size:.82rem;">
           <option value="">Walk-in Customer</option>
           <?php foreach ($patients as $pt): ?>
           <option value="<?= $pt['id'] ?>" <?= $pt['id'] === $selectedPatientId ? 'selected' : '' ?>><?= sanitize($pt['full_name']) ?> — <?= sanitize($pt['phone']??'') ?></option>
@@ -530,7 +352,7 @@ include __DIR__ . '/../includes/header.php';
       <div style="background:var(--bg-card);border:1px solid var(--border-color);border-radius:10px;padding:10px 12px;margin-bottom:10px;">
         <div style="display:flex;justify-content:space-between;font-size:.8rem;margin-bottom:4px;"><span style="color:var(--text-muted)">Subtotal</span><span id="subtotalDisplay" style="font-weight:600;">₱0.00</span></div>
         <div style="display:flex;justify-content:space-between;font-size:.8rem;margin-bottom:4px;"><span style="color:var(--clr-warning)">Discount</span><span id="discountDisplay" style="color:var(--clr-warning);font-weight:600;">-₱0.00</span></div>
-        <div style="display:flex;justify-content:space-between;font-size:.95rem;font-weight:800;border-top:1px solid var(--border-light);padding-top:6px;"><span>TOTAL</span><span id="totalDisplay" style="color:var(--clr-primary)">₱0.00</span></div>
+        <div style="display:flex;justify-content:space-between;font-size:.95rem;font-weight:800;border-top:1px solid var(--border-light);padding-top:6px;"><span>TOTAL</span><span id="totalDisplay" style="color:var(--clr-success)">₱0.00</span></div>
       </div>
 
       <!-- Amount Paid (cash only) -->
@@ -612,21 +434,25 @@ function escapeHtml(str) {
 // Product search & filter
 const searchInput = document.getElementById('productSearch');
 const catFilter   = document.getElementById('catFilter');
+const tierFilter  = document.getElementById('tierFilter');
 searchInput.addEventListener('input', filterProducts);
 catFilter.addEventListener('change', filterProducts);
+tierFilter.addEventListener('change', filterProducts);
 
 function filterProducts() {
-  const q   = searchInput.value.toLowerCase().trim();
-  const cat = catFilter.value.toLowerCase().trim();
+  const q    = searchInput.value.toLowerCase().trim();
+  const cat  = catFilter.value.toLowerCase().trim();
+  const tier = tierFilter.value.toLowerCase().trim();
   document.querySelectorAll('.prod-card').forEach(card => {
     const name = (card.dataset.name || '').toLowerCase();
     const c    = (card.dataset.cat || '').toLowerCase();
-    const show = (!q || name.includes(q)) && (!cat || c === cat);
+    const t    = (card.dataset.tier || 'budget').toLowerCase();
+    const show = (!q || name.includes(q)) && (!cat || c === cat) && (!tier || t === tier);
     card.style.display = show ? '' : 'none';
   });
 }
 
-// Add physical product to cart
+// Add to cart
 function addToCart(el) {
   const id    = parseInt(el.dataset.id, 10);
   const name  = el.dataset.name;
@@ -635,7 +461,7 @@ function addToCart(el) {
 
   if (!id || isNaN(id)) return;
 
-  const existing = cart.find(i => i.id === id && !i.is_service);
+  const existing = cart.find(i => i.id === id);
   if (existing) {
     if (existing.qty >= stock) { 
       showToast('Maximum stock reached for ' + name + '!', 'warning'); 
@@ -643,7 +469,7 @@ function addToCart(el) {
     }
     existing.qty++;
   } else {
-    cart.push({ id, name, price, stock, qty: 1, is_service: false, item_type: 'product' });
+    cart.push({ id, name, price, stock, qty: 1 });
   }
   
   renderCart();
@@ -655,29 +481,6 @@ function addToCart(el) {
     el.style.transform = '';
     el.style.background = 'var(--bg-card)';
   }, 180);
-}
-
-// Add service or custom lens to cart
-function addServiceToCart(name, price, itemType='service') {
-  const srvId = 'srv_' + Math.random().toString(36).substr(2, 9);
-  
-  const existing = cart.find(i => i.name === name && i.is_service);
-  if (existing) {
-    existing.qty++;
-  } else {
-    cart.push({
-      id: srvId,
-      name: name,
-      price: parseFloat(price),
-      stock: 9999,
-      qty: 1,
-      is_service: true,
-      item_type: itemType
-    });
-  }
-  
-  renderCart();
-  showToast(`Added ${name} to cart!`, 'success');
 }
 
 function removeFromCart(id) {
@@ -729,19 +532,14 @@ function renderCart() {
   // Clear container
   container.innerHTML = '';
 
-  // Render every unique item row
+  // Render every unique product row
   cart.forEach(item => {
     const itemRow = document.createElement('div');
     itemRow.className = 'pos-cart-item';
     
-    const isSrv = item.is_service;
-    const badgeHtml = isSrv ? `<span class="badge bg-secondary me-1" style="font-size:0.6rem;">${item.item_type === 'consultation_fee' ? 'Fee' : 'Service'}</span>` : '';
-
     itemRow.innerHTML = `
       <div style="flex:1;min-width:0;">
-        <div style="font-weight:600;font-size:.82rem;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;color:var(--text-primary);" title="${escapeHtml(item.name)}">
-          ${badgeHtml}${escapeHtml(item.name)}
-        </div>
+        <div style="font-weight:600;font-size:.82rem;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;color:var(--text-primary);" title="${escapeHtml(item.name)}">${escapeHtml(item.name)}</div>
         <div style="font-size:.7rem;color:var(--text-muted);">${formatPeso(item.price)} each</div>
       </div>
       <div style="display:flex;align-items:center;gap:5px;flex-shrink:0;">
@@ -749,7 +547,7 @@ function renderCart() {
         <span style="min-width:22px;text-align:center;font-weight:700;font-size:.82rem;color:var(--text-primary);">${item.qty}</span>
         <button type="button" class="pos-qty-btn btn-qty-plus" data-id="${item.id}">+</button>
       </div>
-      <div style="min-width:68px;text-align:right;font-weight:700;color:var(--clr-primary);font-size:.85rem;flex-shrink:0;">
+      <div style="min-width:68px;text-align:right;font-weight:700;color:var(--clr-success);font-size:.85rem;flex-shrink:0;">
         ${formatPeso(item.price * item.qty)}
       </div>
       <button type="button" class="pos-remove-btn btn-remove-item" data-id="${item.id}" title="Remove item">✕</button>
@@ -812,34 +610,6 @@ function setQuickCash(val) {
   recalculate();
 }
 
-// Patient Rx Dynamic Fetch
-async function onPatientSelectChange(patId) {
-  const rxBox = document.getElementById('patientRxBox');
-  if (!patId) {
-    rxBox.style.display = 'none';
-    return;
-  }
-
-  try {
-    const res = await fetch(`pos.php?action=get_patient_rx&patient_id=${patId}`);
-    const data = await res.json();
-    if (data.success && data.rx) {
-      const rx = data.rx;
-      document.getElementById('rxDoctorBadge').textContent = 'Dr. ' + (rx.doctor_name || 'Optometrist');
-      document.getElementById('rxOdDisplay').innerHTML = `SPH: ${rx.od_sphere || '0.00'} &middot; CYL: ${rx.od_cylinder || '0.00'} &middot; AXIS: ${rx.od_axis || '—'}`;
-      document.getElementById('rxOsDisplay').innerHTML = `SPH: ${rx.os_sphere || '0.00'} &middot; CYL: ${rx.os_cylinder || '0.00'} &middot; AXIS: ${rx.os_axis || '—'}`;
-      document.getElementById('rxPdDisplay').textContent = rx.pd || '—';
-      document.getElementById('rxAddDisplay').textContent = rx.add_power || '—';
-      document.getElementById('rxNotesDisplay').textContent = rx.notes ? `Notes: ${rx.notes}` : '';
-      rxBox.style.display = '';
-    } else {
-      rxBox.style.display = 'none';
-    }
-  } catch(e) {
-    console.error('Error fetching patient rx:', e);
-  }
-}
-
 // Payment method toggle
 document.getElementById('paymentMethod').addEventListener('change', function() {
   const isCash = this.value === 'cash';
@@ -881,16 +651,8 @@ async function processCheckout() {
   const form = new FormData();
   form.append('csrf_token', '<?= generateCsrfToken() ?>');
   form.append('action', 'process_sale');
-  form.append('items', JSON.stringify(cart.map(i => ({ 
-    id: i.id, 
-    name: i.name, 
-    qty: i.qty, 
-    price: i.price, 
-    is_service: !!i.is_service, 
-    item_type: i.item_type || 'product' 
-  }))));
+  form.append('items', JSON.stringify(cart.map(i => ({ id: i.id, name: i.name, qty: i.qty }))));
   form.append('patient_id', document.getElementById('patientSelect').value);
-  form.append('appointment_id', document.getElementById('selectedApptId').value || '');
   form.append('payment_method', payMethod);
   form.append('discount', discount);
   form.append('amount_paid', paid);
@@ -920,8 +682,6 @@ async function processCheckout() {
       document.getElementById('amountPaid').value = '';
       document.getElementById('discountInput').value = '0';
       document.getElementById('patientSelect').value = '';
-      document.getElementById('patientRxBox').style.display = 'none';
-      document.getElementById('selectedApptId').value = '';
       recalculate();
       
       btn.disabled = false;
@@ -991,4 +751,3 @@ function showToast(msg, type='success') {
 </script>
 
 <?php include __DIR__ . '/../includes/footer.php'; ?>
-

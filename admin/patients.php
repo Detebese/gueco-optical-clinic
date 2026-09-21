@@ -9,7 +9,10 @@ $db = getDB();
 $search = sanitize($_GET['search'] ?? '');
 $page   = max(1,(int)($_GET['page']??1)); $perPage = 15;
 $where = ['1=1']; $params = [];
-if ($search) { $where[] = "(p.full_name LIKE ? OR p.email LIKE ? OR p.phone LIKE ?)"; $params = ["%$search%","%$search%","%$search%"]; }
+if ($search) { 
+    $where[] = "(p.full_name LIKE ? OR p.first_name LIKE ? OR p.last_name LIKE ? OR p.middle_name LIKE ? OR p.email LIKE ? OR p.phone LIKE ?)"; 
+    $params = ["%$search%","%$search%","%$search%","%$search%","%$search%","%$search%"]; 
+}
 $whereStr = implode(' AND ',$where);
 
 $total = $db->prepare("SELECT COUNT(*) as c FROM patients p WHERE $whereStr"); $total->execute($params); $total = $total->fetch()['c'];

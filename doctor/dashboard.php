@@ -255,7 +255,7 @@ include __DIR__ . '/../includes/header.php';
 </div>
 
 <?php
-$statusColors = ['pending'=>'#D97706','confirmed'=>'#0891B2','completed'=>'#059669','cancelled'=>'#DC2626','no_show'=>'#64748B'];
+$statusColors = ['pending'=>'#268FC8','confirmed'=>'#0891B2','completed'=>'#059669','cancelled'=>'#DC2626','no_show'=>'#64748B'];
 $sLabels = array_keys($apptStatusData);
 $sCounts = array_values($apptStatusData);
 $sColors = array_map(fn($s) => $statusColors[$s] ?? '#64748B', $sLabels);

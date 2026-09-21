@@ -14,9 +14,11 @@ $user        = getCurrentUser();
 
 $fullName    = $user['full_name'] ?? 'Admin';
 $initials    = strtoupper(substr($fullName, 0, 1));
+$userTheme = $_COOKIE['gueco_theme'] ?? ($_COOKIE['theme'] ?? 'dark');
+$currentTheme = ($userTheme === 'light') ? 'light' : 'dark';
 ?>
 <!DOCTYPE html>
-<html lang="en">
+<html lang="en" data-theme="<?= $currentTheme ?>">
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
@@ -27,10 +29,15 @@ $initials    = strtoupper(substr($fullName, 0, 1));
   <script>
     (function() {
       try {
-        var theme = localStorage.getItem("gueco_theme") || localStorage.getItem("gueco-theme") || localStorage.getItem("theme") || "dark";
+        var theme = localStorage.getItem("gueco_theme") || localStorage.getItem("gueco-theme") || localStorage.getItem("theme") || localStorage.getItem("guecoTheme");
+        if (!theme) {
+          var m = document.cookie.match(/(?:^|;\s*)gueco_theme=([^;]+)/);
+          theme = m ? m[1] : "<?= $currentTheme ?>";
+        }
+        if (theme !== "light" && theme !== "dark") theme = "dark";
         document.documentElement.setAttribute("data-theme", theme);
       } catch (e) {
-        document.documentElement.setAttribute("data-theme", "dark");
+        document.documentElement.setAttribute("data-theme", "<?= $currentTheme ?>");
       }
     })();
   </script>

@@ -490,7 +490,7 @@ $autoPrint = isset($_GET['auto_print']) && $_GET['auto_print'] == '1';
           <span style="font-weight: 600;"><?= formatCurrency($sale['subtotal']) ?></span>
         </div>
         <?php if ($sale['discount'] > 0): ?>
-        <div class="summary-line" style="color: #d97706;">
+        <div class="summary-line" style="color: #1E74BD;">
           <span>Discount Applied:</span>
           <span style="font-weight: 600;">-<?= formatCurrency($sale['discount']) ?></span>
         </div>

@@ -18,6 +18,8 @@ if (($_SERVER['REQUEST_METHOD'] ?? '') === 'POST') {
         $productCode = sanitize(trim($_POST['product_code'] ?? ''));
         $name     = sanitize(trim($_POST['name'] ?? ''));
         $catId    = (int)($_POST['category_id'] ?? 0);
+        $tier     = sanitize(trim($_POST['tier'] ?? 'budget'));
+        if (!in_array($tier, ['budget', 'mid', 'high'])) $tier = 'budget';
         $suppId   = (int)($_POST['supplier_id'] ?? 0) ?: null;
         $price    = (float)($_POST['price'] ?? 0);
         $stock    = (int)($_POST['stock_quantity'] ?? 0);
@@ -48,8 +50,8 @@ if (($_SERVER['REQUEST_METHOD'] ?? '') === 'POST') {
                 }
 
                 if ($action === 'add') {
-                    $db->prepare("INSERT INTO products (product_code,name,category_id,supplier_id,price,stock_quantity,low_stock_alert,description,status,image) VALUES (?,?,?,?,?,?,?,?,?,?)")
-                       ->execute([$productCode,$name,$catId,$suppId,$price,$stock,$alert,$desc,$stat,$imagePath]);
+                    $db->prepare("INSERT INTO products (product_code,name,category_id,tier,supplier_id,price,stock_quantity,low_stock_alert,description,status,image) VALUES (?,?,?,?,?,?,?,?,?,?,?)")
+                       ->execute([$productCode,$name,$catId,$tier,$suppId,$price,$stock,$alert,$desc,$stat,$imagePath]);
                     // Log inventory
                     $newId = $db->lastInsertId();
                     if ($stock > 0) {
@@ -57,27 +59,27 @@ if (($_SERVER['REQUEST_METHOD'] ?? '') === 'POST') {
                            ->execute([$newId,'stock_in',$stock,0,$stock,'Initial stock',$_SESSION['user_id']]);
                     }
                     $msg = "Product \"$name\" added.";
-                    logActivity("Added new product \"$name\" ($productCode, Price: " . formatCurrency($price) . ", Stock: $stock)", "Inventory", $_SESSION['user_id'], 'staff');
+                    logActivity("Added new product \"$name\" ($productCode, Tier: " . tierLabel($tier) . ", Price: " . formatCurrency($price) . ", Stock: $stock)", "Inventory", $_SESSION['user_id'], 'staff');
                 } else {
                     $id = (int)$_POST['id'];
-                    $stmt = $db->prepare("SELECT product_code, name, category_id, supplier_id, price, low_stock_alert, description, status FROM products WHERE id=?");
+                    $stmt = $db->prepare("SELECT product_code, name, category_id, tier, supplier_id, price, low_stock_alert, description, status FROM products WHERE id=?");
                     $stmt->execute([$id]);
                     $old = $stmt->fetch();
                     
-                    if ($old && $old['product_code'] === $productCode && $old['name'] === $name && (int)$old['category_id'] === $catId && (int)$old['supplier_id'] === $suppId && (float)$old['price'] === $price && (int)$old['low_stock_alert'] === $alert && $old['description'] === $desc && $old['status'] === $stat && !$imagePath) {
+                    if ($old && $old['product_code'] === $productCode && $old['name'] === $name && (int)$old['category_id'] === $catId && ($old['tier'] ?? 'budget') === $tier && (int)$old['supplier_id'] === $suppId && (float)$old['price'] === $price && (int)$old['low_stock_alert'] === $alert && $old['description'] === $desc && $old['status'] === $stat && !$imagePath) {
                         $msg = "No changes were made. Product is already up to date!";
                         $msgType = "info";
-                        $reopenData = ['id' => $id, 'name' => $name, 'category_id' => $catId, 'supplier_id' => $suppId, 'price' => $price, 'low_stock_alert' => $alert, 'description' => $desc, 'status' => $stat];
+                        $reopenData = ['id' => $id, 'name' => $name, 'category_id' => $catId, 'tier' => $tier, 'supplier_id' => $suppId, 'price' => $price, 'low_stock_alert' => $alert, 'description' => $desc, 'status' => $stat];
                     } else {
                         if ($imagePath) {
-                            $db->prepare("UPDATE products SET product_code=?,name=?,category_id=?,supplier_id=?,price=?,low_stock_alert=?,description=?,status=?,image=? WHERE id=?")
-                               ->execute([$productCode,$name,$catId,$suppId,$price,$alert,$desc,$stat,$imagePath,$id]);
+                            $db->prepare("UPDATE products SET product_code=?,name=?,category_id=?,tier=?,supplier_id=?,price=?,low_stock_alert=?,description=?,status=?,image=? WHERE id=?")
+                               ->execute([$productCode,$name,$catId,$tier,$suppId,$price,$alert,$desc,$stat,$imagePath,$id]);
                         } else {
-                            $db->prepare("UPDATE products SET product_code=?,name=?,category_id=?,supplier_id=?,price=?,low_stock_alert=?,description=?,status=? WHERE id=?")
-                               ->execute([$productCode,$name,$catId,$suppId,$price,$alert,$desc,$stat,$id]);
+                            $db->prepare("UPDATE products SET product_code=?,name=?,category_id=?,tier=?,supplier_id=?,price=?,low_stock_alert=?,description=?,status=? WHERE id=?")
+                               ->execute([$productCode,$name,$catId,$tier,$suppId,$price,$alert,$desc,$stat,$id]);
                         }
                         $msg = "Product updated successfully!";
-                        logActivity("Updated product \"$name\" ($productCode, Price: " . formatCurrency($price) . ", Status: " . strtoupper($stat) . ")", "Inventory", $_SESSION['user_id'], 'staff');
+                        logActivity("Updated product \"$name\" ($productCode, Tier: " . tierLabel($tier) . ", Price: " . formatCurrency($price) . ", Status: " . strtoupper($stat) . ")", "Inventory", $_SESSION['user_id'], 'staff');
                     }
                 }
             } catch (PDOException $e) {
@@ -112,10 +114,12 @@ if (($_SERVER['REQUEST_METHOD'] ?? '') === 'POST') {
 // Filters
 $search = sanitize($_GET['search'] ?? '');
 $catFilter = (int)($_GET['cat'] ?? 0);
+$tierFilter = sanitize($_GET['tier'] ?? '');
 $stockFilter = $_GET['stock'] ?? '';
 $where = ['1=1']; $params = [];
 if ($search) { $where[] = '(p.name LIKE ? OR p.product_code LIKE ?)'; $params[] = "%$search%"; $params[] = "%$search%"; }
 if ($catFilter) { $where[] = 'p.category_id=?'; $params[] = $catFilter; }
+if (in_array($tierFilter, ['budget', 'mid', 'high'])) { $where[] = 'p.tier=?'; $params[] = $tierFilter; }
 if ($stockFilter === 'low') { $where[] = 'p.stock_quantity <= p.low_stock_alert'; }
 if ($stockFilter === 'out') { $where[] = 'p.stock_quantity = 0'; }
 $whereStr = implode(' AND ', $where);
@@ -132,7 +136,7 @@ $products->execute($params); $products = $products->fetchAll();
 $categories = $db->query("SELECT * FROM categories WHERE status='active' ORDER BY name")->fetchAll();
 $suppliers  = $db->query("SELECT * FROM suppliers WHERE status='active' ORDER BY company_name")->fetchAll();
 
-$extraHead = '<link rel="stylesheet" href="'.BASE_URL.'assets/css/pages/inventory.css">';
+$extraHead = '<link rel="stylesheet" href="'.BASE_URL.'assets/css/pages/inventory.css?v='.time().'">';
 include __DIR__ . '/../includes/header.php';
 ?>
 
@@ -156,11 +160,11 @@ document.addEventListener("DOMContentLoaded", function() {
 <div class="section-header">
   <h5><i  class="fas fa-boxes me-2 inv-b6b6a8"></i>Inventory — <?= count($products) ?> Products</h5>
   <div class="inv-96b971">
-    <button id="viewToggleBtn" class="btn btn-secondary btn-sm" onclick="toggleView()"><i class="fas fa-th-large"></i> Grid View</button>
+    <button id="viewToggleBtn" class="btn btn-view-toggle btn-sm" onclick="toggleView()"><i class="fas fa-th-large"></i> Grid View</button>
     <a href="inventory_logs.php" class="btn btn-info btn-sm text-white"><i class="fas fa-history"></i> Stock History</a>
     <a href="?stock=low" class="btn btn-warning btn-sm"><i class="fas fa-exclamation-triangle"></i> Low Stock</a>
     <a href="?stock=out" class="btn btn-danger btn-sm"><i class="fas fa-times-circle"></i> Out of Stock</a>
-    <button class="btn btn-primary" onclick="openModal('addProductModal')"><i class="fas fa-plus"></i> Add Product</button>
+    <button class="btn btn-primary btn-sm" onclick="openModal('addProductModal')"><i class="fas fa-plus"></i> Add Product</button>
   </div>
 </div>
 
@@ -169,13 +173,20 @@ document.addEventListener("DOMContentLoaded", function() {
   <div  class="card-body inv-140fb6">
     <form method="GET" class="inv-7cdce4">
       <div class="inv-ce6b9e"><label  class="form-label inv-7c8fee">Search</label>
-        <input type="text" name="search" class="form-control" placeholder="Product name..." value="<?= htmlspecialchars($search) ?>"></div>
+        <input type="text" name="search" class="form-control" placeholder="Product name or SKU..." value="<?= htmlspecialchars($search) ?>"></div>
       <div class="inv-398dad"><label  class="form-label inv-7c8fee">Category</label>
         <select name="cat" class="form-select">
           <option value="">All Categories</option>
           <?php foreach ($categories as $c): ?>
           <option value="<?= $c['id'] ?>" <?= $catFilter==$c['id']?'selected':'' ?>><?= sanitize($c['name']) ?></option>
           <?php endforeach; ?>
+        </select></div>
+      <div class="inv-398dad"><label  class="form-label inv-7c8fee">Product Tier</label>
+        <select name="tier" class="form-select">
+          <option value="">All Tiers</option>
+          <option value="budget" <?= $tierFilter==='budget'?'selected':'' ?>>⚪ Budget Product</option>
+          <option value="mid" <?= $tierFilter==='mid'?'selected':'' ?>>🔵 Mid Product</option>
+          <option value="high" <?= $tierFilter==='high'?'selected':'' ?>>🟣 High Product</option>
         </select></div>
       <div><button type="submit" class="btn btn-outline-primary"><i class="fas fa-search"></i> Search</button></div>
       <div><a href="inventory.php" class="btn btn-secondary"><i class="fas fa-undo"></i></a></div>
@@ -186,14 +197,18 @@ document.addEventListener("DOMContentLoaded", function() {
 <div class="table-wrapper" id="tableView">
   <div class="table-responsive">
     <table class="table">
-      <thead><tr><th>#</th><th>CODE</th><th>Product</th><th>Category</th><th>Supplier</th><th>Price</th><th>Stock</th><th>Alert</th><th>Status</th><th>Actions</th></tr></thead>
+      <thead><tr><th>#</th><th>CODE</th><th>Product</th><th>Tier</th><th>Category</th><th>Supplier</th><th>Price</th><th>Stock</th><th>Alert</th><th>Status</th><th>Actions</th></tr></thead>
       <tbody>
         <?php if (empty($products)): ?>
-        <tr><td colspan="10"><div class="empty-state"><div class="empty-icon"><i class="fas fa-boxes"></i></div><h6>No products found</h6></div></td></tr>
+        <tr><td colspan="11"><div class="empty-state"><div class="empty-icon"><i class="fas fa-boxes"></i></div><h6>No products found</h6></div></td></tr>
         <?php else: ?>
         <?php foreach ($products as $i => $p): ?>
-        <?php $isLow = $p['stock_quantity'] <= $p['low_stock_alert']; $isOut = $p['stock_quantity'] == 0; ?>
-        <tr>
+        <?php 
+          $isLow = $p['stock_quantity'] <= $p['low_stock_alert']; 
+          $isOut = $p['stock_quantity'] == 0; 
+          $rowClass = $isOut ? 'table-row-out' : ($isLow ? 'table-row-low' : '');
+        ?>
+        <tr class="<?= $rowClass ?>">
           <td class="inv-67fd48"><?= $i+1 ?></td>
           <td style="font-family:monospace; color:var(--text-primary); font-size:0.85rem; font-weight:600;"><?= sanitize($p['product_code'] ?: '—') ?></td>
           <td>
@@ -209,15 +224,16 @@ document.addEventListener("DOMContentLoaded", function() {
               </div>
             </div>
           </td>
+          <td><?= tierBadge($p['tier'] ?? 'budget') ?></td>
           <td><span class="badge bg-secondary"><?= sanitize($p['cat_name']) ?></span></td>
           <td class="inv-67fd48"><?= sanitize($p['supplier_name'] ?? '—') ?></td>
           <td class="inv-c0f652"><?= formatCurrency($p['price']) ?></td>
           <td>
-            <span style="font-weight:700;font-size:.95rem;color:<?= $isOut?'var(--clr-danger)':($isLow?'var(--clr-warning)':'var(--text-primary)') ?>">
+            <span style="font-weight:700;font-size:.95rem;color:<?= $isOut?'#DC2626':($isLow?'#EF4444':'var(--text-primary)') ?>">
               <?= $p['stock_quantity'] ?>
             </span>
-            <?php if ($isOut): ?><span  class="badge bg-danger inv-c1ae5c">OUT</span>
-            <?php elseif ($isLow): ?><span  class="badge bg-warning inv-c1ae5c">LOW</span><?php endif; ?>
+            <?php if ($isOut): ?><span class="badge badge-out-alert inv-c1ae5c">OUT</span>
+            <?php elseif ($isLow): ?><span class="badge badge-low-alert inv-c1ae5c">LOW</span><?php endif; ?>
           </td>
           <td class="inv-00a7ed"><?= $p['low_stock_alert'] ?></td>
           <td><?= statusBadge($p['status']) ?></td>
@@ -241,8 +257,14 @@ document.addEventListener("DOMContentLoaded", function() {
     <?php 
     $isLow = $p['stock_quantity'] <= $p['low_stock_alert'];
     $isOut = $p['stock_quantity'] == 0; 
+    $cardClass = $isOut ? 'product-card card-out-stock' : ($isLow ? 'product-card card-low-stock' : 'product-card');
+    $cardBorder = $isOut 
+      ? 'border:2px solid #DC2626; box-shadow:0 0 14px rgba(220,38,38,0.28);' 
+      : ($isLow 
+        ? 'border:2px solid #EF4444; box-shadow:0 0 14px rgba(239,68,68,0.25);' 
+        : 'border:1px solid var(--border-color);');
     ?>
-    <div style="background:var(--bg-card); border:1px solid var(--border-color); border-radius:12px; padding:15px; position:relative; display:flex; flex-direction:column;">
+    <div class="<?= $cardClass ?>" style="background:var(--bg-card); <?= $cardBorder ?> border-radius:12px; padding:15px; position:relative; display:flex; flex-direction:column;">
       <div style="text-align:center; margin-bottom:12px; flex-grow:0;">
         <?php if($p['image']): ?>
           <img src="<?= BASE_URL ?>assets/images/products/<?= $p['image'] ?>" alt="Product" style="width:100%; height:160px; object-fit:cover; border-radius:8px;">
@@ -254,21 +276,24 @@ document.addEventListener("DOMContentLoaded", function() {
       </div>
       
       <div style="flex-grow:1;">
-        <div style="font-family:monospace; color:var(--text-primary); font-size:0.85rem; margin-bottom:2px; font-weight:600;"><?= sanitize($p['product_code'] ?: '—') ?></div>
+        <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:4px;">
+          <span style="font-family:monospace; color:var(--text-primary); font-size:0.85rem; font-weight:600;"><?= sanitize($p['product_code'] ?: '—') ?></span>
+          <?= tierBadge($p['tier'] ?? 'budget') ?>
+        </div>
         <div style="font-weight:700; font-size:1.05rem; line-height:1.2; margin-bottom:5px; color:var(--text-primary);"><?= sanitize($p['name']) ?></div>
         <div style="font-size:0.8rem; color:var(--text-muted); margin-bottom:12px;"><?= sanitize($p['cat_name']) ?></div>
       </div>
       
       <div style="display:flex; justify-content:space-between; align-items:end; margin-bottom:15px; flex-grow:0;">
-        <div style="font-weight:800; font-size:1.1rem; color:var(--clr-primary);">₱<?= number_format($p['price'], 2) ?></div>
+        <div style="font-weight:800; font-size:1.15rem; color:var(--clr-success);">₱<?= number_format($p['price'], 2) ?></div>
         
         <div style="text-align:right;">
           <?php if($isOut): ?>
-            <span class="badge bg-danger">Out of Stock</span>
+            <span class="badge badge-out-alert"><i class="fas fa-times-circle me-1"></i>Out of Stock</span>
           <?php elseif($isLow): ?>
-            <span class="badge bg-warning text-dark">Low: <?= $p['stock_quantity'] ?></span>
+            <span class="badge badge-low-alert"><i class="fas fa-exclamation-triangle me-1"></i>Low: <?= $p['stock_quantity'] ?></span>
           <?php else: ?>
-            <span class="badge bg-success"><?= $p['stock_quantity'] ?> in stock</span>
+            <span class="badge bg-success" style="font-weight:600; font-size:0.8rem; padding:4px 10px; border-radius:20px;"><?= $p['stock_quantity'] ?> in stock</span>
           <?php endif; ?>
         </div>
       </div>
@@ -296,6 +321,12 @@ document.addEventListener("DOMContentLoaded", function() {
           <div  class="form-group inv-da5cd6"><label class="form-label">Category *</label>
             <select name="category_id" class="form-select" required><option value="">Select</option>
               <?php foreach ($categories as $c): ?><option value="<?= $c['id'] ?>"><?= sanitize($c['name']) ?></option><?php endforeach; ?>
+            </select></div>
+          <div  class="form-group inv-da5cd6"><label class="form-label">Product Tier *</label>
+            <select name="tier" class="form-select" required>
+              <option value="budget" selected>⚪ Budget Product</option>
+              <option value="mid">🔵 Mid Product</option>
+              <option value="high">🟣 High Product</option>
             </select></div>
           <div  class="form-group inv-da5cd6"><label class="form-label">Supplier</label>
             <select name="supplier_id" class="form-select"><option value="">None</option>
@@ -329,6 +360,12 @@ document.addEventListener("DOMContentLoaded", function() {
           <div  class="form-group inv-da5cd6"><label class="form-label">Category *</label>
             <select name="category_id" id="epCat" class="form-select" required><option value="">Select</option>
               <?php foreach ($categories as $c): ?><option value="<?= $c['id'] ?>"><?= sanitize($c['name']) ?></option><?php endforeach; ?>
+            </select></div>
+          <div  class="form-group inv-da5cd6"><label class="form-label">Product Tier *</label>
+            <select name="tier" id="epTier" class="form-select" required>
+              <option value="budget">⚪ Budget Product</option>
+              <option value="mid">🔵 Mid Product</option>
+              <option value="high">🟣 High Product</option>
             </select></div>
           <div  class="form-group inv-da5cd6"><label class="form-label">Supplier</label>
             <select name="supplier_id" id="epSupp" class="form-select"><option value="">None</option>
@@ -389,6 +426,7 @@ function confirmEdit(e, form) {
       const code = document.getElementById('epCode').value;
       const name = document.getElementById('epName').value;
       const cat = document.getElementById('epCat').value;
+      const tier = document.getElementById('epTier').value;
       const supp = document.getElementById('epSupp').value || null;
       const price = parseFloat(document.getElementById('epPrice').value);
       const alert = parseInt(document.getElementById('epAlert').value);
@@ -404,6 +442,7 @@ function confirmEdit(e, form) {
           code === (p.product_code || '') &&
           name === p.name &&
           cat === String(p.category_id) &&
+          tier === (p.tier || 'budget') &&
           supp === oldSupp &&
           price === parseFloat(p.price) &&
           alert === parseInt(p.low_stock_alert) &&
@@ -445,6 +484,7 @@ function openEditProduct(p) {
   document.getElementById('epCode').value = p.product_code || '';
   document.getElementById('epName').value = p.name;
   document.getElementById('epCat').value = p.category_id;
+  document.getElementById('epTier').value = p.tier || 'budget';
   document.getElementById('epSupp').value = p.supplier_id || '';
   document.getElementById('epPrice').value = p.price;
   document.getElementById('epAlert').value = p.low_stock_alert;

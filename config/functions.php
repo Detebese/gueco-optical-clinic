@@ -5,6 +5,8 @@
 // ============================================================
 
 require_once __DIR__ . '/db.php';
+require_once __DIR__ . '/google_oauth.php';
+require_once __DIR__ . '/mail.php';
 
 // --- Session & Auth ---
 
@@ -31,6 +33,11 @@ function isLoggedIn(): bool {
 function isPatientLoggedIn(): bool {
     startSession();
     return isset($_SESSION['patient_id']);
+}
+
+function isPatient2FAVerified(): bool {
+    startSession();
+    return !empty($_SESSION['patient_id']) && !empty($_SESSION['patient_2fa_verified']);
 }
 
 function getCurrentUser(): ?array {
@@ -64,32 +71,74 @@ function getCurrentUser(): ?array {
     return $currentUser;
 }
 
+function getAppBaseUrl(): string {
+    static $base = null;
+    if ($base === null) {
+        $script = $_SERVER['SCRIPT_NAME'] ?? '';
+        $base = (strpos($script, '/gueco-optical/') !== false) ? '/gueco-optical' : '';
+    }
+    return $base;
+}
+
 function requireRole(string ...$roles): void {
     startSession();
+    $base = getAppBaseUrl();
     if (!isLoggedIn()) {
-        header('Location: /gueco-optical/login.php');
+        header('Location: ' . $base . '/login.php');
         exit;
     }
     if (!in_array($_SESSION['user_role'], $roles)) {
-        header('Location: /gueco-optical/unauthorized.php');
+        header('Location: ' . $base . '/unauthorized.php');
         exit;
+    }
+}
+
+function isPatientProfileComplete(int $patientId): bool {
+    try {
+        $db = getDB();
+        $stmt = $db->prepare("SELECT first_name, last_name, full_name, phone, address, gender FROM patients WHERE id = ? LIMIT 1");
+        $stmt->execute([$patientId]);
+        $row = $stmt->fetch();
+        if (!$row) return false;
+        
+        $hasName = (!empty(trim((string)($row['last_name'] ?? ''))) && !empty(trim((string)($row['first_name'] ?? ''))))
+                   || !empty(trim((string)($row['full_name'] ?? '')));
+
+        return $hasName
+            && !empty(trim((string)$row['phone']))
+            && !empty(trim((string)$row['address']))
+            && !empty(trim((string)$row['gender']));
+    } catch (Exception $e) {
+        return false;
     }
 }
 
 function requirePatientLogin(): void {
     startSession();
+    $base = getAppBaseUrl();
     if (!isPatientLoggedIn()) {
-        header('Location: /gueco-optical/index.php');
+        header('Location: ' . $base . '/index.php');
+        exit;
+    }
+    // Check if 2FA OTP verification is complete
+    if (!isPatient2FAVerified()) {
+        header('Location: ' . $base . '/verify-otp.php');
+        exit;
+    }
+    // Check if essential profile setup is complete
+    if (!isPatientProfileComplete((int)$_SESSION['patient_id'])) {
+        header('Location: ' . $base . '/complete-profile.php');
         exit;
     }
 }
 
 function getDashboardUrl(string $role): string {
+    $base = getAppBaseUrl();
     return match($role) {
-        'admin'     => '/gueco-optical/admin/dashboard.php',
-        'doctor'    => '/gueco-optical/doctor/dashboard.php',
-        'saleslady' => '/gueco-optical/saleslady/dashboard.php',
-        default     => '/gueco-optical/login.php',
+        'admin'     => $base . '/admin/dashboard.php',
+        'doctor'    => $base . '/doctor/dashboard.php',
+        'saleslady' => $base . '/saleslady/dashboard.php',
+        default     => $base . '/login.php',
     };
 }
 
@@ -228,13 +277,31 @@ function formatTime(string $time): string {
 }
 
 function timeAgo(string $datetime): string {
-    $now  = new DateTime();
-    $past = new DateTime($datetime);
-    $diff = $now->diff($past);
-    if ($diff->d === 0 && $diff->h === 0) return $diff->i . 'm ago';
-    if ($diff->d === 0) return $diff->h . 'h ago';
-    if ($diff->d < 7) return $diff->d . 'd ago';
-    return formatDate($datetime);
+    if (!$datetime) return '—';
+    try {
+        $tz = new DateTimeZone('Asia/Manila');
+        $now = new DateTime('now', $tz);
+        $past = new DateTime($datetime, $tz);
+        
+        // If the timestamp is slightly in the future due to small clock discrepancies
+        if ($past > $now) {
+            $diffSeconds = $past->getTimestamp() - $now->getTimestamp();
+            if ($diffSeconds < 120) {
+                return 'Just now';
+            }
+        }
+        
+        $diff = $now->diff($past);
+        if ($diff->y > 0) return $diff->y . 'y ago';
+        if ($diff->m > 0) return $diff->m . 'mo ago';
+        if ($diff->d >= 7) return floor($diff->d / 7) . 'w ago';
+        if ($diff->d > 0) return $diff->d . 'd ago';
+        if ($diff->h > 0) return $diff->h . 'h ago';
+        if ($diff->i > 0) return $diff->i . 'm ago';
+        return 'Just now';
+    } catch (Exception $e) {
+        return formatDate($datetime);
+    }
 }
 
 // --- Badge Helpers ---
@@ -265,6 +332,26 @@ function roleBadge(string $role): string {
     ];
     $cfg = $map[$role] ?? ['secondary', 'user', ucfirst($role)];
     return "<span class='badge bg-{$cfg[0]}'><i class='fas fa-{$cfg[1]} me-1'></i>{$cfg[2]}</span>";
+}
+
+function tierBadge(string $tier): string {
+    $tier = strtolower(trim($tier));
+    return match($tier) {
+        'budget' => '<span class="badge badge-tier badge-tier-budget"><i class="fas fa-tag me-1"></i>Budget</span>',
+        'mid'    => '<span class="badge badge-tier badge-tier-mid"><i class="fas fa-layer-group me-1"></i>Mid Product</span>',
+        'high'   => '<span class="badge badge-tier badge-tier-high"><i class="fas fa-crown me-1"></i>High Product</span>',
+        default  => '<span class="badge bg-secondary"><i class="fas fa-tag me-1"></i>' . htmlspecialchars(ucfirst($tier)) . '</span>',
+    };
+}
+
+function tierLabel(string $tier): string {
+    $tier = strtolower(trim($tier));
+    return match($tier) {
+        'budget' => 'Budget Product',
+        'mid'    => 'Mid Product',
+        'high'   => 'High Product',
+        default  => ucfirst($tier),
+    };
 }
 
 // --- Pagination ---
@@ -335,30 +422,43 @@ function sendEmailOTP(string $toEmail, string $otp): bool {
     $mail = new \PHPMailer\PHPMailer\PHPMailer(true);
     
     try {
-        // Server settings
-        // $mail->SMTPDebug = \PHPMailer\PHPMailer\SMTP::DEBUG_SERVER; 
-        $mail->isSMTP();
-        $mail->Host       = 'smtp.gmail.com'; // Replace with real host
-        $mail->SMTPAuth   = true;
-        $mail->Username   = 'your_email@gmail.com'; // Replace with real username
-        $mail->Password   = 'your_app_password'; // Replace with real password
-        $mail->SMTPSecure = \PHPMailer\PHPMailer\PHPMailer::ENCRYPTION_STARTTLS;
-        $mail->Port       = 587;
+        if (isSMTPConfigured()) {
+            $mail->isSMTP();
+            $mail->Host       = SMTP_HOST;
+            $mail->SMTPAuth   = true;
+            $mail->Username   = SMTP_USERNAME;
+            $mail->Password   = SMTP_PASSWORD;
+            $mail->SMTPSecure = (SMTP_ENCRYPTION === 'ssl') ? \PHPMailer\PHPMailer\PHPMailer::ENCRYPTION_SMTPS : \PHPMailer\PHPMailer\PHPMailer::ENCRYPTION_STARTTLS;
+            $mail->Port       = SMTP_PORT;
 
-        // Recipients
-        $mail->setFrom('no-reply@guecooptical.com', 'Gueco Optical Clinic');
-        $mail->addAddress($toEmail);
-        
-        // Content
-        $mail->isHTML(true);
-        $mail->Subject = 'Password Reset OTP';
-        $mail->Body    = "Your OTP for password reset is: <b>{$otp}</b>. This OTP is valid for 15 minutes.";
-        $mail->AltBody = "Your OTP for password reset is: {$otp}. This OTP is valid for 15 minutes.";
+            $mail->setFrom(SMTP_FROM_EMAIL ?: SMTP_USERNAME, SMTP_FROM_NAME ?: 'Gueco Optical Clinic');
+            $mail->addAddress($toEmail);
+            
+            $mail->isHTML(true);
+            $mail->Subject = 'Password Reset OTP — Gueco Optical Clinic';
+            $mail->Body    = "
+                <div style='font-family: Arial, sans-serif; max-width: 540px; margin: 0 auto; padding: 24px; border: 1px solid #e5e7eb; border-radius: 12px; background: #ffffff;'>
+                    <div style='text-align: center; margin-bottom: 20px;'>
+                        <h2 style='color: #235EAE; margin: 0; font-size: 22px;'>Gueco Optical Clinic</h2>
+                        <p style='color: #6B7280; font-size: 13px; margin: 4px 0 0 0;'>Password Reset Verification</p>
+                    </div>
+                    <p style='color: #374151; font-size: 14px; line-height: 1.6;'>
+                        We received a request to reset your patient account password. Use the verification code below to proceed:
+                    </p>
+                    <div style='text-align: center; margin: 28px 0;'>
+                        <span style='display: inline-block; background: #F0F4F9; color: #235EAE; font-size: 32px; font-weight: 800; letter-spacing: 8px; padding: 14px 28px; border-radius: 10px; border: 1px solid #BFDBFE;'>{$otp}</span>
+                    </div>
+                    <p style='color: #6B7280; font-size: 13px; margin-bottom: 8px;'>This code is valid for <b>15 minutes</b>. If you did not request this, you can safely ignore this email.</p>
+                    <hr style='border: none; border-top: 1px solid #F3F4F6; margin: 20px 0;'>
+                    <p style='color: #9CA3AF; font-size: 12px; text-align: center; margin: 0;'>&copy; " . date('Y') . " Gueco Optical Clinic. All rights reserved.</p>
+                </div>
+            ";
+            $mail->AltBody = "Your Gueco Optical password reset OTP is: {$otp}. This code is valid for 15 minutes.";
 
-        // $mail->send(); // Uncomment when real SMTP is ready
-        
-        // Simulate success for now by logging it (for local testing)
-        error_log("OTP for $toEmail is $otp");
+            $mail->send();
+        } else {
+            error_log("OTP for $toEmail is $otp");
+        }
         
         return true;
     } catch (Exception $e) {
@@ -366,3 +466,88 @@ function sendEmailOTP(string $toEmail, string $otp): bool {
         return false;
     }
 }
+
+/**
+ * Send Login Verification OTP to patient email
+ */
+function sendLoginEmailOTP(string $toEmail, string $otp, string $patientName = ''): bool {
+    require_once __DIR__ . '/../includes/PHPMailer/src/Exception.php';
+    require_once __DIR__ . '/../includes/PHPMailer/src/PHPMailer.php';
+    require_once __DIR__ . '/../includes/PHPMailer/src/SMTP.php';
+    
+    $mail = new \PHPMailer\PHPMailer\PHPMailer(true);
+    
+    try {
+        if (isSMTPConfigured()) {
+            $mail->isSMTP();
+            $mail->Host       = SMTP_HOST;
+            $mail->SMTPAuth   = true;
+            $mail->Username   = SMTP_USERNAME;
+            $mail->Password   = SMTP_PASSWORD;
+            $mail->SMTPSecure = (SMTP_ENCRYPTION === 'ssl') ? \PHPMailer\PHPMailer\PHPMailer::ENCRYPTION_SMTPS : \PHPMailer\PHPMailer\PHPMailer::ENCRYPTION_STARTTLS;
+            $mail->Port       = SMTP_PORT;
+
+            $mail->setFrom(SMTP_FROM_EMAIL ?: SMTP_USERNAME, SMTP_FROM_NAME ?: 'Gueco Optical Clinic');
+            $mail->addAddress($toEmail, $patientName ?: 'Valued Patient');
+            
+            $mail->isHTML(true);
+            $mail->Subject = 'Your Login Verification Code — Gueco Optical Clinic';
+            $nameGreeting  = !empty($patientName) ? "Hello " . htmlspecialchars($patientName) . "," : "Hello,";
+            
+            $mail->Body    = "
+                <div style='font-family: Arial, sans-serif; max-width: 540px; margin: 0 auto; padding: 24px; border: 1px solid #e5e7eb; border-radius: 12px; background: #ffffff;'>
+                    <div style='text-align: center; margin-bottom: 20px;'>
+                        <h2 style='color: #235EAE; margin: 0; font-size: 22px;'>Gueco Optical Clinic</h2>
+                        <p style='color: #6B7280; font-size: 13px; margin: 4px 0 0 0;'>Patient Portal Two-Factor Authentication</p>
+                    </div>
+                    <p style='color: #374151; font-size: 15px;'>{$nameGreeting}</p>
+                    <p style='color: #374151; font-size: 14px; line-height: 1.6;'>
+                        You recently attempted to sign in to your Gueco Optical Patient Account. Please enter the verification code below to complete your login:
+                    </p>
+                    <div style='text-align: center; margin: 28px 0;'>
+                        <span style='display: inline-block; background: #F0F4F9; color: #235EAE; font-size: 32px; font-weight: 800; letter-spacing: 8px; padding: 14px 28px; border-radius: 10px; border: 1px solid #BFDBFE;'>{$otp}</span>
+                    </div>
+                    <p style='color: #6B7280; font-size: 13px; margin-bottom: 8px;'>This code is valid for <b>10 minutes</b>. If you did not attempt to sign in, please secure your account immediately.</p>
+                    <hr style='border: none; border-top: 1px solid #F3F4F6; margin: 20px 0;'>
+                    <p style='color: #9CA3AF; font-size: 12px; text-align: center; margin: 0;'>&copy; " . date('Y') . " Gueco Optical Clinic. All rights reserved.</p>
+                </div>
+            ";
+            $mail->AltBody = "{$nameGreeting}\n\nYour Gueco Optical login verification code is: {$otp}\nThis code is valid for 10 minutes.";
+
+            $mail->send();
+        } else {
+            error_log("SMTP not configured yet. Login OTP for $toEmail: $otp");
+        }
+        
+        return true;
+    } catch (Exception $e) {
+        error_log("Login OTP mail error: {$mail->ErrorInfo}");
+        return false;
+    }
+}
+
+/**
+ * Generate and issue a login OTP for patient session
+ */
+function issuePatientLoginOTP(array $patient): string {
+    startSession();
+    $otp = sprintf("%06d", mt_rand(100000, 999999));
+    
+    $_SESSION['patient_otp_code']    = $otp;
+    $_SESSION['patient_otp_hash']    = password_hash($otp, PASSWORD_DEFAULT);
+    $_SESSION['patient_otp_expires'] = time() + (10 * 60); // 10 minutes
+    $_SESSION['patient_otp_attempts']= 0;
+    
+    // Save to pending login session
+    $_SESSION['patient_id_pending']  = (int)$patient['id'];
+    $_SESSION['patient_name_pending']= $patient['full_name'];
+    $_SESSION['patient_email_pending']= $patient['email'];
+    $_SESSION['patient_avatar_pending']= $patient['avatar'] ?? '';
+    $_SESSION['patient_2fa_verified']= false;
+    
+    // Attempt sending via email
+    sendLoginEmailOTP($patient['email'], $otp, $patient['full_name']);
+    
+    return $otp;
+}
+

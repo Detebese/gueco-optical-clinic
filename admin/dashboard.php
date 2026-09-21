@@ -131,7 +131,7 @@ include __DIR__ . '/../includes/header.php';
 <div class="row g-3 mb-4">
   <!-- Card 1: Sales this month (Clickable Month Filter) -->
   <div class="col-lg-3 col-sm-6">
-    <div class="bento-stat" style="--stat-color:#E09A67; --stat-rgb:224, 154, 103; cursor: pointer;" onclick="openDashMonthPicker()" title="Click to change month">
+    <div class="bento-stat" style="--stat-color:#235EAE; --stat-rgb:35, 94, 174; cursor: pointer;" onclick="openDashMonthPicker()" title="Click to change month">
       <div class="bento-stat-glow"></div>
       <div class="bento-stat-left">
         <div class="bento-label d-flex align-items-center gap-1">
@@ -395,8 +395,8 @@ include __DIR__ . '/../includes/header.php';
               <td class="fw-bold"><?= sanitize($item['name']) ?></td>
               <td><span class="badge bg-secondary"><?= sanitize($item['category']) ?></span></td>
               <td>
-                <span class="badge <?= $item['stock_quantity'] == 0 ? 'bg-danger' : 'bg-warning' ?>">
-                  <?= $item['stock_quantity'] ?> left
+                <span class="badge <?= $item['stock_quantity'] == 0 ? 'badge-out-alert' : 'badge-low-alert' ?>">
+                  <i class="fas fa-<?= $item['stock_quantity'] == 0 ? 'circle-xmark' : 'triangle-exclamation' ?> me-1"></i><?= $item['stock_quantity'] ?> left
                 </span>
               </td>
               <td class="text-muted"><?= $item['low_stock_alert'] ?></td>
@@ -478,11 +478,11 @@ document.addEventListener("DOMContentLoaded", function() {
     return {
       isDark: isDark,
       mode: isDark ? "dark" : "light",
-      bgCard: isDark ? "#17161D" : "#FFFFFF",
-      textPrimary: isDark ? "#F9FAFB" : "#18181B",
-      textSecondary: isDark ? "#E5E7EB" : "#374151",
-      textMuted: isDark ? "#9CA3AF" : "#64748B",
-      borderColor: isDark ? "rgba(255, 255, 255, 0.08)" : "rgba(0, 0, 0, 0.06)",
+      bgCard: isDark ? "#1A2642" : "#FFFFFF",
+      textPrimary: isDark ? "#FFFFFF" : "#18181B",
+      textSecondary: isDark ? "#F1F5F9" : "#374151",
+      textMuted: isDark ? "#CBD5E1" : "#64748B",
+      borderColor: isDark ? "rgba(255, 255, 255, 0.14)" : "rgba(0, 0, 0, 0.06)",
       valColor: isDark ? "#FFFFFF" : "#18181B"
     };
   }
@@ -501,10 +501,10 @@ document.addEventListener("DOMContentLoaded", function() {
       toolbar: { show: false },
       fontFamily: "Plus Jakarta Sans, Poppins, sans-serif",
       background: "transparent",
-      dropShadow: { enabled: true, top: 3, left: 0, blur: 5, color: "#E09A67", opacity: 0.25 }
+      dropShadow: { enabled: true, top: 3, left: 0, blur: 5, color: "#235EAE", opacity: 0.25 }
     },
     theme: { mode: tc.mode },
-    colors: ["#E09A67"],
+    colors: ["#235EAE"],
     fill: {
       type: "gradient",
       gradient: { shadeIntensity: 1, opacityFrom: 0.45, opacityTo: 0.05, stops: [0, 90, 100] }
@@ -552,7 +552,7 @@ document.addEventListener("DOMContentLoaded", function() {
   const prodTotals = {$prodTotalsJson};
   const prodUnits = {$prodUnitsJson};
 
-  // Vibrant modern palette for categories and products
+  // Vibrant modern multi-color palette for categories and products
   const modernPalette = [
     "#3B82F6", // Royal Blue
     "#10B981", // Emerald Green

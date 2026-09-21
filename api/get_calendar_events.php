@@ -39,8 +39,8 @@ try {
     foreach ($appts as $a) {
         // Map status to a color
         $color = '#64748B'; // default secondary
-        if ($a['status'] === 'pending') $color = '#F59E0B'; // warning/orange
-        elseif ($a['status'] === 'confirmed') $color = '#3B82F6'; // primary/blue
+        if ($a['status'] === 'pending') $color = '#268FC8'; // azure blue
+        elseif ($a['status'] === 'confirmed') $color = '#235EAE'; // sapphire blue
         elseif ($a['status'] === 'completed') $color = '#10B981'; // success/green
         elseif ($a['status'] === 'cancelled') $color = '#EF4444'; // danger/red
         elseif ($a['status'] === 'no_show') $color = '#475569'; // darker gray
