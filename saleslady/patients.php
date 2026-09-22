@@ -34,6 +34,15 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action']) && $_POST['
             $msg = 'Email is already registered.';
             $msgType = 'danger';
         } else {
+            // Standardize birthdate for MySQL 8 strict mode compatibility
+            $birthdateFormatted = null;
+            if (!empty($birthdate)) {
+                $ts = strtotime($birthdate);
+                if ($ts !== false) {
+                    $birthdateFormatted = date('Y-m-d', $ts);
+                }
+            }
+
             // Generate a random password since they are a walk-in
             $randomPass = bin2hex(random_bytes(4));
             $stmt = $db->prepare("INSERT INTO patients (full_name, email, password, phone, address, gender, birthdate) VALUES (?, ?, ?, ?, ?, ?, ?)");
@@ -44,7 +53,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action']) && $_POST['
                 $phone,
                 $address,
                 $gender ?: null,
-                $birthdate ?: null
+                $birthdateFormatted
             ]);
             $msg = 'Walk-in patient registered successfully.';
             $msgType = 'success';

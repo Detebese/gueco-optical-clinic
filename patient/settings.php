@@ -31,16 +31,30 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $bdate    = sanitize($_POST['birthdate'] ?? '');
         
         $cleanPhone = preg_replace('/[^0-9]/', '', $phone);
-        
-        $db->prepare("UPDATE patients SET full_name=COALESCE(NULLIF(?,''), full_name), phone=?, gender=?, address=?, birthdate=NULLIF(?,''), updated_at=NOW() WHERE id=?")
-           ->execute([$fullName, $cleanPhone, $gender, $address, $bdate ?: null, $patientId]);
-        
-        if (!empty($fullName)) {
-            $_SESSION['patient_name'] = $fullName;
+
+        $bdateFormatted = null;
+        if (!empty($bdate)) {
+            $ts = strtotime($bdate);
+            if ($ts !== false) {
+                $bdateFormatted = date('Y-m-d', $ts);
+            }
         }
         
-        $_SESSION['flash_msg'] = 'Profile updated successfully!';
-        $_SESSION['flash_type'] = 'success';
+        try {
+            $db->prepare("UPDATE patients SET full_name=COALESCE(NULLIF(?,''), full_name), phone=?, gender=?, address=?, birthdate=COALESCE(?, birthdate), updated_at=NOW() WHERE id=?")
+               ->execute([$fullName, $cleanPhone, $gender, $address, $bdateFormatted, $patientId]);
+            
+            if (!empty($fullName)) {
+                $_SESSION['patient_name'] = $fullName;
+            }
+            
+            $_SESSION['flash_msg'] = 'Profile updated successfully!';
+            $_SESSION['flash_type'] = 'success';
+        } catch (Exception $e) {
+            error_log("Failed updating patient profile in settings: " . $e->getMessage());
+            $_SESSION['flash_msg'] = 'Failed to update profile. Please check your details.';
+            $_SESSION['flash_type'] = 'danger';
+        }
         header('Location: settings.php');
         exit;
     }

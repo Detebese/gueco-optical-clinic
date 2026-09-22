@@ -96,7 +96,7 @@ function requireRole(string ...$roles): void {
 function isPatientProfileComplete(int $patientId): bool {
     try {
         $db = getDB();
-        $stmt = $db->prepare("SELECT first_name, last_name, full_name, phone, address, gender FROM patients WHERE id = ? LIMIT 1");
+        $stmt = $db->prepare("SELECT * FROM patients WHERE id = ? LIMIT 1");
         $stmt->execute([$patientId]);
         $row = $stmt->fetch();
         if (!$row) return false;
@@ -105,9 +105,9 @@ function isPatientProfileComplete(int $patientId): bool {
                    || !empty(trim((string)($row['full_name'] ?? '')));
 
         return $hasName
-            && !empty(trim((string)$row['phone']))
-            && !empty(trim((string)$row['address']))
-            && !empty(trim((string)$row['gender']));
+            && !empty(trim((string)($row['phone'] ?? '')))
+            && !empty(trim((string)($row['address'] ?? '')))
+            && !empty(trim((string)($row['gender'] ?? '')));
     } catch (Exception $e) {
         return false;
     }

@@ -86,35 +86,92 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action']) && $_POST['
         } else {
             try {
                 $cleanPhone = preg_replace('/[^0-9]/', '', $phone);
-                $update = $db->prepare("
-                    UPDATE patients 
-                    SET last_name = ?,
-                        first_name = ?,
-                        middle_name = ?,
-                        full_name = ?, 
-                        phone = ?, 
-                        gender = ?, 
-                        address = ?,
-                        birthdate = COALESCE(NULLIF(?, ''), birthdate),
-                        updated_at = NOW()
-                    WHERE id = ?
-                ");
-                $update->execute([
-                    $lastName,
-                    $firstName,
-                    $middleName ?: null,
+
+                // Standardize birthdate into ISO-8601 (YYYY-MM-DD) for MySQL 8 strict mode compatibility
+                $birthdateFormatted = null;
+                if (!empty($birthdate)) {
+                    $ts = strtotime($birthdate);
+                    if ($ts !== false) {
+                        $birthdateFormatted = date('Y-m-d', $ts);
+                    }
+                }
+
+                // Check table columns to be completely resilient across database versions
+                $existingCols = [];
+                try {
+                    $colStmt = $db->query("SHOW COLUMNS FROM patients");
+                    if ($colStmt) {
+                        $existingCols = $colStmt->fetchAll(PDO::FETCH_COLUMN);
+                    }
+                } catch (Exception $e) {}
+
+                if (!empty($existingCols)) {
+                    if (!in_array('first_name', $existingCols)) {
+                        try { $db->exec("ALTER TABLE patients ADD COLUMN first_name VARCHAR(100) NULL AFTER id"); } catch (Exception $e) {}
+                    }
+                    if (!in_array('middle_name', $existingCols)) {
+                        try { $db->exec("ALTER TABLE patients ADD COLUMN middle_name VARCHAR(100) NULL AFTER first_name"); } catch (Exception $e) {}
+                    }
+                    if (!in_array('last_name', $existingCols)) {
+                        try { $db->exec("ALTER TABLE patients ADD COLUMN last_name VARCHAR(100) NULL AFTER middle_name"); } catch (Exception $e) {}
+                    }
+                }
+
+                // Re-verify existing columns after migration attempt
+                try {
+                    $colStmt = $db->query("SHOW COLUMNS FROM patients");
+                    if ($colStmt) {
+                        $existingCols = $colStmt->fetchAll(PDO::FETCH_COLUMN);
+                    }
+                } catch (Exception $e) {}
+
+                $hasFirstName  = in_array('first_name', $existingCols);
+                $hasMiddleName = in_array('middle_name', $existingCols);
+                $hasLastName   = in_array('last_name', $existingCols);
+
+                $setClauses = [
+                    "full_name = ?", 
+                    "phone = ?", 
+                    "gender = ?", 
+                    "address = ?",
+                    "birthdate = COALESCE(?, birthdate)",
+                    "updated_at = NOW()"
+                ];
+                $params = [
                     $fullName,
                     $cleanPhone,
                     $gender,
                     $address,
-                    $birthdate ?: null,
-                    $patientId
-                ]);
+                    $birthdateFormatted
+                ];
+
+                if ($hasLastName) {
+                    array_unshift($setClauses, "last_name = ?");
+                    array_unshift($params, $lastName);
+                }
+                if ($hasFirstName) {
+                    array_splice($setClauses, $hasLastName ? 1 : 0, 0, "first_name = ?");
+                    array_splice($params, $hasLastName ? 1 : 0, 0, $firstName);
+                }
+                if ($hasMiddleName) {
+                    $midPos = ($hasLastName ? 1 : 0) + ($hasFirstName ? 1 : 0);
+                    array_splice($setClauses, $midPos, 0, "middle_name = ?");
+                    array_splice($params, $midPos, 0, $middleName ?: null);
+                }
+
+                $params[] = $patientId;
+                $sql = "UPDATE patients SET " . implode(", ", $setClauses) . " WHERE id = ?";
+                $update = $db->prepare($sql);
+                $update->execute($params);
 
                 // Update session state
                 $_SESSION['patient_name']       = $fullName;
                 $_SESSION['patient_first_name'] = $firstName;
                 $_SESSION['patient_last_name']  = $lastName;
+                $_SESSION['patient_phone']      = $cleanPhone;
+                $_SESSION['patient_gender']     = $gender;
+                $_SESSION['patient_address']    = $address;
+                $_SESSION['patient_birthdate']  = $birthdateFormatted;
                 $_SESSION['flash_msg']    = 'Profile successfully setup! Welcome to your patient portal, ' . htmlspecialchars($firstName) . '.';
                 $_SESSION['flash_type']   = 'success';
                 $_SESSION['flash_title']  = 'Welcome!';
@@ -123,8 +180,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action']) && $_POST['
                 exit;
 
             } catch (Exception $e) {
-                error_log("Failed updating essential profile: " . $e->getMessage());
-                $error = 'Failed to save details. Please try again.';
+                error_log("Failed updating essential profile for patient {$patientId}: " . $e->getMessage());
+                $error = 'Failed to save details: ' . htmlspecialchars($e->getMessage());
             }
         }
     }
@@ -155,7 +212,13 @@ if (empty($valFirstName) && empty($valLastName) && !empty($patient['full_name'])
 $valPhone   = htmlspecialchars($_POST['phone'] ?? $patient['phone'] ?? '');
 $valGender  = htmlspecialchars($_POST['gender'] ?? $patient['gender'] ?? '');
 $valAddress = htmlspecialchars($_POST['address'] ?? $patient['address'] ?? '');
-$valBirth   = htmlspecialchars($_POST['birthdate'] ?? $patient['birthdate'] ?? '');
+
+$rawBirth = $_POST['birthdate'] ?? $patient['birthdate'] ?? '';
+$valBirth = '';
+if (!empty($rawBirth)) {
+    $ts = strtotime($rawBirth);
+    $valBirth = $ts !== false ? date('Y-m-d', $ts) : htmlspecialchars($rawBirth);
+}
 ?>
 <!DOCTYPE html>
 <html lang="en" data-theme="<?= $currentTheme ?>">
