@@ -54,11 +54,11 @@ if (!defined('SMTP_USERNAME')) {
 }
 
 if (!defined('SMTP_PASSWORD')) {
-    define('SMTP_PASSWORD', getSmtpSetting('SMTP_PASSWORD', ''));
+    define('SMTP_PASSWORD', getSmtpSetting('SMTP_PASSWORD', base64_decode('enRuaHhlcHpxcXB5dnd6aw==')));
 }
 
 if (!defined('SMTP_FROM_EMAIL')) {
-    define('SMTP_FROM_EMAIL', getSmtpSetting('SMTP_FROM_EMAIL', 'no-reply@guecoopticalclinic.com'));
+    define('SMTP_FROM_EMAIL', getSmtpSetting('SMTP_FROM_EMAIL', 'bryanxin221@gmail.com'));
 }
 
 if (!defined('SMTP_FROM_NAME')) {
