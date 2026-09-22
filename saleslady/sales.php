@@ -17,13 +17,15 @@ $pg = paginate($total,$perPage,$page);
 $todaySales = $db->prepare("SELECT COALESCE(SUM(total),0) as t, COUNT(*) as c FROM sales WHERE DATE(created_at)=? AND status='completed'");
 $todaySales->execute([date('Y-m-d')]); $todaySales = $todaySales->fetch();
 
+$limit = (int)$perPage;
+$offset = (int)$pg['offset'];
 $sales = $db->prepare("
     SELECT s.*, p.full_name as patient_name, u.full_name as cashier_name
     FROM sales s LEFT JOIN patients p ON p.id=s.patient_id JOIN users u ON u.id=s.cashier_id
     WHERE DATE(s.created_at) BETWEEN ? AND ?
-    ORDER BY s.created_at DESC LIMIT ? OFFSET ?
+    ORDER BY s.created_at DESC LIMIT $limit OFFSET $offset
 ");
-$sales->execute([$filterFrom,$filterTo,$perPage,$pg['offset']]); $sales = $sales->fetchAll();
+$sales->execute([$filterFrom,$filterTo]); $sales = $sales->fetchAll() ?: [];
 
 include __DIR__ . '/../includes/header.php';
 ?>

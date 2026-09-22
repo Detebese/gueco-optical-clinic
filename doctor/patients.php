@@ -63,15 +63,16 @@ $total = $db->prepare("SELECT COUNT(*) as c FROM patients p WHERE $whereStr");
 $total->execute($params); $total = $total->fetch()['c'];
 $pg = paginate($total, $perPage, $page);
 
-$params2 = array_merge($params, [$perPage, $pg['offset']]);
+$limit = (int)$perPage;
+$offset = (int)$pg['offset'];
 $patients = $db->prepare("
     SELECT p.*,
            (SELECT COUNT(*) FROM appointments a WHERE a.patient_id=p.id) as appt_count,
            (SELECT COUNT(*) FROM prescriptions rx WHERE rx.patient_id=p.id) as rx_count,
            (SELECT MAX(appointment_date) FROM appointments a WHERE a.patient_id=p.id AND a.status='completed') as last_visit
-    FROM patients p WHERE $whereStr ORDER BY p.full_name ASC LIMIT ? OFFSET ?
+    FROM patients p WHERE $whereStr ORDER BY p.full_name ASC LIMIT $limit OFFSET $offset
 ");
-$patients->execute($params2); $patients = $patients->fetchAll();
+$patients->execute($params); $patients = $patients->fetchAll() ?: [];
 
 // View single patient
 $viewPatient = null; $patientRx = []; $patientAppts = [];

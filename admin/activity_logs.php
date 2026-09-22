@@ -75,6 +75,9 @@ $totalLogs = (int)($cntStmt->fetch()['c'] ?? 0);
 
 $pg = paginate($totalLogs, $perPage, $page);
 
+$limit = (int)$perPage;
+$offset = (int)$pg['offset'];
+
 // Fetch Logs
 $fetchSql = "
     SELECT l.*, 
@@ -87,12 +90,11 @@ $fetchSql = "
     LEFT JOIN patients p ON p.id = l.user_id AND l.user_type = 'patient'
     WHERE $whereStr
     ORDER BY l.created_at DESC
-    LIMIT ? OFFSET ?
+    LIMIT $limit OFFSET $offset
 ";
-$fetchParams = array_merge($params, [$perPage, $pg['offset']]);
 $logsStmt = $db->prepare($fetchSql);
-$logsStmt->execute($fetchParams);
-$logs = $logsStmt->fetchAll();
+$logsStmt->execute($params);
+$logs = $logsStmt->fetchAll() ?: [];
 
 // Summary Stats
 $statsToday = $db->query("SELECT COUNT(*) as c FROM activity_logs WHERE DATE(created_at) = CURDATE()")->fetch()['c'] ?? 0;

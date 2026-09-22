@@ -35,11 +35,12 @@ $countStmt = $db->prepare("
     WHERE $whereStr
 ");
 $countStmt->execute($params);
-$total = $countStmt->fetch()['c'];
+$total = (int)($countStmt->fetch()['c'] ?? 0);
 $pagination = paginate($total, $perPage, $page);
 
 // Fetch logs
-$params[] = $perPage; $params[] = $pagination['offset'];
+$limit = (int)$perPage;
+$offset = (int)$pagination['offset'];
 $logsStmt = $db->prepare("
     SELECT l.*, p.name as product_name, u.full_name as user_name
     FROM inventory_logs l
@@ -47,10 +48,10 @@ $logsStmt = $db->prepare("
     LEFT JOIN users u ON u.id = l.user_id
     WHERE $whereStr
     ORDER BY l.created_at DESC
-    LIMIT ? OFFSET ?
+    LIMIT $limit OFFSET $offset
 ");
 $logsStmt->execute($params);
-$logs = $logsStmt->fetchAll();
+$logs = $logsStmt->fetchAll() ?: [];
 
 $extraHead = '<link rel="stylesheet" href="'.BASE_URL.'assets/css/pages/inventory_logs.css">';
 include __DIR__ . '/../includes/header.php';

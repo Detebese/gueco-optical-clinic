@@ -79,28 +79,44 @@ if (!empty($search)) {
 
 $whereStr = implode(' AND ', $where);
 
-$countStmt = $db->prepare("SELECT COUNT(*) as c FROM appointments a JOIN patients p ON p.id=a.patient_id WHERE $whereStr");
-$countStmt->execute($params);
-$total = $countStmt->fetch()['c'];
-$pagination = paginate($total, $perPage, $page);
+try {
+    $countStmt = $db->prepare("SELECT COUNT(*) as c FROM appointments a JOIN patients p ON p.id=a.patient_id WHERE $whereStr");
+    $countStmt->execute($params);
+    $total = (int)($countStmt->fetch()['c'] ?? 0);
+    $pagination = paginate($total, $perPage, $page);
 
-$params[] = $perPage; $params[] = $pagination['offset'];
-$appts = $db->prepare("
-    SELECT a.*, p.full_name as patient_name, p.phone, p.email as patient_email
-    FROM appointments a
-    JOIN patients p ON p.id = a.patient_id
-    WHERE $whereStr
-    ORDER BY a.appointment_date ASC, a.appointment_time ASC
-    LIMIT ? OFFSET ?
-");
-$appts->execute($params);
-$appts = $appts->fetchAll();
+    $limit = (int)$perPage;
+    $offset = (int)$pagination['offset'];
+    $apptsStmt = $db->prepare("
+        SELECT a.*, p.full_name as patient_name, p.phone, p.email as patient_email
+        FROM appointments a
+        JOIN patients p ON p.id = a.patient_id
+        WHERE $whereStr
+        ORDER BY a.appointment_date ASC, a.appointment_time ASC
+        LIMIT $limit OFFSET $offset
+    ");
+    $apptsStmt->execute($params);
+    $appts = $apptsStmt->fetchAll() ?: [];
 
-// Overall Stats
-$overallStats = [];
-foreach (['pending','confirmed','completed','cancelled','no_show'] as $s) {
-    $stmt = $db->prepare("SELECT COUNT(*) as c FROM appointments WHERE status=?");
-    $stmt->execute([$s]); $overallStats[$s] = $stmt->fetch()['c'];
+    // Overall Stats
+    $overallStats = [];
+    foreach (['pending','confirmed','completed','cancelled','no_show'] as $s) {
+        $stmt = $db->prepare("SELECT COUNT(*) as c FROM appointments WHERE status=?");
+        $stmt->execute([$s]);
+        $overallStats[$s] = (int)($stmt->fetch()['c'] ?? 0);
+    }
+} catch (Exception $e) {
+    error_log("Appointments query error: " . $e->getMessage());
+    $total = 0;
+    $pagination = paginate(0, $perPage, 1);
+    $appts = [];
+    $overallStats = [
+        'pending'   => 0,
+        'confirmed' => 0,
+        'completed' => 0,
+        'cancelled' => 0,
+        'no_show'   => 0
+    ];
 }
 
 $extraHead = '<link rel="stylesheet" href="'.BASE_URL.'assets/css/pages/appointments.css?v='.time().'">';

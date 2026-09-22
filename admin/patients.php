@@ -15,12 +15,13 @@ if ($search) {
 }
 $whereStr = implode(' AND ',$where);
 
-$total = $db->prepare("SELECT COUNT(*) as c FROM patients p WHERE $whereStr"); $total->execute($params); $total = $total->fetch()['c'];
+$total = $db->prepare("SELECT COUNT(*) as c FROM patients p WHERE $whereStr"); $total->execute($params); $total = (int)($total->fetch()['c'] ?? 0);
 $pg = paginate($total,$perPage,$page);
 
-$params2 = array_merge($params,[$perPage,$pg['offset']]);
-$patients = $db->prepare("SELECT p.*, (SELECT COUNT(*) FROM appointments a WHERE a.patient_id=p.id) as appt_count FROM patients p WHERE $whereStr ORDER BY p.created_at DESC LIMIT ? OFFSET ?");
-$patients->execute($params2); $patients = $patients->fetchAll();
+$limit = (int)$perPage;
+$offset = (int)$pg['offset'];
+$patients = $db->prepare("SELECT p.*, (SELECT COUNT(*) FROM appointments a WHERE a.patient_id=p.id) as appt_count FROM patients p WHERE $whereStr ORDER BY p.created_at DESC LIMIT $limit OFFSET $offset");
+$patients->execute($params); $patients = $patients->fetchAll() ?: [];
 
 // Handle status toggle
 if ($_SERVER['REQUEST_METHOD']==='POST' && ($_POST['action']??'')==='toggle') {

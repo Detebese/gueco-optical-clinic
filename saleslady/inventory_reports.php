@@ -24,13 +24,15 @@ $total = $db->prepare("SELECT COUNT(*) as c FROM inventory_logs WHERE DATE(creat
 $total->execute([$filterFrom,$filterTo]); $total = $total->fetch()['c'];
 $pg = paginate($total,$perPage,$page);
 
+$limit = (int)$perPage;
+$offset = (int)$pg['offset'];
 $logs = $db->prepare("
     SELECT il.*, p.name as product_name, u.full_name as user_name
     FROM inventory_logs il JOIN products p ON p.id=il.product_id JOIN users u ON u.id=il.user_id
     WHERE DATE(il.created_at) BETWEEN ? AND ?
-    ORDER BY il.created_at DESC LIMIT ? OFFSET ?
+    ORDER BY il.created_at DESC LIMIT $limit OFFSET $offset
 ");
-$logs->execute([$filterFrom,$filterTo,$perPage,$pg['offset']]); $logs = $logs->fetchAll();
+$logs->execute([$filterFrom,$filterTo]); $logs = $logs->fetchAll() ?: [];
 
 include __DIR__ . '/../includes/header.php';
 ?>
