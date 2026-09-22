@@ -153,8 +153,22 @@ function getRoleLabel(string $role): string {
 
 // --- Security & Rate Limiting ---
 
-function sanitize(string $value): string {
+function sanitize(?string $value): string {
+    if ($value === null) return '';
     return htmlspecialchars(strip_tags(trim($value)), ENT_QUOTES, 'UTF-8');
+}
+
+function getPatientDisplayName(array $patient): string {
+    $name = trim((string)($patient['full_name'] ?? ''));
+    if ($name === '') {
+        $first = trim((string)($patient['first_name'] ?? ''));
+        $last  = trim((string)($patient['last_name'] ?? ''));
+        $name  = trim("$first $last");
+    }
+    if ($name === '') {
+        $name = (string)($patient['email'] ?? ('Patient #' . ($patient['id'] ?? '')));
+    }
+    return $name;
 }
 
 function generateCsrfToken(): string {
@@ -261,22 +275,22 @@ function formatCurrency(float $amount): string {
     return '₱' . number_format($amount, 2);
 }
 
-function formatDate(string $date): string {
+function formatDate(?string $date): string {
     if (!$date || $date === '0000-00-00') return '—';
     return date('F d, Y', strtotime($date));
 }
 
-function formatDateTime(string $datetime): string {
-    if (!$datetime) return '—';
+function formatDateTime(?string $datetime): string {
+    if (!$datetime || $datetime === '0000-00-00 00:00:00') return '—';
     return date('M d, Y h:i A', strtotime($datetime));
 }
 
-function formatTime(string $time): string {
+function formatTime(?string $time): string {
     if (!$time) return '—';
     return date('h:i A', strtotime($time));
 }
 
-function timeAgo(string $datetime): string {
+function timeAgo(?string $datetime): string {
     if (!$datetime) return '—';
     try {
         $tz = new DateTimeZone('Asia/Manila');
@@ -306,7 +320,8 @@ function timeAgo(string $datetime): string {
 
 // --- Badge Helpers ---
 
-function statusBadge(string $status): string {
+function statusBadge(?string $status): string {
+    $status = (string)($status ?? '');
     $map = [
         'pending'   => ['warning', 'clock'],
         'confirmed' => ['info',    'check-circle'],
@@ -320,11 +335,12 @@ function statusBadge(string $status): string {
         'adjustment'=> ['warning', 'edit'],
     ];
     $cfg = $map[$status] ?? ['secondary', 'question-circle'];
-    $label = ucwords(str_replace('_', ' ', $status));
+    $label = ucwords(str_replace('_', ' ', $status ?: 'unknown'));
     return "<span class='badge bg-{$cfg[0]}'><i class='fas fa-{$cfg[1]} me-1'></i>{$label}</span>";
 }
 
-function roleBadge(string $role): string {
+function roleBadge(?string $role): string {
+    $role = (string)($role ?? '');
     $map = [
         'admin'     => ['primary',   'shield-alt', 'Administrator'],
         'doctor'    => ['info',      'user-md',    'Optometrist'],

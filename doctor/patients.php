@@ -98,11 +98,15 @@ include __DIR__ . '/../includes/header.php';
   <div class="col-4">
     <div class="card">
       <div class="card-body" style="text-align:center;padding:30px 20px;">
+        <?php 
+          $vpName = getPatientDisplayName($viewPatient);
+          $vpInitial = strtoupper(substr($vpName, 0, 1)) ?: 'P';
+        ?>
         <div style="width:80px;height:80px;background:linear-gradient(135deg,var(--clr-primary),var(--clr-secondary));border-radius:50%;display:flex;align-items:center;justify-content:center;color:#fff;font-weight:800;font-size:1.8rem;margin:0 auto 16px;">
-          <?= strtoupper(substr($viewPatient['full_name'],0,1)) ?>
+          <?= $vpInitial ?>
         </div>
-        <h5 style="font-size:1.05rem;font-weight:700;margin-bottom:4px"><?= sanitize($viewPatient['full_name']) ?></h5>
-        <p style="font-size:.78rem;color:var(--text-muted);margin-bottom:20px"><?= sanitize($viewPatient['email']) ?></p>
+        <h5 style="font-size:1.05rem;font-weight:700;margin-bottom:4px"><?= sanitize($vpName) ?></h5>
+        <p style="font-size:.78rem;color:var(--text-muted);margin-bottom:20px"><?= sanitize($viewPatient['email'] ?? '') ?></p>
 
         <?php $info = [['fas fa-phone','Phone',$viewPatient['phone'],'—'],['fas fa-birthday-cake','Birthday',formatDate($viewPatient['birthdate']),'Not set'],['fas fa-venus-mars','Gender',ucfirst($viewPatient['gender'] ?? ''),'Not set'],['fas fa-map-marker-alt','Address',$viewPatient['address'],'Not set']]; ?>
         <?php foreach ($info as [$icon,$label,$val,$def]): ?>
@@ -262,15 +266,18 @@ include __DIR__ . '/../includes/header.php';
         <?php if (empty($patients)): ?>
         <tr><td colspan="8"><div class="empty-state"><div class="empty-icon"><i class="fas fa-users"></i></div><h6>No patients found</h6></div></td></tr>
         <?php else: ?>
-        <?php foreach ($patients as $i => $p): ?>
+        <?php foreach ($patients as $i => $p): 
+            $ptName = getPatientDisplayName($p);
+            $ptInitial = strtoupper(substr($ptName, 0, 1)) ?: 'P';
+        ?>
         <tr>
           <td style="font-size:.78rem;color:var(--text-muted)"><?= $pg['offset']+$i+1 ?></td>
           <td>
             <div style="display:flex;align-items:center;gap:10px;">
-              <div style="width:34px;height:34px;background:linear-gradient(135deg,var(--clr-primary),var(--clr-secondary));border-radius:50%;display:flex;align-items:center;justify-content:center;color:#fff;font-weight:700;font-size:.8rem;flex-shrink:0;"><?= strtoupper(substr($p['full_name'],0,1)) ?></div>
+              <div style="width:34px;height:34px;background:linear-gradient(135deg,var(--clr-primary),var(--clr-secondary));border-radius:50%;display:flex;align-items:center;justify-content:center;color:#fff;font-weight:700;font-size:.8rem;flex-shrink:0;"><?= $ptInitial ?></div>
               <div>
-                <div style="font-weight:600;font-size:.88rem"><?= sanitize($p['full_name']) ?></div>
-                <div style="font-size:.7rem;color:var(--text-muted)"><?= sanitize($p['email']) ?></div>
+                <div style="font-weight:600;font-size:.88rem"><?= sanitize($ptName) ?></div>
+                <div style="font-size:.7rem;color:var(--text-muted)"><?= sanitize($p['email'] ?? '') ?></div>
               </div>
             </div>
           </td>

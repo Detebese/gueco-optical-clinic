@@ -223,15 +223,18 @@ include __DIR__ . '/../includes/header.php';
         <table class="table">
           <thead><tr><th>Patient</th><th>Contact</th><th>Appts</th><th>Rx</th><th>Action</th></tr></thead>
           <tbody>
-          <?php foreach ($recentPatients as $p): ?>
+          <?php foreach ($recentPatients as $p): 
+            $ptName = getPatientDisplayName($p);
+            $ptInitial = strtoupper(substr($ptName, 0, 1)) ?: 'P';
+          ?>
           <tr>
             <td>
               <div style="display:flex;align-items:center;gap:10px;">
                 <div style="width:32px;height:32px;background:linear-gradient(135deg,var(--clr-primary),var(--clr-secondary));border-radius:50%;display:flex;align-items:center;justify-content:center;color:#fff;font-weight:700;font-size:.78rem;flex-shrink:0;">
-                  <?= strtoupper(substr($p['full_name'],0,1)) ?>
+                  <?= $ptInitial ?>
                 </div>
                 <div>
-                  <div style="font-weight:600;font-size:.83rem"><?= sanitize($p['full_name']) ?></div>
+                  <div style="font-weight:600;font-size:.83rem"><?= sanitize($ptName) ?></div>
                   <div style="font-size:.7rem;color:var(--text-muted)"><?= $p['gender'] ? ucfirst($p['gender']) : '—' ?></div>
                 </div>
               </div>

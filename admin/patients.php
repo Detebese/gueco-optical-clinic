@@ -52,28 +52,34 @@ include __DIR__ . '/../includes/header.php';
         <?php if (empty($patients)): ?>
         <tr><td colspan="8"><div class="empty-state"><div class="empty-icon"><i class="fas fa-users"></i></div><h6>No patients yet</h6></div></td></tr>
         <?php else: ?>
-        <?php foreach ($patients as $i => $p): ?>
+        <?php foreach ($patients as $i => $p): 
+            $patientName = getPatientDisplayName($p);
+            $initial = strtoupper(substr($patientName, 0, 1)) ?: 'P';
+        ?>
         <tr>
           <td class="pat-67fd48"><?= $pg['offset']+$i+1 ?></td>
           <td>
             <div class="pat-3b6fff">
-              <div class="pat-ec276b"><?= strtoupper(substr($p['full_name'],0,1)) ?></div>
-              <div><div class="pat-bac3c9"><?= sanitize($p['full_name']) ?></div><div class="pat-26a4f5"><?= sanitize($p['email']) ?></div></div>
+              <div class="pat-ec276b"><?= $initial ?></div>
+              <div>
+                <div class="pat-bac3c9"><?= sanitize($patientName) ?></div>
+                <div class="pat-26a4f5"><?= sanitize($p['email'] ?? '') ?></div>
+              </div>
             </div>
           </td>
-          <td class="pat-0de4e7"><?= sanitize($p['phone']??'—') ?></td>
-          <td class="pat-67fd48"><?= sanitize($p['address']??'—') ?></td>
-          <td><span class="badge bg-info"><?= $p['appt_count'] ?> appts</span></td>
-          <td><?= statusBadge($p['status']) ?></td>
-          <td class="pat-67fd48"><?= formatDate($p['created_at']) ?></td>
+          <td class="pat-0de4e7"><?= sanitize($p['phone'] ?? '—') ?></td>
+          <td class="pat-67fd48"><?= sanitize($p['address'] ?? '—') ?></td>
+          <td><span class="badge bg-info"><?= (int)($p['appt_count'] ?? 0) ?> appts</span></td>
+          <td><?= statusBadge($p['status'] ?? 'active') ?></td>
+          <td class="pat-67fd48"><?= formatDate($p['created_at'] ?? '') ?></td>
           <td>
             <form method="POST" class="pat-5677b9">
               <input type="hidden" name="csrf_token" value="<?= generateCsrfToken() ?>">
-              <input type="hidden" name="action" value="toggle"><input type="hidden" name="id" value="<?= $p['id'] ?>"><input type="hidden" name="cur" value="<?= $p['status'] ?>">
-              <button class="btn btn-sm <?= $p['status']==='active'?'btn-warning':'btn-success' ?> btn-icon"
-                      data-confirm="<?= $p['status']==='active'?'Deactivate':'Activate' ?> this patient account?"
-                      title="<?= $p['status']==='active'?'Deactivate':'Activate' ?>">
-                <i class="fas fa-<?= $p['status']==='active'?'ban':'check' ?>"></i>
+              <input type="hidden" name="action" value="toggle"><input type="hidden" name="id" value="<?= $p['id'] ?>"><input type="hidden" name="cur" value="<?= $p['status'] ?? 'active' ?>">
+              <button class="btn btn-sm <?= ($p['status'] ?? 'active') === 'active' ? 'btn-warning' : 'btn-success' ?> btn-icon"
+                      data-confirm="<?= ($p['status'] ?? 'active') === 'active' ? 'Deactivate' : 'Activate' ?> this patient account?"
+                      title="<?= ($p['status'] ?? 'active') === 'active' ? 'Deactivate' : 'Activate' ?>">
+                <i class="fas fa-<?= ($p['status'] ?? 'active') === 'active' ? 'ban' : 'check' ?>"></i>
               </button>
             </form>
           </td>
