@@ -55,7 +55,7 @@ $topProds = $db->prepare("
     JOIN products p ON p.id = si.product_id
     JOIN sales s ON s.id = si.sale_id
     WHERE DATE(s.created_at) BETWEEN ? AND ? AND s.status = 'completed'
-    GROUP BY si.product_id ORDER BY units_sold DESC LIMIT 5
+    GROUP BY si.product_id, p.name, p.product_code ORDER BY units_sold DESC LIMIT 5
 ");
 $topProds->execute([$filterFrom, $filterTo]);
 $topProds = $topProds->fetchAll();
