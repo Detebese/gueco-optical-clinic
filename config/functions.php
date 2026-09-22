@@ -531,11 +531,11 @@ function sendLoginEmailOTP(string $toEmail, string $otp, string $patientName = '
             $mail->AltBody = "{$nameGreeting}\n\nYour Gueco Optical login verification code is: {$otp}\nThis code is valid for 10 minutes.";
 
             $mail->send();
+            return true;
         } else {
             error_log("SMTP not configured yet. Login OTP for $toEmail: $otp");
+            return false;
         }
-        
-        return true;
     } catch (Exception $e) {
         error_log("Login OTP mail error: {$mail->ErrorInfo}");
         return false;
@@ -556,13 +556,14 @@ function issuePatientLoginOTP(array $patient): string {
     
     // Save to pending login session
     $_SESSION['patient_id_pending']  = (int)$patient['id'];
-    $_SESSION['patient_name_pending']= $patient['full_name'];
+    $_SESSION['patient_name_pending']= $patient['full_name'] ?? '';
     $_SESSION['patient_email_pending']= $patient['email'];
     $_SESSION['patient_avatar_pending']= $patient['avatar'] ?? '';
     $_SESSION['patient_2fa_verified']= false;
     
-    // Attempt sending via email
-    sendLoginEmailOTP($patient['email'], $otp, $patient['full_name']);
+    // Attempt sending via email and record delivery outcome
+    $sent = sendLoginEmailOTP($patient['email'], $otp, $patient['full_name'] ?? '');
+    $_SESSION['patient_otp_sent'] = $sent;
     
     return $otp;
 }

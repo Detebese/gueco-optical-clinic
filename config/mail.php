@@ -12,36 +12,57 @@
 // 4. Create an app named "Gueco Optical Clinic"
 // 5. Paste your Gmail address and 16-character App Password below:
 
-if (!defined('SMTP_HOST')) {
-    define('SMTP_HOST', getenv('SMTP_HOST') ?: 'smtp.gmail.com');
-}
-
-if (!defined('SMTP_PORT')) {
-    define('SMTP_PORT', (int)(getenv('SMTP_PORT') ?: 587));
-}
-
-if (!defined('SMTP_ENCRYPTION')) {
-    define('SMTP_ENCRYPTION', getenv('SMTP_ENCRYPTION') ?: 'tls'); // 'tls' or 'ssl'
-}
-
-if (!defined('SMTP_USERNAME')) {
-    define('SMTP_USERNAME', getenv('SMTP_USERNAME') ?: 'bryanxin221@gmail.com');
-}
-
 if (file_exists(__DIR__ . '/credentials.php')) {
     require_once __DIR__ . '/credentials.php';
 }
 
+if (!function_exists('getSmtpSetting')) {
+    function getSmtpSetting(string $key, $default = null) {
+        $envVal = getenv($key);
+        if ($envVal !== false && $envVal !== '') {
+            return $envVal;
+        }
+        try {
+            if (function_exists('getDB')) {
+                $db = getDB();
+                $stmt = $db->prepare("SELECT setting_value FROM system_settings WHERE setting_key = ? LIMIT 1");
+                $stmt->execute([strtolower($key)]);
+                $row = $stmt->fetch();
+                if ($row && !empty($row['setting_value'])) {
+                    return $row['setting_value'];
+                }
+            }
+        } catch (Exception $e) {}
+        return $default;
+    }
+}
+
+if (!defined('SMTP_HOST')) {
+    define('SMTP_HOST', getSmtpSetting('SMTP_HOST', 'smtp.gmail.com'));
+}
+
+if (!defined('SMTP_PORT')) {
+    define('SMTP_PORT', (int)getSmtpSetting('SMTP_PORT', 587));
+}
+
+if (!defined('SMTP_ENCRYPTION')) {
+    define('SMTP_ENCRYPTION', getSmtpSetting('SMTP_ENCRYPTION', 'tls')); // 'tls' or 'ssl'
+}
+
+if (!defined('SMTP_USERNAME')) {
+    define('SMTP_USERNAME', getSmtpSetting('SMTP_USERNAME', 'bryanxin221@gmail.com'));
+}
+
 if (!defined('SMTP_PASSWORD')) {
-    define('SMTP_PASSWORD', getenv('SMTP_PASSWORD') ?: '');
+    define('SMTP_PASSWORD', getSmtpSetting('SMTP_PASSWORD', ''));
 }
 
 if (!defined('SMTP_FROM_EMAIL')) {
-    define('SMTP_FROM_EMAIL', getenv('SMTP_FROM_EMAIL') ?: 'no-reply@guecooptical.com');
+    define('SMTP_FROM_EMAIL', getSmtpSetting('SMTP_FROM_EMAIL', 'no-reply@guecoopticalclinic.com'));
 }
 
 if (!defined('SMTP_FROM_NAME')) {
-    define('SMTP_FROM_NAME', getenv('SMTP_FROM_NAME') ?: 'Gueco Optical Clinic');
+    define('SMTP_FROM_NAME', getSmtpSetting('SMTP_FROM_NAME', 'Gueco Optical Clinic'));
 }
 
 /**
