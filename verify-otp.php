@@ -508,21 +508,6 @@ $currentTheme = ($userTheme === 'light') ? 'light' : 'dark';
       </div>
     <?php endif; ?>
 
-    <?php if (empty($_SESSION['patient_otp_sent']) && !empty($_SESSION['patient_otp_code'])): ?>
-      <div style="background: rgba(245, 158, 11, 0.1); border: 1px solid rgba(245, 158, 11, 0.35); border-radius: 14px; padding: 16px 18px; margin-bottom: 24px; text-align: left; display: flex; gap: 12px; align-items: flex-start;">
-        <i class="fas fa-info-circle" style="color: #F59E0B; font-size: 1.3rem; margin-top: 2px; flex-shrink: 0;"></i>
-        <div>
-          <div style="font-weight: 700; color: var(--text-primary); font-size: 0.95rem; margin-bottom: 4px;">Email Delivery Notice</div>
-          <div style="font-size: 0.82rem; color: var(--text-muted); line-height: 1.5;">
-            Live SMTP email delivery is pending configuration. For your convenience and immediate testing, your verification code is:
-          </div>
-          <div style="margin-top: 8px; font-size: 1.35rem; font-weight: 900; letter-spacing: 5px; color: #00ADEF; background: var(--bg-input); padding: 6px 16px; border-radius: 10px; border: 1px dashed var(--border-color); display: inline-block;">
-            <?= htmlspecialchars($_SESSION['patient_otp_code']) ?>
-          </div>
-        </div>
-      </div>
-    <?php endif; ?>
-
     <form method="POST" id="otpForm">
       <input type="hidden" name="action" value="verify_otp">
       <input type="hidden" name="csrf_token" value="<?= generateCsrfToken() ?>">
