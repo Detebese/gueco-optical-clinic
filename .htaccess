@@ -5,6 +5,9 @@
 # Disable Directory Browsing
 Options -Indexes
 
+# Set default DirectoryIndex files
+DirectoryIndex index.php dashboard.php index.html
+
 # Prevent access to hidden files and sensitive directories
 <FilesMatch "^\.|\.(git|env|sql|log|json|lock|bak|config)$">
     <IfModule mod_authz_core.c>
@@ -16,10 +19,18 @@ Options -Indexes
     </IfModule>
 </FilesMatch>
 
-# Protect database directory
+# Protect sensitive internal directories from direct HTTP access
 <IfModule mod_rewrite.c>
     RewriteEngine On
     RewriteRule ^database/ - [F,L,NC]
+    RewriteRule ^config/ - [F,L,NC]
+    RewriteRule ^scratch/ - [F,L,NC]
+
+    # Redirect role directory requests directly to their dashboard
+    RewriteRule ^admin/?$ admin/dashboard.php [L,R=301]
+    RewriteRule ^doctor/?$ doctor/dashboard.php [L,R=301]
+    RewriteRule ^saleslady/?$ saleslady/dashboard.php [L,R=301]
+    RewriteRule ^patient/?$ patient/dashboard.php [L,R=301]
 </IfModule>
 
 # Security Headers
