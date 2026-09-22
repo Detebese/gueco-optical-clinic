@@ -18,110 +18,116 @@ if (!preg_match('/^\d{4}-\d{2}$/', $selectedMonth)) {
 $isCurrentMonth = ($selectedMonth === date('Y-m'));
 $monthName = date('F Y', strtotime($selectedMonth . '-01'));
 
-// Monthly Sales for the selected month
-$monthSalesStmt = $db->prepare("
-    SELECT COALESCE(SUM(total),0) as total, COUNT(*) as count 
-    FROM sales 
-    WHERE DATE_FORMAT(created_at, '%Y-%m') = ? AND status = 'completed'
-");
-$monthSalesStmt->execute([$selectedMonth]);
-$monthSalesData = $monthSalesStmt->fetch();
-$monthlySalesTotal = (float)$monthSalesData['total'];
-$monthSalesCount   = (int)$monthSalesData['count'];
+try {
+    // Monthly Sales for the selected month
+    $monthSalesStmt = $db->prepare("
+        SELECT COALESCE(SUM(total),0) as total, COUNT(*) as count 
+        FROM sales 
+        WHERE DATE_FORMAT(created_at, '%Y-%m') = ? AND status = 'completed'
+    ");
+    $monthSalesStmt->execute([$selectedMonth]);
+    $monthSalesData = $monthSalesStmt->fetch();
+    $monthlySalesTotal = (float)($monthSalesData['total'] ?? 0);
+    $monthSalesCount   = (int)($monthSalesData['count'] ?? 0);
 
-// Sales chart data — last 7 days
-$sales7 = [];
-$labels7 = [];
-for ($i = 6; $i >= 0; $i--) {
-    $date = date('Y-m-d', strtotime("-$i days"));
-    $stmt = $db->prepare("SELECT COALESCE(SUM(total),0) as total FROM sales WHERE DATE(created_at)=? AND status='completed'");
-    $stmt->execute([$date]);
-    $sales7[]  = round($stmt->fetch()['total'], 2);
-    $labels7[] = date('M d', strtotime($date));
-}
+    // Sales chart data — last 7 days
+    $sales7 = [];
+    $labels7 = [];
+    for ($i = 6; $i >= 0; $i--) {
+        $date = date('Y-m-d', strtotime("-$i days"));
+        $stmt = $db->prepare("SELECT COALESCE(SUM(total),0) as total FROM sales WHERE DATE(created_at)=? AND status='completed'");
+        $stmt->execute([$date]);
+        $sales7[]  = round((float)($stmt->fetch()['total'] ?? 0), 2);
+        $labels7[] = date('M d', strtotime($date));
+    }
 
-// Category sales breakdown for the selected month (net revenue after discounts)
-$catStmt = $db->prepare("
-    SELECT c.name, 
-           ROUND(COALESCE(SUM(
-               CASE 
-                   WHEN s.subtotal > 0 THEN (si.total_price * (s.total / s.subtotal)) 
-                   ELSE si.total_price 
-               END
-           ), 0), 2) as total
-    FROM sale_items si
-    JOIN sales s ON s.id = si.sale_id AND s.status = 'completed' AND DATE_FORMAT(s.created_at, '%Y-%m') = ?
-    JOIN products p ON p.id = si.product_id
-    JOIN categories c ON c.id = p.category_id
-    GROUP BY c.id
-    HAVING total > 0
-    ORDER BY total DESC
-    LIMIT 6
-");
-$catStmt->execute([$selectedMonth]);
-$catSales = $catStmt->fetchAll();
+    // Category sales breakdown for the selected month (net revenue after discounts)
+    $catStmt = $db->prepare("
+        SELECT c.name, 
+               ROUND(COALESCE(SUM(
+                   CASE 
+                       WHEN s.subtotal > 0 THEN (si.total_price * (s.total / s.subtotal)) 
+                       ELSE si.total_price 
+                   END
+               ), 0), 2) as total
+        FROM sale_items si
+        JOIN sales s ON s.id = si.sale_id AND s.status = 'completed' AND DATE_FORMAT(s.created_at, '%Y-%m') = ?
+        JOIN products p ON p.id = si.product_id
+        JOIN categories c ON c.id = p.category_id
+        GROUP BY c.id, c.name
+        HAVING total > 0
+        ORDER BY total DESC
+        LIMIT 6
+    ");
+    $catStmt->execute([$selectedMonth]);
+    $catSales = $catStmt->fetchAll() ?: [];
 
-if (empty($catSales)) {
+    // Product sales breakdown for the selected month (net revenue after discounts)
+    $prodStmt = $db->prepare("
+        SELECT p.name, 
+               SUM(si.quantity) as units_sold,
+               ROUND(COALESCE(SUM(
+                   CASE 
+                       WHEN s.subtotal > 0 THEN (si.total_price * (s.total / s.subtotal)) 
+                       ELSE si.total_price 
+                   END
+               ), 0), 2) as total
+        FROM sale_items si
+        JOIN sales s ON s.id = si.sale_id AND s.status = 'completed' AND DATE_FORMAT(s.created_at, '%Y-%m') = ?
+        JOIN products p ON p.id = si.product_id
+        GROUP BY p.id, p.name
+        HAVING total > 0
+        ORDER BY total DESC
+        LIMIT 6
+    ");
+    $prodStmt->execute([$selectedMonth]);
+    $prodSales = $prodStmt->fetchAll() ?: [];
+
+    // Today's appointments
+    $todayAppts = $db->prepare("
+        SELECT a.*, p.full_name as patient_name, p.phone
+        FROM appointments a
+        JOIN patients p ON p.id = a.patient_id
+        WHERE a.appointment_date = CURDATE()
+        ORDER BY a.appointment_time ASC
+        LIMIT 6
+    ");
+    $todayAppts->execute();
+    $appointments = $todayAppts->fetchAll() ?: [];
+
+    // Low stock products
+    $lowStockItems = $db->query("
+        SELECT p.name, p.stock_quantity, p.low_stock_alert, c.name as category
+        FROM products p
+        JOIN categories c ON c.id = p.category_id
+        WHERE p.stock_quantity <= p.low_stock_alert AND p.status = 'active'
+        ORDER BY p.stock_quantity ASC
+        LIMIT 5
+    ");
+    $lowStockItems = $lowStockItems ? ($lowStockItems->fetchAll() ?: []) : [];
+
+    // Recent sales
+    $recentSales = $db->query("
+        SELECT s.*, p.full_name as patient_name, u.full_name as cashier_name
+        FROM sales s
+        LEFT JOIN patients p ON p.id = s.patient_id
+        JOIN users u ON u.id = s.cashier_id
+        ORDER BY s.created_at DESC
+        LIMIT 5
+    ");
+    $recentSales = $recentSales ? ($recentSales->fetchAll() ?: []) : [];
+} catch (Exception $e) {
+    error_log("Dashboard query error: " . $e->getMessage());
+    $monthlySalesTotal = 0.0;
+    $monthSalesCount = 0;
+    $sales7 = array_fill(0, 7, 0);
+    $labels7 = array_map(fn($i) => date('M d', strtotime("-$i days")), range(6, 0));
     $catSales = [];
-}
-
-// Product sales breakdown for the selected month (net revenue after discounts)
-$prodStmt = $db->prepare("
-    SELECT p.name, 
-           SUM(si.quantity) as units_sold,
-           ROUND(COALESCE(SUM(
-               CASE 
-                   WHEN s.subtotal > 0 THEN (si.total_price * (s.total / s.subtotal)) 
-                   ELSE si.total_price 
-               END
-           ), 0), 2) as total
-    FROM sale_items si
-    JOIN sales s ON s.id = si.sale_id AND s.status = 'completed' AND DATE_FORMAT(s.created_at, '%Y-%m') = ?
-    JOIN products p ON p.id = si.product_id
-    GROUP BY p.id
-    HAVING total > 0
-    ORDER BY total DESC
-    LIMIT 6
-");
-$prodStmt->execute([$selectedMonth]);
-$prodSales = $prodStmt->fetchAll();
-
-if (empty($prodSales)) {
     $prodSales = [];
+    $appointments = [];
+    $lowStockItems = [];
+    $recentSales = [];
 }
-
-// Today's appointments
-$todayAppts = $db->prepare("
-    SELECT a.*, p.full_name as patient_name, p.phone
-    FROM appointments a
-    JOIN patients p ON p.id = a.patient_id
-    WHERE a.appointment_date = CURDATE()
-    ORDER BY a.appointment_time ASC
-    LIMIT 6
-");
-$todayAppts->execute();
-$appointments = $todayAppts->fetchAll();
-
-// Low stock products
-$lowStockItems = $db->query("
-    SELECT p.name, p.stock_quantity, p.low_stock_alert, c.name as category
-    FROM products p
-    JOIN categories c ON c.id = p.category_id
-    WHERE p.stock_quantity <= p.low_stock_alert AND p.status = 'active'
-    ORDER BY p.stock_quantity ASC
-    LIMIT 5
-");
-$lowStockItems = $lowStockItems->fetchAll();
-
-// Recent sales
-$recentSales = $db->query("
-    SELECT s.*, p.full_name as patient_name, u.full_name as cashier_name
-    FROM sales s
-    LEFT JOIN patients p ON p.id = s.patient_id
-    JOIN users u ON u.id = s.cashier_id
-    ORDER BY s.created_at DESC
-    LIMIT 5
-")->fetchAll();
 
 $extraHead = '<link rel="stylesheet" href="'.BASE_URL.'assets/css/pages/dashboard.css?v='.time().'">';
 include __DIR__ . '/../includes/header.php';
