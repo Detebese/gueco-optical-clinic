@@ -113,6 +113,27 @@ function isPatientProfileComplete(int $patientId): bool {
     }
 }
 
+function ensurePatientSchema(?PDO $db = null): void {
+    static $checked = false;
+    if ($checked) return;
+    try {
+        if (!$db) {
+            $db = getDB();
+        }
+        $colStmt = $db->query("SHOW COLUMNS FROM patients");
+        if ($colStmt) {
+            $cols = $colStmt->fetchAll(PDO::FETCH_COLUMN);
+            if (!in_array('login_count', $cols)) {
+                $db->exec("ALTER TABLE patients ADD COLUMN login_count INT NOT NULL DEFAULT 1");
+            }
+            if (!in_array('last_login_at', $cols)) {
+                $db->exec("ALTER TABLE patients ADD COLUMN last_login_at DATETIME NULL");
+            }
+        }
+        $checked = true;
+    } catch (Exception $e) {}
+}
+
 function requirePatientLogin(): void {
     startSession();
     $base = getAppBaseUrl();
@@ -130,6 +151,7 @@ function requirePatientLogin(): void {
         header('Location: ' . $base . '/complete-profile.php');
         exit;
     }
+    ensurePatientSchema();
 }
 
 function getDashboardUrl(string $role): string {

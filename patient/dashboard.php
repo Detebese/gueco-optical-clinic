@@ -228,6 +228,17 @@ $pendingCount   = count(array_filter($myAppts, fn($a) => $a['status']==='pending
 
 // Patient info
 $patient = $db->prepare("SELECT * FROM patients WHERE id=?"); $patient->execute([$patientId]); $patient = $patient->fetch();
+
+$patientLoginCount = (int)($patient['login_count'] ?? 1);
+$isFirstLogin      = ($patientLoginCount <= 1);
+$greetingPrefix    = $isFirstLogin ? 'Welcome' : 'Welcome back';
+
+$patientFirstName  = !empty($patient['first_name']) 
+    ? trim($patient['first_name']) 
+    : sanitize(explode(' ', $_SESSION['patient_name'] ?? ($patient['full_name'] ?? 'Patient'))[0]);
+if (empty($patientFirstName)) {
+    $patientFirstName = 'Patient';
+}
 $userTheme = $_COOKIE['gueco_theme'] ?? ($_COOKIE['theme'] ?? 'dark');
 $currentTheme = ($userTheme === 'light') ? 'light' : 'dark';
 ?>
@@ -2249,7 +2260,7 @@ $currentTheme = ($userTheme === 'light') ? 'light' : 'dark';
   <!-- Welcome Header -->
   <div class="welcome-header">
     <div class="welcome-text">
-      <h1 class="welcome-title">Welcome back, <?= sanitize(explode(' ', $_SESSION['patient_name'] ?? 'Patient')[0]) ?> <span>👋</span></h1>
+      <h1 class="welcome-title"><?= $greetingPrefix ?>, <?= htmlspecialchars($patientFirstName) ?> <span>👋</span></h1>
       <p class="welcome-subtitle">Manage your eye care appointments, schedules, and optical consultation history.</p>
     </div>
     <div class="welcome-date-badge">

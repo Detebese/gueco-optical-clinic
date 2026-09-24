@@ -184,6 +184,12 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action']) && $_POST['
                 $update = $db->prepare($sql);
                 $update->execute($params);
 
+                // Ensure initial login_count is 1 on first profile completion
+                try {
+                    $db->prepare("UPDATE patients SET login_count = 1 WHERE id = ? AND (login_count IS NULL OR login_count = 0)")
+                       ->execute([$patientId]);
+                } catch (Exception $e) {}
+
                 // Update session state
                 $_SESSION['patient_name']       = $fullName;
                 $_SESSION['patient_first_name'] = $firstName;

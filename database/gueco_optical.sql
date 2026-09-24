@@ -210,6 +210,8 @@ CREATE TABLE `patients` (
   `updated_at` timestamp NOT NULL DEFAULT current_timestamp() ON UPDATE current_timestamp(),
   `reset_otp_hash` varchar(255) DEFAULT NULL,
   `reset_expires` datetime DEFAULT NULL,
+  `login_count` int(11) NOT NULL DEFAULT 1,
+  `last_login_at` datetime DEFAULT NULL,
   PRIMARY KEY (`id`),
   UNIQUE KEY `email` (`email`),
   UNIQUE KEY `google_id` (`google_id`)

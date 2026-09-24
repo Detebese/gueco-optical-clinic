@@ -83,6 +83,14 @@ try {
             $db->exec("ALTER TABLE patients ADD COLUMN auth_provider VARCHAR(20) DEFAULT 'email' AFTER status");
             $db->exec("UPDATE patients SET auth_provider = 'email' WHERE auth_provider IS NULL OR auth_provider = ''");
         }
+        $colLoginCount = $db->query("SHOW COLUMNS FROM patients LIKE 'login_count'")->fetch();
+        if (!$colLoginCount) {
+            $db->exec("ALTER TABLE patients ADD COLUMN login_count INT NOT NULL DEFAULT 1");
+        }
+        $colLastLogin = $db->query("SHOW COLUMNS FROM patients LIKE 'last_login_at'")->fetch();
+        if (!$colLastLogin) {
+            $db->exec("ALTER TABLE patients ADD COLUMN last_login_at DATETIME NULL");
+        }
     } catch (Exception $eCol) {
         // Table column checks failed or already exist
     }
@@ -123,8 +131,8 @@ try {
             $lastName  = count($nameParts) > 1 ? end($nameParts) : '';
         }
         $stmtInsert = $db->prepare(
-            "INSERT INTO patients (first_name, last_name, full_name, email, password, google_id, avatar, auth_provider, status)
-             VALUES (?, ?, ?, ?, ?, ?, ?, 'google', 'active')"
+            "INSERT INTO patients (first_name, last_name, full_name, email, password, google_id, avatar, auth_provider, status, login_count)
+             VALUES (?, ?, ?, ?, ?, ?, ?, 'google', 'active', 1)"
         );
         $stmtInsert->execute([$firstName, $lastName, $fullName, $email, $randomPassword, $googleId, $picture ?: null]);
         $newId = (int)$db->lastInsertId();
@@ -149,15 +157,35 @@ try {
     $_SESSION['patient_avatar'] = $patient['avatar'] ?: $picture;
     $_SESSION['patient_2fa_verified'] = true;
 
+    $isComplete = isPatientProfileComplete((int)$patient['id']);
+    $currentLogins = (int)($patient['login_count'] ?? 0);
+    $newLogins = $isComplete ? max(2, $currentLogins + 1) : max(1, $currentLogins);
+
+    $db->prepare("UPDATE patients SET login_count = ?, last_login_at = NOW() WHERE id = ?")
+       ->execute([$newLogins, $patient['id']]);
+
+    logActivity('Patient Login (Google)', 'Auth', (int)$patient['id'], 'patient');
+
     // Check if essential profile setup is complete
-    if (!isPatientProfileComplete((int)$patient['id'])) {
+    if (!$isComplete) {
         header('Location: complete-profile.php');
         exit;
     }
 
-    $_SESSION['flash_msg']   = 'Signed in successfully! Welcome, ' . htmlspecialchars($patient['full_name'] ?: 'Patient') . '.';
-    $_SESSION['flash_type']  = 'success';
-    $_SESSION['flash_title'] = 'Welcome Back!';
+    $isFirstLogin = ($newLogins <= 1);
+    $displayName = !empty($patient['first_name']) 
+        ? $patient['first_name'] 
+        : (!empty($patient['full_name']) ? explode(' ', trim($patient['full_name']))[0] : 'Patient');
+
+    if ($isFirstLogin) {
+        $_SESSION['flash_msg']   = 'Signed in successfully! Welcome, ' . htmlspecialchars($displayName) . '.';
+        $_SESSION['flash_type']  = 'success';
+        $_SESSION['flash_title'] = 'Welcome!';
+    } else {
+        $_SESSION['flash_msg']   = 'Welcome back, ' . htmlspecialchars($displayName) . '!';
+        $_SESSION['flash_type']  = 'success';
+        $_SESSION['flash_title'] = 'Welcome Back!';
+    }
 
     // Redirect directly to dashboard
     header('Location: patient/dashboard.php');

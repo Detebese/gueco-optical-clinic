@@ -136,9 +136,11 @@ if (isset($_POST['action']) && $_POST['action'] === 'verify_otp') {
                     exit;
                 }
 
-                $_SESSION['flash_msg']   = 'Security verification passed! Welcome, ' . htmlspecialchars($patientName) . '.';
+                $patientLoginCount = (int)($db->query("SELECT login_count FROM patients WHERE id = " . (int)$patientId)->fetchColumn() ?: 1);
+                $isFirst = ($patientLoginCount <= 1);
+                $_SESSION['flash_msg']   = 'Security verification passed! ' . ($isFirst ? 'Welcome, ' : 'Welcome back, ') . htmlspecialchars($patientName) . '.';
                 $_SESSION['flash_type']  = 'success';
-                $_SESSION['flash_title'] = 'Welcome Back!';
+                $_SESSION['flash_title'] = $isFirst ? 'Welcome!' : 'Welcome Back!';
                 
                 header('Location: patient/dashboard.php');
                 exit;

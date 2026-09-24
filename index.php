@@ -86,9 +86,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action']) && $_POST['
                         $errorField = 'email';
                         $tab   = 'register';
                     } else {
+                        ensurePatientSchema($db);
                         $stmt = $db->prepare(
-                            "INSERT INTO patients (email, password, created_at)
-                             VALUES (?, ?, NOW())"
+                            "INSERT INTO patients (email, password, login_count, created_at)
+                             VALUES (?, ?, 1, NOW())"
                         );
                         $stmt->execute([
                             $email,
@@ -149,6 +150,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action']) && $_POST['
         } else {
             try {
                 $db   = getDB();
+                ensurePatientSchema($db);
                 $stmt = $db->prepare("SELECT * FROM patients WHERE email = ? AND status = 'active' LIMIT 1");
                 $stmt->execute([$email]);
                 $patient = $stmt->fetch();
@@ -163,15 +165,37 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action']) && $_POST['
                     $_SESSION['patient_avatar'] = $patient['avatar'] ?? '';
                     $_SESSION['patient_2fa_verified'] = true;
 
+                    $isComplete = isPatientProfileComplete((int)$patient['id']);
+
+                    // Track login count: if profile is already complete, this is a returning login (bump to at least 2)
+                    $currentLogins = (int)($patient['login_count'] ?? 0);
+                    $newLogins = $isComplete ? max(2, $currentLogins + 1) : max(1, $currentLogins);
+
+                    $db->prepare("UPDATE patients SET login_count = ?, last_login_at = NOW() WHERE id = ?")
+                       ->execute([$newLogins, $patient['id']]);
+
+                    logActivity('Patient Login', 'Auth', (int)$patient['id'], 'patient');
+
                     // If profile is incomplete, guide them to complete profile; otherwise go directly to dashboard
-                    if (!isPatientProfileComplete((int)$patient['id'])) {
+                    if (!$isComplete) {
                         header('Location: complete-profile.php');
                         exit;
                     }
 
-                    $_SESSION['flash_msg']   = 'Welcome back, ' . htmlspecialchars($patient['full_name'] ?: 'Patient') . '!';
-                    $_SESSION['flash_type']  = 'success';
-                    $_SESSION['flash_title'] = 'Welcome Back!';
+                    $isFirstLogin = ($newLogins <= 1);
+                    $displayName = !empty($patient['first_name']) 
+                        ? $patient['first_name'] 
+                        : (!empty($patient['full_name']) ? explode(' ', trim($patient['full_name']))[0] : 'Patient');
+
+                    if ($isFirstLogin) {
+                        $_SESSION['flash_msg']   = 'Welcome, ' . htmlspecialchars($displayName) . '!';
+                        $_SESSION['flash_type']  = 'success';
+                        $_SESSION['flash_title'] = 'Welcome!';
+                    } else {
+                        $_SESSION['flash_msg']   = 'Welcome back, ' . htmlspecialchars($displayName) . '!';
+                        $_SESSION['flash_type']  = 'success';
+                        $_SESSION['flash_title'] = 'Welcome Back!';
+                    }
 
                     header('Location: patient/dashboard.php');
                     exit;
