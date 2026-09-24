@@ -45,14 +45,19 @@ if (!defined('GOOGLE_CLIENT_SECRET')) {
 }
 
 if (!defined('GOOGLE_REDIRECT_URI')) {
-    $host = $_SERVER['HTTP_HOST'] ?? 'localhost';
-    if (strpos($host, 'guecoopticalclinic.com') !== false) {
-        define('GOOGLE_REDIRECT_URI', 'https://guecoopticalclinic.com/google-callback.php');
+    $customUri = getGoogleSetting('GOOGLE_REDIRECT_URI', '');
+    if (!empty($customUri)) {
+        define('GOOGLE_REDIRECT_URI', $customUri);
     } else {
-        $proto  = (!empty($_SERVER['HTTPS']) && $_SERVER['HTTPS'] !== 'off') ? 'https://' : 'http://';
-        $script = $_SERVER['SCRIPT_NAME'] ?? '';
-        $subDir = (strpos($script, '/gueco-optical/') !== false) ? '/gueco-optical' : '';
-        define('GOOGLE_REDIRECT_URI', $proto . $host . $subDir . '/google-callback.php');
+        $host = $_SERVER['HTTP_HOST'] ?? 'localhost';
+        if (strpos($host, 'guecoopticalclinic.com') !== false) {
+            define('GOOGLE_REDIRECT_URI', 'https://guecoopticalclinic.com/google-callback.php');
+        } else {
+            $proto  = (!empty($_SERVER['HTTPS']) && $_SERVER['HTTPS'] !== 'off') ? 'https://' : 'http://';
+            $script = $_SERVER['SCRIPT_NAME'] ?? '';
+            $subDir = (strpos($script, '/gueco-optical/') !== false) ? '/gueco-optical' : '';
+            define('GOOGLE_REDIRECT_URI', $proto . $host . $subDir . '/google-callback.php');
+        }
     }
 }
 
