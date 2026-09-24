@@ -31,14 +31,16 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $bdate    = sanitize($_POST['birthdate'] ?? '');
         $removeAvatar = isset($_POST['remove_avatar']) && $_POST['remove_avatar'] === '1';
         
-        $cleanPhone = preg_replace('/[^0-9]/', '', $phone);
+        $phoneVal = null;
         if (!empty($phone)) {
+            $cleanPhone = preg_replace('/[^0-9]/', '', $phone);
             if (strlen($cleanPhone) !== 11 || !str_starts_with($cleanPhone, '09')) {
                 $_SESSION['flash_msg'] = 'Contact number must be exactly 11 digits starting with 09 (e.g., 09123456789).';
                 $_SESSION['flash_type'] = 'danger';
                 header('Location: settings.php');
                 exit;
             }
+            $phoneVal = $cleanPhone;
         }
 
         $bdateFormatted = null;
@@ -48,6 +50,14 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 $bdateFormatted = date('Y-m-d', $ts);
             }
         }
+
+        $genderVal = null;
+        $cleanGender = strtolower(trim($gender));
+        if (in_array($cleanGender, ['male', 'female', 'other'], true)) {
+            $genderVal = $cleanGender;
+        }
+
+        $addressVal = !empty(trim($address)) ? trim($address) : null;
 
         // Defensive check: ensure avatar column exists
         try {
@@ -61,6 +71,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $currStmt = $db->prepare("SELECT avatar FROM patients WHERE id = ?");
         $currStmt->execute([$patientId]);
         $currentAvatar = $currStmt->fetchColumn() ?: '';
+        $currStmt->closeCursor();
 
         $avatarUpdated = false;
         $newAvatarVal = $currentAvatar;
@@ -127,24 +138,51 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         }
         
         try {
-            if ($avatarUpdated) {
-                $db->prepare("UPDATE patients SET full_name=COALESCE(NULLIF(?,''), full_name), phone=?, gender=?, address=?, birthdate=COALESCE(?, birthdate), avatar=?, updated_at=NOW() WHERE id=?")
-                   ->execute([$fullName, $cleanPhone, $gender, $address, $bdateFormatted, $newAvatarVal, $patientId]);
-                $_SESSION['patient_avatar'] = $newAvatarVal ?: '';
-            } else {
-                $db->prepare("UPDATE patients SET full_name=COALESCE(NULLIF(?,''), full_name), phone=?, gender=?, address=?, birthdate=COALESCE(?, birthdate), updated_at=NOW() WHERE id=?")
-                   ->execute([$fullName, $cleanPhone, $gender, $address, $bdateFormatted, $patientId]);
+            $setParts = [];
+            $params   = [];
+
+            if (!empty($fullName)) {
+                $setParts[] = "full_name = ?";
+                $params[]   = $fullName;
             }
+
+            $setParts[] = "phone = ?";
+            $params[]   = $phoneVal;
+
+            $setParts[] = "gender = ?";
+            $params[]   = $genderVal;
+
+            $setParts[] = "address = ?";
+            $params[]   = $addressVal;
+
+            $setParts[] = "birthdate = ?";
+            $params[]   = $bdateFormatted;
+
+            if ($avatarUpdated) {
+                $setParts[] = "avatar = ?";
+                $params[]   = $newAvatarVal;
+            }
+
+            $setParts[] = "updated_at = NOW()";
+            $params[]   = $patientId;
+
+            $sql = "UPDATE patients SET " . implode(", ", $setParts) . " WHERE id = ?";
+            $stmt = $db->prepare($sql);
+            $stmt->execute($params);
             
+            if ($avatarUpdated) {
+                $_SESSION['patient_avatar'] = $newAvatarVal ?: '';
+            }
+
             if (!empty($fullName)) {
                 $_SESSION['patient_name'] = $fullName;
             }
             
             $_SESSION['flash_msg'] = $avatarUpdated ? 'Profile and photo updated successfully!' : 'Profile updated successfully!';
             $_SESSION['flash_type'] = 'success';
-        } catch (Exception $e) {
+        } catch (Throwable $e) {
             error_log("Failed updating patient profile in settings: " . $e->getMessage());
-            $_SESSION['flash_msg'] = 'Failed to update profile. Please check your details.';
+            $_SESSION['flash_msg'] = 'Failed to update profile: ' . $e->getMessage();
             $_SESSION['flash_type'] = 'danger';
         }
         header('Location: settings.php');
