@@ -570,6 +570,11 @@ $currentTheme = ($userTheme === 'light') ? 'light' : 'dark';
       display: flex; align-items: center; justify-content: center;
       color: #fff; font-weight: 800; font-size: .84rem;
       box-shadow: 0 2px 6px rgba(35, 94, 174, 0.25);
+      overflow: hidden;
+      flex-shrink: 0;
+    }
+    .user-avatar img {
+      width: 100%; height: 100%; object-fit: cover; display: block; border-radius: 50%;
     }
     .user-name { font-size: .92rem; font-weight: 800; color: var(--text-primary); }
 
@@ -3555,7 +3560,17 @@ $currentTheme = ($userTheme === 'light') ? 'light' : 'dark';
     </button>
     <div class="user-dropdown" id="userDropdown">
       <div class="user-chip" onclick="toggleDropdown()">
-        <div class="user-avatar"><?= strtoupper(substr($_SESSION['patient_name'] ?? 'P', 0, 1)) ?></div>
+        <div class="user-avatar">
+          <?php 
+            $navAvatar = $patient['avatar'] ?? ($_SESSION['patient_avatar'] ?? '');
+            if (!empty($navAvatar)): 
+              $navSrc = str_starts_with($navAvatar, 'http') ? $navAvatar : (BASE_URL . ltrim($navAvatar, '/'));
+          ?>
+            <img src="<?= htmlspecialchars($navSrc) ?>" alt="Avatar">
+          <?php else: ?>
+            <?= strtoupper(substr($patient['full_name'] ?? ($_SESSION['patient_name'] ?? 'P'), 0, 1)) ?>
+          <?php endif; ?>
+        </div>
         <span class="user-name"><?= sanitize(explode(' ', $_SESSION['patient_name'] ?? 'Patient')[0]) ?></span>
         <i class="fas fa-chevron-down" style="font-size:.7rem;color:var(--text-muted);margin-left:4px;"></i>
       </div>

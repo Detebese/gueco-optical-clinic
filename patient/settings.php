@@ -29,6 +29,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $gender   = sanitize($_POST['gender'] ?? '');
         $address  = sanitize($_POST['address'] ?? '');
         $bdate    = sanitize($_POST['birthdate'] ?? '');
+        $removeAvatar = isset($_POST['remove_avatar']) && $_POST['remove_avatar'] === '1';
         
         $cleanPhone = preg_replace('/[^0-9]/', '', $phone);
         if (!empty($phone)) {
@@ -47,16 +48,99 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 $bdateFormatted = date('Y-m-d', $ts);
             }
         }
+
+        // Defensive check: ensure avatar column exists
+        try {
+            $colCheck = $db->query("SHOW COLUMNS FROM patients LIKE 'avatar'")->fetch();
+            if (!$colCheck) {
+                $db->exec("ALTER TABLE patients ADD COLUMN avatar VARCHAR(500) NULL AFTER gender");
+            }
+        } catch (Exception $e) {}
+
+        // Fetch current avatar
+        $currStmt = $db->prepare("SELECT avatar FROM patients WHERE id = ?");
+        $currStmt->execute([$patientId]);
+        $currentAvatar = $currStmt->fetchColumn() ?: '';
+
+        $avatarUpdated = false;
+        $newAvatarVal = $currentAvatar;
+
+        // Handle Avatar Removal
+        if ($removeAvatar) {
+            if (!empty($currentAvatar) && !str_starts_with($currentAvatar, 'http')) {
+                $oldFile = __DIR__ . '/../' . ltrim($currentAvatar, '/');
+                if (file_exists($oldFile)) {
+                    @unlink($oldFile);
+                }
+            }
+            $newAvatarVal = null;
+            $avatarUpdated = true;
+        }
+
+        // Handle Avatar File Upload
+        if (isset($_FILES['avatar']) && $_FILES['avatar']['error'] === UPLOAD_ERR_OK) {
+            $allowedExts = ['jpg', 'jpeg', 'png', 'webp', 'gif'];
+            $allowedMimes = ['image/jpeg', 'image/png', 'image/webp', 'image/gif'];
+            $fileTmp = $_FILES['avatar']['tmp_name'];
+            $fileExt = strtolower(pathinfo($_FILES['avatar']['name'], PATHINFO_EXTENSION));
+            $fileSize = $_FILES['avatar']['size'];
+            
+            $imgInfo = @getimagesize($fileTmp);
+            $fileMime = $imgInfo['mime'] ?? '';
+
+            if (!in_array($fileExt, $allowedExts) || !in_array($fileMime, $allowedMimes)) {
+                $_SESSION['flash_msg'] = 'Invalid image format. Please upload a JPG, PNG, WEBP, or GIF image.';
+                $_SESSION['flash_type'] = 'danger';
+                header('Location: settings.php');
+                exit;
+            } elseif ($fileSize > 5 * 1024 * 1024) {
+                $_SESSION['flash_msg'] = 'The selected image is too large. Maximum allowed size is 5MB.';
+                $_SESSION['flash_type'] = 'danger';
+                header('Location: settings.php');
+                exit;
+            } else {
+                $uploadDir = __DIR__ . '/../assets/images/avatars/';
+                if (!is_dir($uploadDir)) {
+                    @mkdir($uploadDir, 0755, true);
+                }
+
+                $avatarFilename = 'avatar_pt' . $patientId . '_' . bin2hex(random_bytes(6)) . '.' . $fileExt;
+                $destPath = $uploadDir . $avatarFilename;
+
+                if (move_uploaded_file($fileTmp, $destPath)) {
+                    // Remove previous local avatar if it exists
+                    if (!empty($currentAvatar) && !str_starts_with($currentAvatar, 'http')) {
+                        $oldFile = __DIR__ . '/../' . ltrim($currentAvatar, '/');
+                        if (file_exists($oldFile) && $oldFile !== $destPath) {
+                            @unlink($oldFile);
+                        }
+                    }
+                    $newAvatarVal = 'assets/images/avatars/' . $avatarFilename;
+                    $avatarUpdated = true;
+                } else {
+                    $_SESSION['flash_msg'] = 'Failed to save uploaded picture. Please try again.';
+                    $_SESSION['flash_type'] = 'danger';
+                    header('Location: settings.php');
+                    exit;
+                }
+            }
+        }
         
         try {
-            $db->prepare("UPDATE patients SET full_name=COALESCE(NULLIF(?,''), full_name), phone=?, gender=?, address=?, birthdate=COALESCE(?, birthdate), updated_at=NOW() WHERE id=?")
-               ->execute([$fullName, $cleanPhone, $gender, $address, $bdateFormatted, $patientId]);
+            if ($avatarUpdated) {
+                $db->prepare("UPDATE patients SET full_name=COALESCE(NULLIF(?,''), full_name), phone=?, gender=?, address=?, birthdate=COALESCE(?, birthdate), avatar=?, updated_at=NOW() WHERE id=?")
+                   ->execute([$fullName, $cleanPhone, $gender, $address, $bdateFormatted, $newAvatarVal, $patientId]);
+                $_SESSION['patient_avatar'] = $newAvatarVal ?: '';
+            } else {
+                $db->prepare("UPDATE patients SET full_name=COALESCE(NULLIF(?,''), full_name), phone=?, gender=?, address=?, birthdate=COALESCE(?, birthdate), updated_at=NOW() WHERE id=?")
+                   ->execute([$fullName, $cleanPhone, $gender, $address, $bdateFormatted, $patientId]);
+            }
             
             if (!empty($fullName)) {
                 $_SESSION['patient_name'] = $fullName;
             }
             
-            $_SESSION['flash_msg'] = 'Profile updated successfully!';
+            $_SESSION['flash_msg'] = $avatarUpdated ? 'Profile and photo updated successfully!' : 'Profile updated successfully!';
             $_SESSION['flash_type'] = 'success';
         } catch (Exception $e) {
             error_log("Failed updating patient profile in settings: " . $e->getMessage());
@@ -395,6 +479,11 @@ $currentTheme = ($userTheme === 'light') ? 'light' : 'dark';
       display: flex; align-items: center; justify-content: center;
       color: #fff; font-weight: 800; font-size: .76rem;
       box-shadow: 0 2px 8px rgba(35, 94, 174, 0.35);
+      overflow: hidden;
+      flex-shrink: 0;
+    }
+    .user-avatar img {
+      width: 100%; height: 100%; object-fit: cover; display: block; border-radius: 50%;
     }
     .user-name { font-size: .88rem; font-weight: 700; color: var(--text-primary); }
 
@@ -442,6 +531,155 @@ $currentTheme = ($userTheme === 'light') ? 'light' : 'dark';
     .card-icon.orange { background: linear-gradient(135deg, #1E74BD, #272264); box-shadow: 0 6px 18px rgba(30, 116, 189, 0.3); }
     .card-title { font-size: 1.25rem; font-weight: 800; color: var(--text-primary); margin: 0; letter-spacing: -0.01em; }
     .card-subtitle { font-size: .84rem; color: var(--text-muted); margin: 3px 0 0; font-weight: 500; }
+
+    /* PROFILE AVATAR SECTION */
+    .profile-avatar-section {
+      display: flex;
+      align-items: center;
+      gap: 24px;
+      padding: 22px 24px;
+      background: var(--bg-hover);
+      border: 1.5px solid var(--border-color);
+      border-radius: 18px;
+      margin-bottom: 26px;
+      transition: all 0.25s ease;
+    }
+    .profile-avatar-preview-box {
+      position: relative;
+      width: 96px;
+      height: 96px;
+      border-radius: 50%;
+      flex-shrink: 0;
+      box-shadow: 0 8px 24px rgba(35, 94, 174, 0.25);
+      border: 3px solid var(--bg-card);
+    }
+    .profile-avatar-img {
+      width: 100%;
+      height: 100%;
+      border-radius: 50%;
+      object-fit: cover;
+      display: block;
+    }
+    .profile-avatar-initials {
+      width: 100%;
+      height: 100%;
+      border-radius: 50%;
+      background: linear-gradient(135deg, var(--clr-primary), var(--clr-secondary));
+      color: #FFFFFF;
+      font-size: 2.2rem;
+      font-weight: 800;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      text-transform: uppercase;
+      user-select: none;
+    }
+    .avatar-camera-btn {
+      position: absolute;
+      bottom: -2px;
+      right: -2px;
+      width: 32px;
+      height: 32px;
+      border-radius: 50%;
+      background: linear-gradient(135deg, #00ADEF, #235EAE);
+      color: #FFFFFF !important;
+      border: 2.5px solid var(--bg-card);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 0.82rem;
+      cursor: pointer;
+      box-shadow: 0 4px 10px rgba(0, 0, 0, 0.25);
+      transition: transform 0.2s cubic-bezier(0.16, 1, 0.3, 1), background-color 0.2s;
+    }
+    .avatar-camera-btn:hover {
+      transform: scale(1.12);
+      background: linear-gradient(135deg, #0284C7, #1D4ED8);
+      color: #FFFFFF !important;
+    }
+    .profile-avatar-meta {
+      flex: 1;
+      min-width: 0;
+    }
+    .profile-avatar-title {
+      font-size: 1.05rem;
+      font-weight: 800;
+      color: var(--text-primary);
+      margin-bottom: 4px;
+    }
+    .profile-avatar-desc {
+      font-size: 0.82rem;
+      color: var(--text-muted);
+      line-height: 1.5;
+      margin-bottom: 12px;
+    }
+    .profile-avatar-actions {
+      display: flex;
+      align-items: center;
+      flex-wrap: wrap;
+      gap: 10px;
+    }
+    .btn-avatar-upload {
+      display: inline-flex;
+      align-items: center;
+      gap: 7px;
+      padding: 9px 18px;
+      border-radius: 100px;
+      font-size: 0.82rem;
+      font-weight: 800;
+      color: #FFFFFF !important;
+      background: linear-gradient(135deg, #00ADEF, #235EAE);
+      border: none;
+      cursor: pointer;
+      box-shadow: 0 4px 14px rgba(0, 173, 239, 0.3);
+      transition: all 0.2s ease;
+      text-decoration: none;
+    }
+    .btn-avatar-upload:hover {
+      transform: translateY(-1px);
+      box-shadow: 0 6px 18px rgba(0, 173, 239, 0.45);
+      color: #FFFFFF !important;
+    }
+    .btn-avatar-remove {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      padding: 8px 16px;
+      border-radius: 100px;
+      font-size: 0.82rem;
+      font-weight: 700;
+      color: #EF4444;
+      background: rgba(239, 68, 68, 0.08);
+      border: 1px solid rgba(239, 68, 68, 0.25);
+      cursor: pointer;
+      transition: all 0.2s ease;
+    }
+    .btn-avatar-remove:hover {
+      background: #EF4444;
+      color: #FFFFFF !important;
+      border-color: #EF4444;
+      transform: translateY(-1px);
+    }
+    .avatar-file-feedback {
+      margin-top: 10px;
+      font-size: 0.78rem;
+      font-weight: 700;
+      padding: 6px 12px;
+      border-radius: 8px;
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+    }
+    .avatar-file-feedback.ready {
+      background: rgba(16, 185, 129, 0.12);
+      color: #10B981;
+      border: 1px solid rgba(16, 185, 129, 0.25);
+    }
+    .avatar-file-feedback.remove {
+      background: rgba(245, 158, 11, 0.12);
+      color: #F59E0B;
+      border: 1px solid rgba(245, 158, 11, 0.25);
+    }
 
     /* FORM FIELDS */
     .field-control {
@@ -534,7 +772,17 @@ $currentTheme = ($userTheme === 'light') ? 'light' : 'dark';
     </button>
     <div class="user-dropdown" id="userDropdown">
       <div class="user-chip" onclick="toggleDropdown()">
-        <div class="user-avatar"><?= strtoupper(substr($_SESSION['patient_name'] ?? 'P', 0, 1)) ?></div>
+        <div class="user-avatar">
+          <?php 
+            $navAvatar = $patient['avatar'] ?? ($_SESSION['patient_avatar'] ?? '');
+            if (!empty($navAvatar)): 
+              $navSrc = str_starts_with($navAvatar, 'http') ? $navAvatar : (BASE_URL . ltrim($navAvatar, '/'));
+          ?>
+            <img src="<?= htmlspecialchars($navSrc) ?>" alt="Avatar">
+          <?php else: ?>
+            <?= strtoupper(substr($patient['full_name'] ?? ($_SESSION['patient_name'] ?? 'P'), 0, 1)) ?>
+          <?php endif; ?>
+        </div>
         <span class="user-name"><?= sanitize(explode(' ', $_SESSION['patient_name'] ?? 'Patient')[0]) ?></span>
         <i class="fas fa-chevron-down" style="font-size:.7rem;color:var(--text-muted);margin-left:4px;"></i>
       </div>
@@ -566,13 +814,53 @@ $currentTheme = ($userTheme === 'light') ? 'light' : 'dark';
       <div class="card-icon bronze"><i class="fas fa-user"></i></div>
       <div>
         <h2 class="card-title">Profile Settings</h2>
-        <p class="card-subtitle">View and update your contact details</p>
+        <p class="card-subtitle">View and update your contact details and profile picture</p>
       </div>
     </div>
 
-    <form method="POST">
+    <form method="POST" enctype="multipart/form-data">
       <input type="hidden" name="csrf_token" value="<?= generateCsrfToken() ?>">
       <input type="hidden" name="action" value="update_profile">
+      <input type="hidden" name="remove_avatar" id="removeAvatarInput" value="0">
+      
+      <!-- Profile Picture Upload Section -->
+      <div class="profile-avatar-section">
+        <div class="profile-avatar-preview-box">
+          <?php 
+            $hasAvatar = !empty($patient['avatar']);
+            $avatarSrc = '';
+            if ($hasAvatar) {
+                $avatarSrc = str_starts_with($patient['avatar'], 'http') ? $patient['avatar'] : (BASE_URL . ltrim($patient['avatar'], '/'));
+            }
+          ?>
+          <img src="<?= htmlspecialchars($avatarSrc) ?>" alt="Profile Picture" id="avatarImgPreview" class="profile-avatar-img <?= $hasAvatar ? '' : 'd-none' ?>">
+          <div id="avatarInitialsFallback" class="profile-avatar-initials <?= $hasAvatar ? 'd-none' : '' ?>">
+            <?= strtoupper(substr($patient['full_name'] ?? ($_SESSION['patient_name'] ?? 'P'), 0, 1)) ?>
+          </div>
+          
+          <label for="avatarInput" class="avatar-camera-btn" title="Choose new profile photo">
+            <i class="fas fa-camera"></i>
+          </label>
+        </div>
+
+        <div class="profile-avatar-meta">
+          <h4 class="profile-avatar-title">Profile Photo</h4>
+          <p class="profile-avatar-desc">
+            Personalize your account with a photo. Supported formats: JPG, PNG, WEBP, or GIF (max 5MB).
+          </p>
+          <div class="profile-avatar-actions">
+            <label for="avatarInput" class="btn-avatar-upload">
+              <i class="fas fa-upload me-1"></i> Choose New Photo
+            </label>
+            <input type="file" name="avatar" id="avatarInput" accept="image/png, image/jpeg, image/jpg, image/webp, image/gif" class="d-none" onchange="previewAvatar(event)">
+            
+            <button type="button" class="btn-avatar-remove <?= $hasAvatar ? '' : 'd-none' ?>" id="btnRemoveAvatar" onclick="handleRemoveAvatar()">
+              <i class="fas fa-trash-alt me-1"></i> Remove Photo
+            </button>
+          </div>
+          <div id="avatarFileFeedback" class="avatar-file-feedback d-none"></div>
+        </div>
+      </div>
       
       <div class="row g-3 mb-3">
         <div class="col-md-6">
@@ -688,6 +976,84 @@ function showPopupModal(msg, type = 'info', title = null) {
       popup: 'patient-swal-popup'
     }
   });
+// Avatar Preview & Removal Handler
+function previewAvatar(event) {
+  const file = event.target.files && event.target.files[0];
+  if (!file) return;
+
+  // Validate type
+  const validTypes = ['image/jpeg', 'image/png', 'image/webp', 'image/gif'];
+  if (!validTypes.includes(file.type)) {
+    showPopupModal('Please choose a valid image file (JPG, PNG, WEBP, or GIF).', 'danger', 'Invalid Format');
+    event.target.value = '';
+    return;
+  }
+
+  // Validate size (5MB)
+  if (file.size > 5 * 1024 * 1024) {
+    showPopupModal('The selected image is larger than 5MB. Please choose a smaller photo.', 'danger', 'File Too Large');
+    event.target.value = '';
+    return;
+  }
+
+  const reader = new FileReader();
+  reader.onload = function(e) {
+    const previewImg = document.getElementById('avatarImgPreview');
+    const initials = document.getElementById('avatarInitialsFallback');
+    const removeBtn = document.getElementById('btnRemoveAvatar');
+    const feedback = document.getElementById('avatarFileFeedback');
+    const removeInput = document.getElementById('removeAvatarInput');
+
+    if (previewImg) {
+      previewImg.src = e.target.result;
+      previewImg.classList.remove('d-none');
+    }
+    if (initials) {
+      initials.classList.add('d-none');
+    }
+    if (removeBtn) {
+      removeBtn.classList.remove('d-none');
+    }
+    if (removeInput) {
+      removeInput.value = '0';
+    }
+    if (feedback) {
+      const sizeMB = (file.size / (1024 * 1024)).toFixed(2);
+      feedback.className = 'avatar-file-feedback ready';
+      feedback.innerHTML = '<i class="fas fa-check-circle"></i> ' + file.name + ' (' + sizeMB + ' MB) — Ready to save!';
+      feedback.classList.remove('d-none');
+    }
+  };
+  reader.readAsDataURL(file);
+}
+
+function handleRemoveAvatar() {
+  const fileInput = document.getElementById('avatarInput');
+  const previewImg = document.getElementById('avatarImgPreview');
+  const initials = document.getElementById('avatarInitialsFallback');
+  const removeBtn = document.getElementById('btnRemoveAvatar');
+  const feedback = document.getElementById('avatarFileFeedback');
+  const removeInput = document.getElementById('removeAvatarInput');
+
+  if (fileInput) fileInput.value = '';
+  if (previewImg) {
+    previewImg.src = '';
+    previewImg.classList.add('d-none');
+  }
+  if (initials) {
+    initials.classList.remove('d-none');
+  }
+  if (removeBtn) {
+    removeBtn.classList.add('d-none');
+  }
+  if (removeInput) {
+    removeInput.value = '1';
+  }
+  if (feedback) {
+    feedback.className = 'avatar-file-feedback remove';
+    feedback.innerHTML = '<i class="fas fa-info-circle"></i> Photo marked for removal. Click "Save Profile" to apply.';
+    feedback.classList.remove('d-none');
+  }
 }
 
 document.addEventListener('DOMContentLoaded', function() {
