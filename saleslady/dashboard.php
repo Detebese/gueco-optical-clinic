@@ -60,26 +60,31 @@ include __DIR__ . '/../includes/header.php';
 ?>
 
 <!-- Quick Action Buttons -->
-<div style="display:flex;gap:12px;margin-bottom:24px;flex-wrap:wrap;align-items:center;">
-  <a href="../saleslady/pos.php?mode=retail" class="btn btn-warning" style="background:linear-gradient(135deg,#f59e0b,#d97706);border:none;color:#fff;font-weight:700;box-shadow:0 4px 12px rgba(245,158,11,0.25);">
-    <i class="fas fa-bolt me-1"></i> Quick Sale / Walk-in Purchase
+<div class="dash-quick-actions">
+  <a href="../saleslady/pos.php?mode=retail" class="dash-action-btn primary-action">
+    <i class="fas fa-bolt"></i>
+    <span>Quick Sale / Walk-in</span>
   </a>
-  <a href="../saleslady/pos.php" class="btn btn-primary">
-    <i class="fas fa-cash-register me-1"></i> POS Terminal
+  <a href="../saleslady/pos.php" class="dash-action-btn action-primary">
+    <i class="fas fa-cash-register"></i>
+    <span>POS Terminal</span>
   </a>
-  <a href="../saleslady/appointments.php" class="btn btn-outline-primary">
-    <i class="fas fa-calendar-check me-1"></i> Scheduled Patients & Queue
+  <a href="../saleslady/appointments.php" class="dash-action-btn">
+    <i class="fas fa-calendar-check"></i>
+    <span>Today's Queue</span>
   </a>
-  <a href="../saleslady/inventory.php" class="btn btn-outline-primary">
-    <i class="fas fa-warehouse me-1"></i> Stock Management
+  <a href="../saleslady/inventory.php" class="dash-action-btn">
+    <i class="fas fa-warehouse"></i>
+    <span>Inventory Stock</span>
   </a>
-  <a href="../saleslady/patients.php" class="btn btn-outline-primary">
-    <i class="fas fa-users me-1"></i> Patient Info
+  <a href="../saleslady/patients.php" class="dash-action-btn">
+    <i class="fas fa-users"></i>
+    <span>Patient Info</span>
   </a>
 </div>
 
 <!-- ─── Bento Top Metric Cards Row (4 Responsive Cards) ─── -->
-<div class="row g-3 mb-4">
+<div class="row g-2 g-sm-3 mb-4">
   <!-- Card 1: Today's Revenue -->
   <div class="col-6 col-lg-3">
     <div class="bento-stat" style="--stat-color:#10B981; --stat-rgb:16, 185, 129;">
@@ -164,10 +169,10 @@ include __DIR__ . '/../includes/header.php';
 </div>
 
 <!-- Charts + Appointments -->
-<div class="row" style="margin-bottom:24px;">
+<div class="row g-3 mb-4">
   <!-- Hourly Sales Chart -->
-  <div class="col-8">
-    <div class="card">
+  <div class="col-12 col-lg-8">
+    <div class="card h-100">
       <div class="card-header">
         <h6><i class="fas fa-chart-area me-2" style="color:var(--clr-success)"></i>Today's Sales by Hour</h6>
         <span style="font-size:.75rem;color:var(--text-muted)"><?= date('F d, Y') ?></span>
@@ -181,8 +186,8 @@ include __DIR__ . '/../includes/header.php';
   </div>
 
   <!-- Today's Appointment Mini List -->
-  <div class="col-4">
-    <div class="card" style="height:100%;">
+  <div class="col-12 col-lg-4">
+    <div class="card h-100">
       <div class="card-header">
         <h6><i class="fas fa-calendar-day me-2" style="color:var(--clr-info)"></i>Today's Queue</h6>
       </div>
@@ -209,10 +214,10 @@ include __DIR__ . '/../includes/header.php';
 </div>
 
 <!-- Today's Sales + Low Stock -->
-<div class="row">
+<div class="row g-3 mb-4">
   <!-- Today's transactions -->
-  <div class="col-6">
-    <div class="card">
+  <div class="col-12 col-lg-6">
+    <div class="card h-100">
       <div class="card-header">
         <h6><i class="fas fa-receipt me-2" style="color:var(--clr-success)"></i>Today's Transactions</h6>
         <a href="../saleslady/sales.php" class="btn btn-sm btn-outline-primary">All Sales</a>
@@ -246,7 +251,7 @@ include __DIR__ . '/../includes/header.php';
   </div>
 
   <!-- Low stock items -->
-  <div class="col-6">
+  <div class="col-12 col-lg-6">
     <div class="card">
       <div class="card-header">
         <h6><i class="fas fa-exclamation-triangle me-2" style="color:var(--clr-warning)"></i>Low Stock Items</h6>

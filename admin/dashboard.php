@@ -134,7 +134,7 @@ include __DIR__ . '/../includes/header.php';
 ?>
 
 <!-- ─── Bento Top Metric Cards Row (4 Responsive Cards) ─── -->
-<div class="row g-3 mb-4">
+<div class="row g-2 g-sm-3 mb-4">
   <!-- Card 1: Sales this month (Clickable Month Filter) -->
   <div class="col-6 col-lg-3">
     <div class="bento-stat" style="--stat-color:#235EAE; --stat-rgb:35, 94, 174; cursor: pointer;" onclick="openDashMonthPicker()" title="Click to change month">
@@ -289,7 +289,7 @@ include __DIR__ . '/../includes/header.php';
 <!-- ─── Middle Charts Row (Bento Grid) ────────────────────── -->
 <div class="row g-3 mb-4">
   <!-- Main Sales Trend Area Chart -->
-  <div class="col-xl-8 col-lg-7">
+  <div class="col-12 col-lg-7 col-xl-8">
     <div class="card h-100">
       <div class="card-header">
         <div>
@@ -308,7 +308,7 @@ include __DIR__ . '/../includes/header.php';
   </div>
 
   <!-- Sales Breakdown Donut Chart (Category & Product) -->
-  <div class="col-xl-4 col-lg-5">
+  <div class="col-12 col-lg-5 col-xl-4">
     <div class="card h-100">
       <div class="card-header d-flex align-items-center justify-content-between flex-wrap gap-2">
         <div class="d-flex align-items-center gap-2">
@@ -331,7 +331,7 @@ include __DIR__ . '/../includes/header.php';
 <!-- ─── Lower Row: Appointments & Low Stock ───────────────── -->
 <div class="row g-3 mb-4">
   <!-- Today's Appointments -->
-  <div class="col-xl-6">
+  <div class="col-12 col-xl-6">
     <div class="card h-100">
       <div class="card-header">
         <h6><i class="fas fa-calendar-day me-2" style="color:var(--clr-success)"></i>Today's Appointments</h6>
@@ -373,7 +373,7 @@ include __DIR__ . '/../includes/header.php';
   </div>
 
   <!-- Low Stock Alerts -->
-  <div class="col-xl-6">
+  <div class="col-12 col-xl-6">
     <div class="card h-100">
       <div class="card-header">
         <h6><i class="fas fa-triangle-exclamation me-2" style="color:var(--clr-warning)"></i>Low Stock Alerts</h6>

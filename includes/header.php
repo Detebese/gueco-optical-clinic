@@ -48,7 +48,7 @@ $currentTheme = ($userTheme === 'light') ? 'light' : 'dark';
       }
     });
 
-    function toggleSidebarMobile(forceState) {
+    window.toggleSidebarMobile = function(forceState) {
       var sb = document.getElementById('sidebar');
       var bd = document.getElementById('sidebarBackdrop');
       if (!sb) return;
@@ -56,15 +56,17 @@ $currentTheme = ($userTheme === 'light') ? 'light' : 'dark';
       if (willOpen) {
         sb.classList.add('open');
         if (bd) bd.classList.add('show');
+        document.body.classList.add('sidebar-open');
       } else {
         sb.classList.remove('open');
         if (bd) bd.classList.remove('show');
+        document.body.classList.remove('sidebar-open');
       }
-    }
+    };
 
     // Close mobile sidebar on Escape key
     window.addEventListener('keydown', function(e) {
-      if (e.key === 'Escape') toggleSidebarMobile(false);
+      if (e.key === 'Escape') window.toggleSidebarMobile(false);
     });
   </script>
 
@@ -93,7 +95,7 @@ $currentTheme = ($userTheme === 'light') ? 'light' : 'dark';
 <div class="app-wrapper">
 
   <!-- Mobile Sidebar Backdrop Overlay -->
-  <div class="sidebar-backdrop" id="sidebarBackdrop" onclick="toggleSidebarMobile(false)"></div>
+  <div class="sidebar-backdrop" id="sidebarBackdrop" onclick="window.toggleSidebarMobile(false)"></div>
 
   <!-- SIDEBAR (Floating Modern Dock) -->
   <aside class="sidebar" id="sidebar">
@@ -106,6 +108,9 @@ $currentTheme = ($userTheme === 'light') ? 'light' : 'dark';
         <h6>Gueco Optical</h6>
         <span>Clinic Management</span>
       </div>
+      <button type="button" class="sidebar-close-btn d-lg-none" onclick="window.toggleSidebarMobile(false)" aria-label="Close Sidebar">
+        <i class="fas fa-times"></i>
+      </button>
     </div>
 
     <!-- User Info -->
@@ -139,7 +144,7 @@ $currentTheme = ($userTheme === 'light') ? 'light' : 'dark';
     <header class="app-header">
       <div class="header-left">
         <!-- Mobile menu toggle -->
-        <button id="sidebarToggle" type="button" class="header-icon-btn d-lg-none me-2" onclick="toggleSidebarMobile()" aria-label="Toggle Navigation Menu">
+        <button id="sidebarToggle" type="button" class="header-icon-btn d-lg-none me-2" aria-label="Toggle Navigation Menu">
           <i class="fas fa-bars"></i>
         </button>
         <div class="header-greeting">

@@ -61,7 +61,7 @@ include __DIR__ . '/../includes/header.php';
 ?>
 
 <!-- Stats -->
-<div class="row g-3 mb-4">
+<div class="row g-2 g-sm-3 mb-4">
   <!-- Card 1: Total Patients -->
   <div class="col-6 col-lg-3">
     <div class="bento-stat" style="--stat-color:#0EA5E9; --stat-rgb:14, 165, 233;">
@@ -140,9 +140,9 @@ include __DIR__ . '/../includes/header.php';
 </div>
 
 <!-- Charts Row -->
-<div class="row" style="margin-bottom:24px;">
-  <div class="col-8">
-    <div class="card">
+<div class="row g-3 mb-4">
+  <div class="col-12 col-lg-8">
+    <div class="card h-100">
       <div class="card-header">
         <h6><i class="fas fa-chart-bar me-2" style="color:var(--clr-primary)"></i>Appointments — Last 7 Days</h6>
       </div>
@@ -153,8 +153,8 @@ include __DIR__ . '/../includes/header.php';
       </div>
     </div>
   </div>
-  <div class="col-4">
-    <div class="card" style="height:100%;">
+  <div class="col-12 col-lg-4">
+    <div class="card h-100">
       <div class="card-header">
         <h6><i class="fas fa-chart-pie me-2" style="color:var(--clr-secondary)"></i>Status Breakdown (30d)</h6>
       </div>
@@ -168,10 +168,10 @@ include __DIR__ . '/../includes/header.php';
 </div>
 
 <!-- Queue + Recent Patients -->
-<div class="row">
+<div class="row g-3 mb-4">
   <!-- Today's Queue -->
-  <div class="col-6">
-    <div class="card">
+  <div class="col-12 col-lg-6">
+    <div class="card h-100">
       <div class="card-header">
         <h6><i class="fas fa-users me-2" style="color:var(--clr-info)"></i>Today's Patient Queue</h6>
         <a href="../doctor/appointments.php" class="btn btn-sm btn-outline-primary">Manage</a>
@@ -209,7 +209,7 @@ include __DIR__ . '/../includes/header.php';
   </div>
 
   <!-- Recent Patients -->
-  <div class="col-6">
+  <div class="col-12 col-lg-6">
     <div class="card">
       <div class="card-header">
         <h6><i class="fas fa-user-injured me-2" style="color:var(--clr-secondary)"></i>Recent Patients</h6>
