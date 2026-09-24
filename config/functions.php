@@ -426,11 +426,7 @@ function getDashboardStats(): array {
 
 // --- Email ---
 
-function sendEmailOTP(string $toEmail, string $otp): bool {
-    // In a real app, you would configure SMTP here.
-    // For now, if no SMTP is configured, we'll log it.
-    
-    // We will use PHPMailer for this.
+function sendEmailOTP(string $toEmail, string $otp, string $patientName = ''): bool {
     require_once __DIR__ . '/../includes/PHPMailer/src/Exception.php';
     require_once __DIR__ . '/../includes/PHPMailer/src/PHPMailer.php';
     require_once __DIR__ . '/../includes/PHPMailer/src/SMTP.php';
@@ -446,39 +442,53 @@ function sendEmailOTP(string $toEmail, string $otp): bool {
             $mail->Password   = SMTP_PASSWORD;
             $mail->SMTPSecure = (SMTP_ENCRYPTION === 'ssl') ? \PHPMailer\PHPMailer\PHPMailer::ENCRYPTION_SMTPS : \PHPMailer\PHPMailer\PHPMailer::ENCRYPTION_STARTTLS;
             $mail->Port       = SMTP_PORT;
+            $mail->CharSet    = 'UTF-8';
+
+            // Shared hosting SSL certificate chain tolerance
+            $mail->SMTPOptions = [
+                'ssl' => [
+                    'verify_peer'       => false,
+                    'verify_peer_name'  => false,
+                    'allow_self_signed' => true,
+                ],
+            ];
 
             $mail->setFrom(SMTP_FROM_EMAIL ?: SMTP_USERNAME, SMTP_FROM_NAME ?: 'Gueco Optical Clinic');
-            $mail->addAddress($toEmail);
+            $mail->addReplyTo(SMTP_FROM_EMAIL ?: SMTP_USERNAME, SMTP_FROM_NAME ?: 'Gueco Optical Clinic');
+            $mail->addAddress($toEmail, $patientName ?: 'Valued Patient');
             
             $mail->isHTML(true);
-            $mail->Subject = 'Password Reset OTP — Gueco Optical Clinic';
+            $mail->Subject = 'Password Reset Code — Gueco Optical Clinic';
+            $greetingName  = !empty($patientName) ? "Hello " . htmlspecialchars($patientName) . "," : "Hello,";
+
             $mail->Body    = "
                 <div style='font-family: Arial, sans-serif; max-width: 540px; margin: 0 auto; padding: 24px; border: 1px solid #e5e7eb; border-radius: 12px; background: #ffffff;'>
                     <div style='text-align: center; margin-bottom: 20px;'>
                         <h2 style='color: #235EAE; margin: 0; font-size: 22px;'>Gueco Optical Clinic</h2>
                         <p style='color: #6B7280; font-size: 13px; margin: 4px 0 0 0;'>Password Reset Verification</p>
                     </div>
+                    <p style='color: #374151; font-size: 15px;'>{$greetingName}</p>
                     <p style='color: #374151; font-size: 14px; line-height: 1.6;'>
-                        We received a request to reset your patient account password. Use the verification code below to proceed:
+                        We received a request to reset your patient account password. Use the 6-digit verification code below to proceed:
                     </p>
                     <div style='text-align: center; margin: 28px 0;'>
                         <span style='display: inline-block; background: #F0F4F9; color: #235EAE; font-size: 32px; font-weight: 800; letter-spacing: 8px; padding: 14px 28px; border-radius: 10px; border: 1px solid #BFDBFE;'>{$otp}</span>
                     </div>
-                    <p style='color: #6B7280; font-size: 13px; margin-bottom: 8px;'>This code is valid for <b>15 minutes</b>. If you did not request this, you can safely ignore this email.</p>
+                    <p style='color: #6B7280; font-size: 13px; margin-bottom: 8px;'>This code is valid for <b>15 minutes</b>. If you did not request a password reset, you can safely ignore this email.</p>
                     <hr style='border: none; border-top: 1px solid #F3F4F6; margin: 20px 0;'>
                     <p style='color: #9CA3AF; font-size: 12px; text-align: center; margin: 0;'>&copy; " . date('Y') . " Gueco Optical Clinic. All rights reserved.</p>
                 </div>
             ";
-            $mail->AltBody = "Your Gueco Optical password reset OTP is: {$otp}. This code is valid for 15 minutes.";
+            $mail->AltBody = "{$greetingName}\n\nYour Gueco Optical password reset code is: {$otp}\nThis code is valid for 15 minutes.\nIf you did not request this, please ignore this email.";
 
             $mail->send();
+            return true;
         } else {
-            error_log("OTP for $toEmail is $otp");
+            error_log("SMTP not configured. Password reset OTP for $toEmail: $otp");
+            return false;
         }
-        
-        return true;
     } catch (Exception $e) {
-        error_log("Message could not be sent. Mailer Error: {$mail->ErrorInfo}");
+        error_log("Password reset OTP mail error for {$toEmail}: {$mail->ErrorInfo} | Exception: " . $e->getMessage());
         return false;
     }
 }
@@ -502,8 +512,19 @@ function sendLoginEmailOTP(string $toEmail, string $otp, string $patientName = '
             $mail->Password   = SMTP_PASSWORD;
             $mail->SMTPSecure = (SMTP_ENCRYPTION === 'ssl') ? \PHPMailer\PHPMailer\PHPMailer::ENCRYPTION_SMTPS : \PHPMailer\PHPMailer\PHPMailer::ENCRYPTION_STARTTLS;
             $mail->Port       = SMTP_PORT;
+            $mail->CharSet    = 'UTF-8';
+
+            // Shared hosting SSL certificate chain tolerance
+            $mail->SMTPOptions = [
+                'ssl' => [
+                    'verify_peer'       => false,
+                    'verify_peer_name'  => false,
+                    'allow_self_signed' => true,
+                ],
+            ];
 
             $mail->setFrom(SMTP_FROM_EMAIL ?: SMTP_USERNAME, SMTP_FROM_NAME ?: 'Gueco Optical Clinic');
+            $mail->addReplyTo(SMTP_FROM_EMAIL ?: SMTP_USERNAME, SMTP_FROM_NAME ?: 'Gueco Optical Clinic');
             $mail->addAddress($toEmail, $patientName ?: 'Valued Patient');
             
             $mail->isHTML(true);
@@ -537,7 +558,7 @@ function sendLoginEmailOTP(string $toEmail, string $otp, string $patientName = '
             return false;
         }
     } catch (Exception $e) {
-        error_log("Login OTP mail error: {$mail->ErrorInfo}");
+        error_log("Login OTP mail error: {$mail->ErrorInfo} | Exception: " . $e->getMessage());
         return false;
     }
 }

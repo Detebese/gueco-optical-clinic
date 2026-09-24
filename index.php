@@ -186,12 +186,12 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action']) && $_POST['
     if (!verifyCsrfToken($_POST['csrf_token'] ?? '')) {
         $error = 'Security session expired. Please refresh and try again.';
         $tab = 'forgot';
-    } elseif (!checkRateLimit($rlKey, 3, 900)) {
+    } elseif (!checkRateLimit($rlKey, 5, 900)) {
         $remaining = ceil(getRateLimitRemainingSeconds($rlKey) / 60);
         $error = "Too many OTP requests. Please wait {$remaining} minute(s) before requesting again.";
         $tab = 'forgot';
     } else {
-        $email = trim($_POST['email'] ?? '');
+        $email = strtolower(trim($_POST['email'] ?? ''));
         
         if (empty($email)) {
             $error = 'Please enter your email.';
@@ -199,31 +199,58 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action']) && $_POST['
         } else {
             try {
                 $db = getDB();
-                $stmt = $db->prepare("SELECT id FROM patients WHERE email = ? AND status = 'active' LIMIT 1");
+
+                // Self-healing database schema: ensure reset_otp_hash and reset_expires columns exist
+                try {
+                    $colStmt = $db->query("SHOW COLUMNS FROM patients");
+                    if ($colStmt) {
+                        $cols = $colStmt->fetchAll(PDO::FETCH_COLUMN);
+                        if (!in_array('reset_otp_hash', $cols)) {
+                            $db->exec("ALTER TABLE patients ADD COLUMN reset_otp_hash VARCHAR(255) NULL");
+                        }
+                        if (!in_array('reset_expires', $cols)) {
+                            $db->exec("ALTER TABLE patients ADD COLUMN reset_expires DATETIME NULL");
+                        }
+                    }
+                } catch (Exception $colEx) {}
+
+                // Case-insensitive email lookup, allowing active or unset status
+                $stmt = $db->prepare("SELECT id, full_name, email, status FROM patients WHERE LOWER(TRIM(email)) = LOWER(TRIM(?)) LIMIT 1");
                 $stmt->execute([$email]);
                 $patient = $stmt->fetch();
                 
                 if ($patient) {
-                    recordFailedAttempt($rlKey, 900);
-                    $otp = sprintf("%06d", mt_rand(100000, 999999));
-                    $otpHash = password_hash($otp, PASSWORD_DEFAULT);
-                    $expires = date('Y-m-d H:i:s', strtotime('+15 minutes'));
-                    
-                    $update = $db->prepare("UPDATE patients SET reset_otp_hash = ?, reset_expires = ? WHERE id = ?");
-                    $update->execute([$otpHash, $expires, $patient['id']]);
-                    
-                    sendEmailOTP($email, $otp);
-                    
-                    $_SESSION['reset_email'] = $email;
-                    $_SESSION['flash_msg'] = 'OTP sent to your email.';
-                    $_SESSION['flash_type'] = 'success';
-                    
-                    $tab = 'otp';
+                    if (($patient['status'] ?? 'active') === 'inactive') {
+                        $error = 'This account has been deactivated. Please contact the clinic for assistance.';
+                        $tab = 'forgot';
+                    } else {
+                        $otp = sprintf("%06d", mt_rand(100000, 999999));
+                        $otpHash = password_hash($otp, PASSWORD_DEFAULT);
+                        $expires = date('Y-m-d H:i:s', strtotime('+15 minutes'));
+                        
+                        $update = $db->prepare("UPDATE patients SET reset_otp_hash = ?, reset_expires = ? WHERE id = ?");
+                        $update->execute([$otpHash, $expires, $patient['id']]);
+                        
+                        $sent = sendEmailOTP($patient['email'], $otp, $patient['full_name'] ?? '');
+                        
+                        if ($sent) {
+                            clearRateLimit($rlKey);
+                            $_SESSION['reset_email'] = $patient['email'];
+                            $_SESSION['flash_msg']   = 'A 6-digit verification code has been sent to your Gmail (' . htmlspecialchars($patient['email']) . '). Please check your inbox (and Spam folder).';
+                            $_SESSION['flash_type']  = 'success';
+                            $tab = 'otp';
+                        } else {
+                            $error = 'Unable to deliver verification code to your email at this time. Please check your connection or try again shortly.';
+                            $tab = 'forgot';
+                        }
+                    }
                 } else {
-                    $error = 'Email not found or inactive.';
+                    recordFailedAttempt($rlKey, 900);
+                    $error = 'We could not find an account associated with this email address.';
                     $tab = 'forgot';
                 }
             } catch (Exception $e) {
+                error_log("Forgot password exception: " . $e->getMessage());
                 $error = 'System error. Please try again.';
                 $tab = 'forgot';
             }
@@ -234,49 +261,50 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action']) && $_POST['
 // ── VERIFY OTP ──
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action']) && $_POST['action'] === 'otp') {
     $showModal = true;
-    $otp = trim($_POST['otp'] ?? '');
-    $email = $_SESSION['reset_email'] ?? '';
+    $otp = preg_replace('/[^0-9]/', '', trim($_POST['otp'] ?? ''));
+    $email = strtolower(trim($_SESSION['reset_email'] ?? ''));
     $otpKey = 'otp_verify_' . md5($email ?: 'guest');
 
     if (!verifyCsrfToken($_POST['csrf_token'] ?? '')) {
         $error = 'Security session expired. Please refresh and try again.';
         $tab = 'otp';
-    } elseif (!checkRateLimit($otpKey, 4, 900)) {
+    } elseif (!checkRateLimit($otpKey, 5, 900)) {
         if ($email) {
             $db = getDB();
-            $db->prepare("UPDATE patients SET reset_otp_hash = NULL, reset_expires = NULL WHERE email = ?")->execute([$email]);
+            $db->prepare("UPDATE patients SET reset_otp_hash = NULL, reset_expires = NULL WHERE LOWER(TRIM(email)) = LOWER(TRIM(?))")->execute([$email]);
         }
-        $error = 'Too many failed OTP attempts. For your security, this OTP has been invalidated. Please request a new one.';
+        $error = 'Too many failed OTP attempts. For your security, this verification code has been invalidated. Please request a new one.';
         $tab = 'forgot';
-    } elseif (empty($otp)) {
-        $error = 'Please enter the OTP.';
+    } elseif (empty($otp) || strlen($otp) !== 6) {
+        $error = 'Please enter the valid 6-digit verification code.';
         $tab = 'otp';
     } elseif (empty($email)) {
-        $error = 'Session expired. Please try again.';
+        $error = 'Session expired. Please request a new verification code.';
         $tab = 'forgot';
     } else {
         try {
             $db = getDB();
-            $stmt = $db->prepare("SELECT id, reset_otp_hash, reset_expires FROM patients WHERE email = ? AND status = 'active' LIMIT 1");
+            $stmt = $db->prepare("SELECT id, reset_otp_hash, reset_expires FROM patients WHERE LOWER(TRIM(email)) = LOWER(TRIM(?)) LIMIT 1");
             $stmt->execute([$email]);
             $patient = $stmt->fetch();
             
-            if ($patient && $patient['reset_expires'] > date('Y-m-d H:i:s')) {
-                if (password_verify($otp, $patient['reset_otp_hash'])) {
+            if ($patient && !empty($patient['reset_expires']) && $patient['reset_expires'] > date('Y-m-d H:i:s')) {
+                if (password_verify($otp, $patient['reset_otp_hash'] ?? '')) {
                     // OTP is valid
                     clearRateLimit($otpKey);
                     $_SESSION['reset_verified'] = true;
                     $tab = 'new-password';
                 } else {
                     recordFailedAttempt($otpKey, 900);
-                    $error = 'Invalid OTP. Please try again.';
+                    $error = 'Invalid verification code. Please check your email and try again.';
                     $tab = 'otp';
                 }
             } else {
-                $error = 'OTP expired or invalid.';
+                $error = 'The verification code has expired. Please request a new one.';
                 $tab = 'forgot';
             }
         } catch (Exception $e) {
+            error_log("Verify OTP exception: " . $e->getMessage());
             $error = 'System error. Please try again.';
             $tab = 'otp';
         }
@@ -291,11 +319,11 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action']) && $_POST['
         $tab = 'new-password';
     } else {
         $password = $_POST['password'] ?? '';
-        $confirm = $_POST['confirm_password'] ?? '';
-        $email = $_SESSION['reset_email'] ?? '';
+        $confirm  = $_POST['confirm_password'] ?? '';
+        $email    = strtolower(trim($_SESSION['reset_email'] ?? ''));
         
         if (empty($_SESSION['reset_verified'])) {
-            $error = 'Please verify OTP first.';
+            $error = 'Please verify your OTP code first.';
             $tab = 'forgot';
         } elseif (empty($password)) {
             $error = 'Please enter a new password.';
@@ -309,7 +337,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action']) && $_POST['
         } else {
             try {
                 $db = getDB();
-                $stmt = $db->prepare("SELECT id FROM patients WHERE email = ? AND status = 'active' LIMIT 1");
+                $stmt = $db->prepare("SELECT id FROM patients WHERE LOWER(TRIM(email)) = LOWER(TRIM(?)) LIMIT 1");
                 $stmt->execute([$email]);
                 $patient = $stmt->fetch();
                 
@@ -321,7 +349,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action']) && $_POST['
                     unset($_SESSION['reset_email']);
                     unset($_SESSION['reset_verified']);
                     
-                    $_SESSION['flash_msg'] = 'Password reset successful. Please login.';
+                    $_SESSION['flash_msg']  = 'Password reset successfully! You can now sign in with your new password.';
                     $_SESSION['flash_type'] = 'success';
                     
                     $tab = 'login';
@@ -330,6 +358,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action']) && $_POST['
                     $tab = 'forgot';
                 }
             } catch (Exception $e) {
+                error_log("New password exception: " . $e->getMessage());
                 $error = 'System error. Please try again.';
                 $tab = 'new-password';
             }
@@ -2198,6 +2227,10 @@ $currentTheme = ($userTheme === 'light') ? 'light' : 'dark';
         <button type="submit" class="btn-primary" style="margin-top:6px;">
           <i class="fas fa-check"></i> Verify OTP
         </button>
+        <div style="display:flex; justify-content:space-between; align-items:center; margin-top:16px;">
+          <a href="#" onclick="switchTab('forgot')" style="font-size: .9rem; color: var(--text-secondary); text-decoration: none; font-weight: 600;"><i class="fas fa-redo me-1"></i> Resend Code</a>
+          <a href="#" onclick="switchTab('login')" style="font-size: .9rem; color: var(--text-secondary); text-decoration: none; font-weight: 600;"><i class="fas fa-arrow-left me-1"></i> Back to Login</a>
+        </div>
       </form>
     </div>
 
@@ -2225,6 +2258,9 @@ $currentTheme = ($userTheme === 'light') ? 'light' : 'dark';
         <button type="submit" class="btn-primary" style="margin-top:6px;">
           <i class="fas fa-save"></i> Save New Password
         </button>
+        <div style="text-align:center; margin-top:16px;">
+          <a href="#" onclick="switchTab('login')" style="font-size: .9rem; color: var(--text-secondary); text-decoration: none; font-weight: 600;"><i class="fas fa-arrow-left me-1"></i> Back to Login</a>
+        </div>
       </form>
     </div>
 
