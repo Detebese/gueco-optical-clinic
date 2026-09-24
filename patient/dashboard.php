@@ -787,83 +787,283 @@ $currentTheme = ($userTheme === 'light') ? 'light' : 'dark';
     }
 
     /* ============================================================
-       BENTO STAT CARDS (Crisp Clean Elevation, No Smudgy Halos)
+       MODERN BENTO METRICS GRID (Ultra-Modern Glassmorphic Cards)
        ============================================================ */
-    .stats-row {
-      display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
-      gap: 16px; margin-bottom: 28px;
+    .bento-stats-grid {
+      display: grid !important;
+      grid-template-columns: repeat(5, minmax(0, 1fr)) !important;
+      gap: 16px !important;
+      margin-bottom: 28px !important;
     }
-    .stat-pill {
-      display: flex; align-items: center; gap: 18px;
+
+    @media (max-width: 1200px) and (min-width: 768px) {
+      .bento-stats-grid {
+        grid-template-columns: repeat(6, 1fr) !important;
+      }
+      .bento-stats-grid .modern-stat-card:nth-child(1),
+      .bento-stats-grid .modern-stat-card:nth-child(2),
+      .bento-stats-grid .modern-stat-card:nth-child(3) {
+        grid-column: span 2 !important;
+      }
+      .bento-stats-grid .modern-stat-card:nth-child(4),
+      .bento-stats-grid .modern-stat-card:nth-child(5) {
+        grid-column: span 3 !important;
+      }
+    }
+
+    .modern-stat-card {
+      position: relative;
       background: var(--bg-card);
       border: 1.5px solid var(--border-color);
-      border-radius: 20px; padding: 20px 22px;
-      transition: all .25s ease;
-      box-shadow: 0 2px 8px rgba(15, 23, 42, 0.04);
-      position: relative; overflow: hidden;
-    }
-    [data-theme="dark"] .stat-pill {
-      box-shadow: var(--shadow-card);
-    }
-    .stat-pill:hover {
-      border-color: var(--clr-primary); transform: translateY(-2px);
-      box-shadow: 0 10px 24px -4px rgba(15, 23, 42, 0.08);
-    }
-    [data-theme="dark"] .stat-pill:hover {
-      border-color: rgba(56, 189, 248, 0.6);
-      box-shadow: 0 14px 34px rgba(0, 0, 0, 0.45);
-    }
-    .stat-pill-icon {
-      width: 52px; height: 52px; border-radius: 16px;
-      display: flex; align-items: center; justify-content: center;
-      font-size: 1.35rem; flex-shrink: 0; transition: all .25s ease;
-    }
-    .stat-pill:hover .stat-pill-icon { transform: scale(1.05); }
-
-    /* Light Theme Stat Icons (Clean Solid Tinted Surfaces) */
-    [data-theme="light"] .stat-pill-icon.sapphire {
-      background: #EFF6FF; color: #235EAE; border: 1.5px solid #DBEAFE;
-      box-shadow: 0 2px 5px rgba(35, 94, 174, 0.08);
-    }
-    [data-theme="light"] .stat-pill-icon.cyan {
-      background: #F0F9FF; color: #0284C7; border: 1.5px solid #BAE6FD;
-      box-shadow: 0 2px 5px rgba(2, 132, 199, 0.08);
-    }
-    [data-theme="light"] .stat-pill-icon.emerald {
-      background: #ECFDF5; color: #059669; border: 1.5px solid #A7F3D0;
-      box-shadow: 0 2px 5px rgba(5, 150, 105, 0.08);
-    }
-    [data-theme="light"] .stat-pill-icon.amethyst,
-    [data-theme="light"] .stat-pill-icon.amber {
-      background: #FFF7ED; color: #EA580C; border: 1.5px solid #FDBA74;
-      box-shadow: 0 2px 8px rgba(234, 88, 12, 0.15);
+      border-radius: 22px;
+      padding: 20px 20px 18px;
+      overflow: hidden;
+      display: flex;
+      flex-direction: column;
+      justify-content: space-between;
+      gap: 14px;
+      transition: all 0.28s cubic-bezier(0.16, 1, 0.3, 1);
+      box-shadow: 0 4px 20px rgba(15, 23, 42, 0.04);
+      cursor: pointer;
+      user-select: none;
     }
 
-    /* Dark Theme Stat Icons (Elevated Translucent Tinted Surfaces) */
-    [data-theme="dark"] .stat-pill-icon.sapphire {
-      background: rgba(56, 189, 248, 0.22); color: #38BDF8; border: 1.5px solid rgba(56, 189, 248, 0.45);
-      box-shadow: 0 2px 8px rgba(0, 0, 0, 0.25);
-    }
-    [data-theme="dark"] .stat-pill-icon.cyan {
-      background: rgba(0, 173, 239, 0.24); color: #00ADEF; border: 1.5px solid rgba(0, 173, 239, 0.45);
-      box-shadow: 0 2px 8px rgba(0, 0, 0, 0.25);
-    }
-    [data-theme="dark"] .stat-pill-icon.emerald {
-      background: rgba(16, 185, 129, 0.24); color: #34D399; border: 1.5px solid rgba(16, 185, 129, 0.45);
-      box-shadow: 0 2px 8px rgba(0, 0, 0, 0.25);
-    }
-    [data-theme="dark"] .stat-pill-icon.amethyst,
-    [data-theme="dark"] .stat-pill-icon.amber {
-      background: rgba(249, 115, 22, 0.22); color: #FB923C; border: 1.5px solid rgba(251, 146, 60, 0.5);
-      box-shadow: 0 2px 8px rgba(0, 0, 0, 0.25);
+    [data-theme="dark"] .modern-stat-card {
+      background: linear-gradient(145deg, rgba(26, 38, 64, 0.85) 0%, rgba(15, 23, 42, 0.95) 100%);
+      border: 1.5px solid rgba(255, 255, 255, 0.08);
+      backdrop-filter: blur(16px);
+      -webkit-backdrop-filter: blur(16px);
+      box-shadow: 0 10px 30px -10px rgba(0, 0, 0, 0.5), inset 0 1px 0 rgba(255, 255, 255, 0.08);
     }
 
-    .stat-pill-val {
-      font-size: 2rem; font-weight: 900; color: var(--text-primary);
-      line-height: 1; letter-spacing: -0.03em;
+    /* Ambient Glow Orb */
+    .stat-card-glow {
+      position: absolute;
+      top: -24px;
+      right: -24px;
+      width: 110px;
+      height: 110px;
+      border-radius: 50%;
+      filter: blur(36px);
+      opacity: 0.35;
+      pointer-events: none;
+      transition: opacity 0.3s ease, transform 0.3s ease;
     }
-    .stat-pill-lbl {
-      font-size: .84rem; color: var(--text-muted); font-weight: 700; margin-top: 4px;
+    .theme-sapphire .stat-card-glow { background: #2563EB; }
+    .theme-cyan .stat-card-glow { background: #00ADEF; }
+    .theme-emerald .stat-card-glow { background: #10B981; }
+    .theme-amber .stat-card-glow { background: #F59E0B; }
+    .theme-indigo .stat-card-glow { background: #8B5CF6; }
+
+    /* Hover State */
+    .modern-stat-card:hover {
+      transform: translateY(-4px);
+    }
+    .theme-sapphire:hover {
+      border-color: rgba(37, 99, 235, 0.55) !important;
+      box-shadow: 0 16px 36px -6px rgba(37, 99, 235, 0.25);
+    }
+    .theme-cyan:hover {
+      border-color: rgba(0, 173, 239, 0.55) !important;
+      box-shadow: 0 16px 36px -6px rgba(0, 173, 239, 0.25);
+    }
+    .theme-emerald:hover {
+      border-color: rgba(16, 185, 129, 0.55) !important;
+      box-shadow: 0 16px 36px -6px rgba(16, 185, 129, 0.25);
+    }
+    .theme-amber:hover {
+      border-color: rgba(245, 158, 11, 0.55) !important;
+      box-shadow: 0 16px 36px -6px rgba(245, 158, 11, 0.25);
+    }
+    .theme-indigo:hover {
+      border-color: rgba(139, 92, 246, 0.55) !important;
+      box-shadow: 0 16px 36px -6px rgba(139, 92, 246, 0.25);
+    }
+    .modern-stat-card:hover .stat-card-glow {
+      opacity: 0.75;
+      transform: scale(1.25);
+    }
+    .modern-stat-card:active {
+      transform: translateY(-1px) scale(0.99);
+    }
+
+    /* Card Header */
+    .stat-card-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 10px;
+    }
+
+    .stat-card-icon {
+      width: 46px;
+      height: 46px;
+      border-radius: 14px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 1.2rem;
+      flex-shrink: 0;
+      transition: transform 0.25s ease;
+    }
+    .modern-stat-card:hover .stat-card-icon {
+      transform: scale(1.1) rotate(4deg);
+    }
+
+    /* Light Theme Icons */
+    .stat-card-icon.sapphire {
+      background: linear-gradient(135deg, #EFF6FF, #DBEAFE);
+      color: #1D4ED8;
+      border: 1px solid #BFDBFE;
+      box-shadow: 0 3px 8px rgba(37, 99, 235, 0.12);
+    }
+    .stat-card-icon.cyan {
+      background: linear-gradient(135deg, #F0F9FF, #E0F2FE);
+      color: #0284C7;
+      border: 1px solid #BAE6FD;
+      box-shadow: 0 3px 8px rgba(2, 132, 199, 0.12);
+    }
+    .stat-card-icon.emerald {
+      background: linear-gradient(135deg, #ECFDF5, #D1FAE5);
+      color: #059669;
+      border: 1px solid #A7F3D0;
+      box-shadow: 0 3px 8px rgba(5, 150, 105, 0.12);
+    }
+    .stat-card-icon.amber {
+      background: linear-gradient(135deg, #FFFBEB, #FEF3C7);
+      color: #D97706;
+      border: 1px solid #FDE68A;
+      box-shadow: 0 3px 8px rgba(217, 119, 6, 0.12);
+    }
+    .stat-card-icon.indigo {
+      background: linear-gradient(135deg, #F5F3FF, #EDE9FE);
+      color: #7C3AED;
+      border: 1px solid #DDD6FE;
+      box-shadow: 0 3px 8px rgba(124, 58, 237, 0.12);
+    }
+
+    /* Dark Theme Icons */
+    [data-theme="dark"] .stat-card-icon.sapphire {
+      background: linear-gradient(135deg, rgba(37, 99, 235, 0.32), rgba(29, 78, 216, 0.18));
+      color: #60A5FA;
+      border: 1px solid rgba(96, 165, 250, 0.38);
+      box-shadow: 0 4px 14px rgba(37, 99, 235, 0.35);
+    }
+    [data-theme="dark"] .stat-card-icon.cyan {
+      background: linear-gradient(135deg, rgba(0, 173, 239, 0.32), rgba(2, 132, 199, 0.18));
+      color: #38BDF8;
+      border: 1px solid rgba(56, 189, 248, 0.38);
+      box-shadow: 0 4px 14px rgba(0, 173, 239, 0.35);
+    }
+    [data-theme="dark"] .stat-card-icon.emerald {
+      background: linear-gradient(135deg, rgba(16, 185, 129, 0.32), rgba(5, 150, 105, 0.18));
+      color: #34D399;
+      border: 1px solid rgba(52, 211, 153, 0.38);
+      box-shadow: 0 4px 14px rgba(16, 185, 129, 0.35);
+    }
+    [data-theme="dark"] .stat-card-icon.amber {
+      background: linear-gradient(135deg, rgba(245, 158, 11, 0.32), rgba(217, 119, 6, 0.18));
+      color: #FBBF24;
+      border: 1px solid rgba(251, 191, 36, 0.38);
+      box-shadow: 0 4px 14px rgba(245, 158, 11, 0.35);
+    }
+    [data-theme="dark"] .stat-card-icon.indigo {
+      background: linear-gradient(135deg, rgba(139, 92, 246, 0.32), rgba(124, 58, 237, 0.18));
+      color: #C4B5FD;
+      border: 1px solid rgba(196, 181, 253, 0.38);
+      box-shadow: 0 4px 14px rgba(139, 92, 246, 0.35);
+    }
+
+    /* Micro Pills */
+    .stat-micro-pill {
+      font-size: 0.68rem;
+      font-weight: 800;
+      letter-spacing: 0.4px;
+      text-transform: uppercase;
+      padding: 3px 9px;
+      border-radius: 100px;
+      line-height: 1.3;
+    }
+    .stat-micro-pill.sapphire {
+      background: rgba(37, 99, 235, 0.08); color: #2563EB; border: 1px solid rgba(37, 99, 235, 0.2);
+    }
+    .stat-micro-pill.cyan {
+      background: rgba(0, 173, 239, 0.08); color: #00ADEF; border: 1px solid rgba(0, 173, 239, 0.2);
+    }
+    .stat-micro-pill.emerald {
+      background: rgba(16, 185, 129, 0.08); color: #059669; border: 1px solid rgba(16, 185, 129, 0.2);
+    }
+    .stat-micro-pill.amber {
+      background: rgba(245, 158, 11, 0.08); color: #D97706; border: 1px solid rgba(245, 158, 11, 0.2);
+    }
+    .stat-micro-pill.indigo {
+      background: rgba(124, 58, 237, 0.08); color: #7C3AED; border: 1px solid rgba(124, 58, 237, 0.2);
+    }
+    [data-theme="dark"] .stat-micro-pill.sapphire {
+      background: rgba(56, 189, 248, 0.14); color: #60A5FA; border-color: rgba(56, 189, 248, 0.3);
+    }
+    [data-theme="dark"] .stat-micro-pill.cyan {
+      background: rgba(0, 173, 239, 0.16); color: #38BDF8; border-color: rgba(0, 173, 239, 0.3);
+    }
+    [data-theme="dark"] .stat-micro-pill.emerald {
+      background: rgba(16, 185, 129, 0.16); color: #34D399; border-color: rgba(16, 185, 129, 0.3);
+    }
+    [data-theme="dark"] .stat-micro-pill.amber {
+      background: rgba(245, 158, 11, 0.16); color: #FBBF24; border-color: rgba(245, 158, 11, 0.3);
+    }
+    [data-theme="dark"] .stat-micro-pill.indigo {
+      background: rgba(139, 92, 246, 0.18); color: #C4B5FD; border-color: rgba(139, 92, 246, 0.3);
+    }
+
+    /* Content & Numbers */
+    .stat-card-content {
+      display: flex;
+      flex-direction: column;
+      gap: 3px;
+    }
+    .stat-card-number {
+      font-size: 2.2rem;
+      font-weight: 900;
+      letter-spacing: -0.04em;
+      line-height: 1;
+      color: var(--text-primary);
+      font-family: 'Plus Jakarta Sans', system-ui, sans-serif;
+    }
+    [data-theme="dark"] .stat-card-number {
+      color: #FFFFFF;
+      text-shadow: 0 2px 10px rgba(0, 0, 0, 0.3);
+    }
+    .stat-card-label {
+      font-size: 0.78rem;
+      font-weight: 700;
+      color: var(--text-secondary);
+      letter-spacing: 0.2px;
+      line-height: 1.35;
+    }
+    [data-theme="dark"] .stat-card-label {
+      color: #94A3B8;
+    }
+
+    /* Bottom Line Accent */
+    .stat-card-bar {
+      position: absolute;
+      bottom: 0;
+      left: 18px;
+      right: 18px;
+      height: 3px;
+      border-radius: 3px 3px 0 0;
+      opacity: 0.4;
+      transition: opacity 0.25s ease, height 0.25s ease;
+    }
+    .stat-card-bar.sapphire { background: linear-gradient(90deg, #2563EB, #60A5FA); }
+    .stat-card-bar.cyan     { background: linear-gradient(90deg, #00ADEF, #38BDF8); }
+    .stat-card-bar.emerald  { background: linear-gradient(90deg, #059669, #34D399); }
+    .stat-card-bar.amber    { background: linear-gradient(90deg, #D97706, #FBBF24); }
+    .stat-card-bar.indigo   { background: linear-gradient(90deg, #7C3AED, #A78BFA); }
+
+    .modern-stat-card:hover .stat-card-bar {
+      opacity: 1;
+      height: 4px;
     }
 
     /* FLOATING SEGMENTED CAPSULE TABS */
@@ -2473,35 +2673,44 @@ $currentTheme = ($userTheme === 'light') ? 'light' : 'dark';
         border-radius: 9999px;
       }
 
-      /* Stats Row: Balanced 2x2 Bento Grid */
-      .stats-row {
+      /* Stats Row: Balanced Modern Bento Grid */
+      .bento-stats-grid {
         grid-template-columns: repeat(2, 1fr) !important;
         gap: 10px !important;
         margin-bottom: 20px !important;
       }
-      .stat-pill {
-        padding: 12px 14px !important;
+      .bento-stats-grid .modern-stat-card {
+        padding: 14px 14px 12px !important;
+        border-radius: 18px !important;
         gap: 10px !important;
-        border-radius: 16px !important;
       }
-      .stat-pill-icon {
+      .bento-stats-grid .modern-stat-card:nth-child(5) {
+        grid-column: 1 / -1 !important;
+      }
+      .stat-card-icon {
         width: 38px !important;
         height: 38px !important;
         font-size: 1.05rem !important;
-        border-radius: 12px !important;
-        flex-shrink: 0 !important;
+        border-radius: 11px !important;
       }
-      .stat-pill-val {
-        font-size: 1.35rem !important;
+      .stat-micro-pill {
+        font-size: 0.62rem !important;
+        padding: 2px 7px !important;
+      }
+      .stat-card-number {
+        font-size: 1.6rem !important;
         line-height: 1.1 !important;
       }
-      .stat-pill-lbl {
-        font-size: .7rem !important;
-        font-weight: 700 !important;
+      .stat-card-label {
+        font-size: .72rem !important;
         margin-top: 2px !important;
         white-space: nowrap !important;
         overflow: hidden !important;
         text-overflow: ellipsis !important;
+      }
+      .stat-card-bar {
+        left: 14px !important;
+        right: 14px !important;
       }
 
       /* Boarding Pass Ticket Card */
@@ -3479,27 +3688,92 @@ $currentTheme = ($userTheme === 'light') ? 'light' : 'dark';
   </div>
   <?php endif; ?>
 
-  <!-- Stats Bento Row -->
-  <div class="stats-row">
-    <div class="stat-pill">
-      <div class="stat-pill-icon sapphire"><i class="fas fa-calendar-check"></i></div>
-      <div><div class="stat-pill-val"><?= $totalAppts ?></div><div class="stat-pill-lbl">Total Bookings</div></div>
+  <!-- Modern Bento Stats Section -->
+  <div class="stats-row bento-stats-grid">
+    <!-- Card 1: Total Bookings -->
+    <div class="modern-stat-card theme-sapphire" onclick="switchTab('history', document.getElementById('tab-history'))" style="cursor:pointer;" title="View Appointment History">
+      <div class="stat-card-glow"></div>
+      <div class="stat-card-header">
+        <div class="stat-card-icon sapphire">
+          <i class="fas fa-calendar-check"></i>
+        </div>
+        <span class="stat-micro-pill sapphire">Bookings</span>
+      </div>
+      <div class="stat-card-content">
+        <div class="stat-card-number"><?= $totalAppts ?></div>
+        <div class="stat-card-label">Total Appointments</div>
+      </div>
+      <div class="stat-card-bar sapphire"></div>
     </div>
-    <div class="stat-pill">
-      <div class="stat-pill-icon cyan"><i class="fas fa-clock-rotate-left"></i></div>
-      <div><div class="stat-pill-val"><?= $upcomingCount ?></div><div class="stat-pill-lbl">Upcoming Visits</div></div>
+
+    <!-- Card 2: Upcoming Visits -->
+    <div class="modern-stat-card theme-cyan <?= $upcomingCount > 0 ? 'has-active' : '' ?>" onclick="switchTab('history', document.getElementById('tab-history'))" style="cursor:pointer;" title="View Upcoming Appointments">
+      <div class="stat-card-glow"></div>
+      <div class="stat-card-header">
+        <div class="stat-card-icon cyan">
+          <i class="fas fa-clock-rotate-left"></i>
+        </div>
+        <span class="stat-micro-pill cyan <?= $upcomingCount > 0 ? 'pulse' : '' ?>">
+          <?= $upcomingCount > 0 ? 'Upcoming' : 'None' ?>
+        </span>
+      </div>
+      <div class="stat-card-content">
+        <div class="stat-card-number"><?= $upcomingCount ?></div>
+        <div class="stat-card-label">Upcoming Visits</div>
+      </div>
+      <div class="stat-card-bar cyan"></div>
     </div>
-    <div class="stat-pill">
-      <div class="stat-pill-icon emerald"><i class="fas fa-circle-check"></i></div>
-      <div><div class="stat-pill-val"><?= $completedCount ?></div><div class="stat-pill-lbl">Completed</div></div>
+
+    <!-- Card 3: Completed Consultations -->
+    <div class="modern-stat-card theme-emerald" onclick="switchTab('history', document.getElementById('tab-history'))" style="cursor:pointer;" title="View Completed Appointments">
+      <div class="stat-card-glow"></div>
+      <div class="stat-card-header">
+        <div class="stat-card-icon emerald">
+          <i class="fas fa-circle-check"></i>
+        </div>
+        <span class="stat-micro-pill emerald">Finished</span>
+      </div>
+      <div class="stat-card-content">
+        <div class="stat-card-number"><?= $completedCount ?></div>
+        <div class="stat-card-label">Completed Consults</div>
+      </div>
+      <div class="stat-card-bar emerald"></div>
     </div>
-    <div class="stat-pill">
-      <div class="stat-pill-icon amber"><i class="fas fa-hourglass-start"></i></div>
-      <div><div class="stat-pill-val"><?= $pendingCount ?></div><div class="stat-pill-lbl">Pending Review</div></div>
+
+    <!-- Card 4: Pending Review -->
+    <div class="modern-stat-card theme-amber <?= $pendingCount > 0 ? 'has-pending' : '' ?>" onclick="switchTab('history', document.getElementById('tab-history'))" style="cursor:pointer;" title="View Pending Requests">
+      <div class="stat-card-glow"></div>
+      <div class="stat-card-header">
+        <div class="stat-card-icon amber">
+          <i class="fas fa-hourglass-start"></i>
+        </div>
+        <span class="stat-micro-pill amber <?= $pendingCount > 0 ? 'pulse' : '' ?>">
+          <?= $pendingCount > 0 ? 'In Review' : 'Clear' ?>
+        </span>
+      </div>
+      <div class="stat-card-content">
+        <div class="stat-card-number"><?= $pendingCount ?></div>
+        <div class="stat-card-label">Pending Review</div>
+      </div>
+      <div class="stat-card-bar amber"></div>
     </div>
-    <div class="stat-pill" onclick="switchTab('prescriptions', document.getElementById('tab-prescriptions'))" style="cursor:pointer;" title="View My Prescriptions">
-      <div class="stat-pill-icon indigo"><i class="fas fa-glasses"></i></div>
-      <div><div class="stat-pill-val"><?= $totalRxCount ?></div><div class="stat-pill-lbl">Prescriptions</div></div>
+
+    <!-- Card 5: Optical Prescriptions -->
+    <div class="modern-stat-card theme-indigo <?= $totalRxCount > 0 ? 'has-rx' : '' ?>" onclick="switchTab('prescriptions', document.getElementById('tab-prescriptions'))" style="cursor:pointer;" title="View Optical Prescriptions">
+      <div class="stat-card-glow"></div>
+      <div class="stat-card-header">
+        <div class="stat-card-icon indigo">
+          <i class="fas fa-glasses"></i>
+        </div>
+        <span class="stat-micro-pill indigo">
+          <?= $totalRxCount > 0 ? 'Active Rx' : 'Records' ?>
+        </span>
+      </div>
+      <div class="stat-card-content">
+        <div class="stat-card-number"><?= $totalRxCount ?></div>
+        <div class="stat-card-label">Eye Prescriptions</div>
+      </div>
+      <div class="stat-card-bar indigo"></div>
     </div>
   </div>
 
