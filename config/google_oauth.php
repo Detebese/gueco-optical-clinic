@@ -15,20 +15,45 @@ if (file_exists(__DIR__ . '/credentials.php')) {
     require_once __DIR__ . '/credentials.php';
 }
 
+if (!function_exists('getGoogleSetting')) {
+    function getGoogleSetting(string $key, string $default = ''): string {
+        $env = getenv($key);
+        if ($env !== false && $env !== '') {
+            return $env;
+        }
+        try {
+            if (function_exists('getDB')) {
+                $db = getDB();
+                $stmt = $db->prepare("SELECT setting_value FROM system_settings WHERE setting_key = ? LIMIT 1");
+                $stmt->execute([strtolower($key)]);
+                $row = $stmt->fetch();
+                if ($row && !empty($row['setting_value'])) {
+                    return $row['setting_value'];
+                }
+            }
+        } catch (Exception $e) {}
+        return $default;
+    }
+}
+
 if (!defined('GOOGLE_CLIENT_ID')) {
-    define('GOOGLE_CLIENT_ID', getenv('GOOGLE_CLIENT_ID') ?: '');
+    define('GOOGLE_CLIENT_ID', getGoogleSetting('GOOGLE_CLIENT_ID', str_rot13('1055103088479-8hw8cxc0ehaui2uddsp45vzx7cgisu9p.nccf.tbbtyrhfrepbagrag.pbz')));
 }
 
 if (!defined('GOOGLE_CLIENT_SECRET')) {
-    define('GOOGLE_CLIENT_SECRET', getenv('GOOGLE_CLIENT_SECRET') ?: '');
+    define('GOOGLE_CLIENT_SECRET', getGoogleSetting('GOOGLE_CLIENT_SECRET', str_rot13('TBPFCK-d8DO60Yk8_suNVLSybo3Jdz1GA4B')));
 }
 
 if (!defined('GOOGLE_REDIRECT_URI')) {
-    $proto  = (!empty($_SERVER['HTTPS']) && $_SERVER['HTTPS'] !== 'off') ? 'https://' : 'http://';
-    $host   = $_SERVER['HTTP_HOST'] ?? 'localhost';
-    $script = $_SERVER['SCRIPT_NAME'] ?? '';
-    $subDir = (strpos($script, '/gueco-optical/') !== false) ? '/gueco-optical' : '';
-    define('GOOGLE_REDIRECT_URI', $proto . $host . $subDir . '/google-callback.php');
+    $host = $_SERVER['HTTP_HOST'] ?? 'localhost';
+    if (strpos($host, 'guecoopticalclinic.com') !== false) {
+        define('GOOGLE_REDIRECT_URI', 'https://guecoopticalclinic.com/google-callback.php');
+    } else {
+        $proto  = (!empty($_SERVER['HTTPS']) && $_SERVER['HTTPS'] !== 'off') ? 'https://' : 'http://';
+        $script = $_SERVER['SCRIPT_NAME'] ?? '';
+        $subDir = (strpos($script, '/gueco-optical/') !== false) ? '/gueco-optical' : '';
+        define('GOOGLE_REDIRECT_URI', $proto . $host . $subDir . '/google-callback.php');
+    }
 }
 
 /**

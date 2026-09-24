@@ -68,6 +68,20 @@ $fullName = ucwords(strtolower($fullName));
 $db = getDB();
 
 try {
+    // Ensure google_id and avatar columns exist in patients table
+    try {
+        $colGid = $db->query("SHOW COLUMNS FROM patients LIKE 'google_id'")->fetch();
+        if (!$colGid) {
+            $db->exec("ALTER TABLE patients ADD COLUMN google_id VARCHAR(255) NULL UNIQUE AFTER email");
+        }
+        $colAv = $db->query("SHOW COLUMNS FROM patients LIKE 'avatar'")->fetch();
+        if (!$colAv) {
+            $db->exec("ALTER TABLE patients ADD COLUMN avatar VARCHAR(500) NULL AFTER gender");
+        }
+    } catch (Exception $eCol) {
+        // Table column checks failed or already exist
+    }
+
     // 1. Check if patient exists with this Google ID
     $stmt = $db->prepare("SELECT * FROM patients WHERE google_id = ? LIMIT 1");
     $stmt->execute([$googleId]);
@@ -79,8 +93,8 @@ try {
             $db->prepare("UPDATE patients SET avatar = ? WHERE id = ?")->execute([$picture, $patient['id']]);
         }
     } else {
-        // 2. Check if a patient exists with the same email
-        $stmtEmail = $db->prepare("SELECT * FROM patients WHERE email = ? LIMIT 1");
+        // 2. Check if a patient exists with the same email (case-insensitive)
+        $stmtEmail = $db->prepare("SELECT * FROM patients WHERE LOWER(TRIM(email)) = LOWER(TRIM(?)) LIMIT 1");
         $stmtEmail->execute([$email]);
         $patient = $stmtEmail->fetch(PDO::FETCH_ASSOC);
 
