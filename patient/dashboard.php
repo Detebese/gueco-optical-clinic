@@ -228,6 +228,25 @@ $pendingCount   = count(array_filter($myAppts, fn($a) => $a['status']==='pending
 
 // Patient info
 $patient = $db->prepare("SELECT * FROM patients WHERE id=?"); $patient->execute([$patientId]); $patient = $patient->fetch();
+$patientFullName  = $patient ? getPatientDisplayName($patient) : ($_SESSION['patient_name'] ?? 'Patient');
+$patientAge       = !empty($patient['birthdate']) ? (new DateTime($patient['birthdate']))->diff(new DateTime())->y : null;
+
+// Prescriptions for this patient
+$patientRxStmt = $db->prepare("
+    SELECT rx.*, u.full_name as doctor_name, u.role as doctor_role 
+    FROM prescriptions rx 
+    LEFT JOIN users u ON u.id = rx.doctor_id 
+    WHERE rx.patient_id = ? 
+    ORDER BY rx.created_at DESC
+");
+$patientRxStmt->execute([$patientId]);
+$patientRxList = $patientRxStmt->fetchAll(PDO::FETCH_ASSOC) ?: [];
+$latestRx      = !empty($patientRxList) ? $patientRxList[0] : null;
+$totalRxCount  = count($patientRxList);
+
+if (($_GET['tab'] ?? '') === 'prescriptions') {
+    $_SESSION['open_tab'] = 'prescriptions';
+}
 
 $patientLoginCount = (int)($patient['login_count'] ?? 1);
 $isFirstLogin      = ($patientLoginCount <= 1);
@@ -2682,6 +2701,554 @@ $currentTheme = ($userTheme === 'light') ? 'light' : 'dark';
       .edit-modal-header { padding: 14px 16px !important; }
       .edit-modal-body { padding: 14px 14px !important; }
       .edit-modal-footer { padding: 12px 14px !important; }
+
+      /* Mobile Prescription Tweaks */
+      .rx-card-topbar { flex-direction: column !important; align-items: flex-start !important; gap: 8px !important; }
+      .rx-topbar-actions { width: 100% !important; justify-content: flex-start !important; }
+      .rx-patient-ribbon { grid-template-columns: 1fr !important; gap: 8px !important; }
+      .rx-pad-details-grid { grid-template-columns: 1fr !important; gap: 10px !important; }
+      .rx-pad-slip { padding: 20px 16px !important; }
+      .rx-slip-header { flex-direction: column !important; align-items: flex-start !important; gap: 10px !important; }
+      .rx-slip-contacts { text-align: left !important; }
+      .rx-doctor-signature-section { flex-direction: column !important; align-items: flex-start !important; gap: 16px !important; }
+      .rx-signature-block { width: 100% !important; text-align: left !important; }
+    }
+
+    /* ============================================================
+       OPTICAL PRESCRIPTION STYLES & HIGHLIGHT CARD
+       ============================================================ */
+    .stat-pill-icon.indigo {
+      background: #F5F3FF; color: #7C3AED; border: 1.5px solid #DDD6FE;
+      box-shadow: 0 2px 5px rgba(124, 58, 237, 0.08);
+    }
+    [data-theme="dark"] .stat-pill-icon.indigo {
+      background: rgba(139, 92, 246, 0.22); color: #A78BFA; border: 1.5px solid rgba(167, 139, 250, 0.45);
+      box-shadow: 0 2px 8px rgba(0, 0, 0, 0.25);
+    }
+
+    .rx-highlight-card {
+      background: var(--bg-card);
+      border: 1.5px solid var(--border-color);
+      border-left: 5px solid #7C3AED;
+      border-radius: 22px;
+      padding: 22px 24px;
+      margin-bottom: 24px;
+      box-shadow: 0 4px 16px rgba(124, 58, 237, 0.08);
+      position: relative;
+      transition: all .25s ease;
+    }
+    [data-theme="dark"] .rx-highlight-card {
+      border-color: rgba(139, 92, 246, 0.3);
+      border-left-color: #A78BFA;
+      box-shadow: 0 8px 24px rgba(0, 0, 0, 0.45);
+    }
+    .rx-highlight-card:hover {
+      box-shadow: 0 10px 28px rgba(124, 58, 237, 0.14);
+      transform: translateY(-2px);
+    }
+
+    .rx-card-topbar {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      flex-wrap: wrap;
+      gap: 12px;
+      margin-bottom: 16px;
+      padding-bottom: 14px;
+      border-bottom: 1px dashed var(--border-color);
+    }
+    .rx-badge-pill {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      background: linear-gradient(135deg, #7C3AED, #6366F1);
+      color: #FFFFFF;
+      font-size: 0.78rem;
+      font-weight: 800;
+      letter-spacing: 0.5px;
+      text-transform: uppercase;
+      padding: 6px 14px;
+      border-radius: 100px;
+      box-shadow: 0 3px 10px rgba(124, 58, 237, 0.35);
+    }
+    .rx-topbar-meta {
+      display: flex;
+      align-items: center;
+      gap: 16px;
+      font-size: 0.82rem;
+      color: var(--text-secondary);
+      font-weight: 600;
+    }
+    .rx-topbar-actions {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+    .btn-rx-action {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      padding: 7px 14px;
+      border-radius: 12px;
+      font-size: 0.8rem;
+      font-weight: 700;
+      cursor: pointer;
+      transition: all .18s ease;
+      border: 1.5px solid transparent;
+      text-decoration: none;
+    }
+    .btn-rx-action.primary {
+      background: rgba(124, 58, 237, 0.1);
+      color: #7C3AED;
+      border-color: rgba(124, 58, 237, 0.28);
+    }
+    [data-theme="dark"] .btn-rx-action.primary {
+      background: rgba(167, 139, 250, 0.16);
+      color: #C4B5FD;
+      border-color: rgba(167, 139, 250, 0.35);
+    }
+    .btn-rx-action.primary:hover {
+      background: #7C3AED;
+      color: #FFFFFF;
+      border-color: #7C3AED;
+      transform: translateY(-1px);
+    }
+    .btn-rx-action.print {
+      background: var(--bg-hover);
+      color: var(--text-primary);
+      border-color: var(--border-color);
+    }
+    .btn-rx-action.print:hover {
+      background: var(--border-color);
+      transform: translateY(-1px);
+    }
+
+    /* Specs Table */
+    .rx-specs-table-wrapper {
+      overflow-x: auto;
+      margin-bottom: 14px;
+      border-radius: 14px;
+      border: 1px solid var(--border-color);
+      background: var(--bg-card);
+    }
+    .rx-specs-table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 0.84rem;
+      text-align: center;
+      min-width: 480px;
+    }
+    .rx-specs-table th {
+      background: var(--bg-hover);
+      color: var(--text-muted);
+      font-weight: 700;
+      font-size: 0.72rem;
+      text-transform: uppercase;
+      letter-spacing: 0.6px;
+      padding: 10px 12px;
+      border-bottom: 1px solid var(--border-color);
+    }
+    .rx-specs-table th.th-eye {
+      text-align: left;
+      padding-left: 18px;
+    }
+    .rx-th-hint {
+      font-weight: 500;
+      font-size: 0.65rem;
+      color: var(--text-subtle);
+      text-transform: none;
+      display: block;
+    }
+    .rx-specs-table td {
+      padding: 11px 12px;
+      border-bottom: 1px solid var(--border-light);
+      color: var(--text-primary);
+    }
+    .rx-specs-table tr:last-child td {
+      border-bottom: none;
+    }
+    .rx-specs-table td.td-eye {
+      text-align: left;
+      font-weight: 700;
+      font-size: 0.85rem;
+      padding-left: 18px;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+    .eye-badge {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      width: 28px;
+      height: 24px;
+      border-radius: 6px;
+      font-size: 0.72rem;
+      font-weight: 900;
+      color: #fff;
+    }
+    .eye-badge.od { background: #00ADEF; }
+    .eye-badge.os { background: #7C3AED; }
+    .font-mono {
+      font-family: 'SF Mono', 'Fira Code', 'Roboto Mono', Menlo, monospace;
+      font-weight: 600;
+    }
+
+    /* Rx Card Footer */
+    .rx-card-footer {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      flex-wrap: wrap;
+      gap: 12px;
+      font-size: 0.82rem;
+      padding-top: 10px;
+    }
+    .rx-footer-pills {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      flex-wrap: wrap;
+    }
+    .rx-info-pill {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      background: var(--bg-hover);
+      border: 1px solid var(--border-color);
+      padding: 4px 12px;
+      border-radius: 100px;
+      color: var(--text-secondary);
+      font-size: 0.78rem;
+    }
+    .rx-info-pill i {
+      color: var(--clr-primary);
+    }
+    .rx-notes-snippet {
+      color: var(--text-secondary);
+      font-size: 0.8rem;
+      background: rgba(0, 173, 239, 0.08);
+      border-left: 3px solid var(--clr-primary);
+      padding: 6px 12px;
+      border-radius: 8px;
+      max-width: 520px;
+      line-height: 1.4;
+    }
+    [data-theme="dark"] .rx-notes-snippet {
+      background: rgba(56, 189, 248, 0.1);
+      border-left-color: #38BDF8;
+    }
+    .rx-all-link {
+      color: #7C3AED;
+      font-weight: 700;
+      text-decoration: none;
+      display: inline-flex;
+      align-items: center;
+      transition: all .15s ease;
+      margin-left: auto;
+    }
+    [data-theme="dark"] .rx-all-link {
+      color: #A78BFA;
+    }
+    .rx-all-link:hover {
+      color: #6D28D9;
+      transform: translateX(3px);
+    }
+
+    /* PRESCRIPTIONS TAB LIST */
+    .rx-card-list {
+      display: flex;
+      flex-direction: column;
+      gap: 20px;
+    }
+    .rx-record-card {
+      background: var(--bg-card);
+      border: 1.5px solid var(--border-color);
+      border-radius: 20px;
+      padding: 22px 24px;
+      box-shadow: 0 2px 10px rgba(15, 23, 42, 0.03);
+      position: relative;
+      transition: all .2s ease;
+    }
+    [data-theme="dark"] .rx-record-card {
+      box-shadow: 0 4px 20px rgba(0, 0, 0, 0.35);
+    }
+    .rx-record-card:hover {
+      border-color: #7C3AED;
+      transform: translateY(-2px);
+      box-shadow: 0 8px 24px rgba(124, 58, 237, 0.1);
+    }
+    [data-theme="dark"] .rx-record-card:hover {
+      border-color: #A78BFA;
+    }
+    .rx-record-card.latest-rx {
+      border-color: #7C3AED;
+      border-left: 5px solid #7C3AED;
+    }
+    [data-theme="dark"] .rx-record-card.latest-rx {
+      border-color: rgba(139, 92, 246, 0.4);
+      border-left-color: #A78BFA;
+    }
+
+    /* Rx Prescription Slip Modal (Authentic Clinic Pad Design) */
+    .rx-slip-dialog {
+      max-width: 680px;
+      background: #FFFFFF !important;
+      color: #0F172A !important;
+      border-radius: 20px;
+      box-shadow: 0 30px 90px rgba(0, 0, 0, 0.45);
+      border: none;
+    }
+    .rx-pad-slip {
+      padding: 34px 38px 28px;
+      position: relative;
+      background: #FFFFFF;
+      color: #0F172A;
+      font-family: 'Plus Jakarta Sans', system-ui, sans-serif;
+    }
+    .rx-watermark-symbol {
+      position: absolute;
+      right: 40px;
+      top: 140px;
+      font-size: 160px;
+      font-family: Georgia, 'Times New Roman', serif;
+      font-style: italic;
+      color: rgba(35, 94, 174, 0.04);
+      pointer-events: none;
+      user-select: none;
+      line-height: 1;
+      font-weight: 900;
+    }
+    .rx-slip-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      border-bottom: 2.5px solid #00ADEF;
+      padding-bottom: 18px;
+      margin-bottom: 18px;
+    }
+    .rx-slip-brand {
+      display: flex;
+      align-items: center;
+      gap: 14px;
+    }
+    .rx-slip-logo {
+      width: 52px;
+      height: 52px;
+      object-fit: contain;
+    }
+    .rx-slip-clinic-name {
+      font-size: 1.35rem;
+      font-weight: 900;
+      color: #0F172A;
+      line-height: 1.15;
+      letter-spacing: -0.02em;
+    }
+    .rx-slip-clinic-sub {
+      font-size: 0.78rem;
+      color: #64748B;
+      font-weight: 600;
+      margin-top: 2px;
+    }
+    .rx-slip-contacts {
+      text-align: right;
+      font-size: 0.73rem;
+      color: #64748B;
+      line-height: 1.45;
+    }
+    .rx-patient-ribbon {
+      display: grid;
+      grid-template-columns: 2fr 1fr 1fr;
+      gap: 14px;
+      background: #F8FAFC;
+      border: 1px solid #E2E8F0;
+      border-radius: 12px;
+      padding: 12px 18px;
+      margin-bottom: 22px;
+      font-size: 0.82rem;
+    }
+    .rx-ribbon-label {
+      font-size: 0.68rem;
+      text-transform: uppercase;
+      letter-spacing: 0.6px;
+      color: #64748B;
+      font-weight: 700;
+      margin-bottom: 2px;
+    }
+    .rx-ribbon-val {
+      font-weight: 700;
+      color: #0F172A;
+      font-size: 0.88rem;
+    }
+    .rx-symbol-banner {
+      display: flex;
+      align-items: baseline;
+      gap: 12px;
+      margin-bottom: 10px;
+    }
+    .rx-big-symbol {
+      font-size: 2.2rem;
+      font-family: Georgia, 'Times New Roman', serif;
+      font-weight: 900;
+      font-style: italic;
+      color: #00ADEF;
+      line-height: 1;
+    }
+    .rx-symbol-text {
+      font-size: 0.78rem;
+      text-transform: uppercase;
+      font-weight: 800;
+      letter-spacing: 1px;
+      color: #475569;
+    }
+
+    .rx-pad-table {
+      width: 100%;
+      border-collapse: collapse;
+      margin-bottom: 20px;
+      border: 1.5px solid #CBD5E1;
+      border-radius: 10px;
+      overflow: hidden;
+    }
+    .rx-pad-table th {
+      background: #F1F5F9;
+      color: #334155;
+      font-size: 0.74rem;
+      font-weight: 800;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+      padding: 8px 10px;
+      border: 1px solid #CBD5E1;
+      text-align: center;
+    }
+    .rx-pad-table td {
+      border: 1px solid #CBD5E1;
+      padding: 10px 10px;
+      text-align: center;
+      font-size: 0.86rem;
+      font-family: 'SF Mono', 'Fira Code', 'Roboto Mono', monospace;
+      color: #0F172A;
+      font-weight: 600;
+    }
+    .rx-pad-table td.td-eye-name {
+      font-family: 'Plus Jakarta Sans', system-ui, sans-serif;
+      font-weight: 800;
+      text-align: left;
+      padding-left: 14px;
+    }
+
+    .rx-pad-details-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 16px;
+      margin-bottom: 22px;
+      font-size: 0.84rem;
+    }
+    .rx-pad-box {
+      background: #F8FAFC;
+      border: 1px dashed #CBD5E1;
+      border-radius: 10px;
+      padding: 10px 14px;
+    }
+    .rx-pad-box-lbl {
+      font-size: 0.68rem;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+      font-weight: 800;
+      color: #64748B;
+      margin-bottom: 4px;
+    }
+    .rx-pad-box-val {
+      font-weight: 600;
+      color: #0F172A;
+      line-height: 1.45;
+    }
+
+    .rx-doctor-signature-section {
+      display: flex;
+      justify-content: space-between;
+      align-items: flex-end;
+      margin-top: 28px;
+      padding-top: 14px;
+      border-top: 1px solid #E2E8F0;
+    }
+    .rx-digital-seal {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      font-size: 0.72rem;
+      color: #64748B;
+    }
+    .rx-seal-badge {
+      width: 40px;
+      height: 40px;
+      border: 2px dashed #00ADEF;
+      border-radius: 50%;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      color: #00ADEF;
+      font-size: 1.1rem;
+    }
+    .rx-signature-block {
+      text-align: center;
+      width: 220px;
+    }
+    .rx-signature-line {
+      border-top: 1.5px solid #0F172A;
+      padding-top: 6px;
+      font-weight: 800;
+      font-size: 0.85rem;
+      color: #0F172A;
+    }
+    .rx-signature-sub {
+      font-size: 0.7rem;
+      color: #64748B;
+      font-weight: 600;
+    }
+
+    .rx-modal-toolbar {
+      display: flex;
+      align-items: center;
+      justify-content: flex-end;
+      gap: 10px;
+      padding: 14px 24px;
+      background: #F1F5F9;
+      border-top: 1px solid #E2E8F0;
+    }
+
+    /* Print Stylesheet */
+    @media print {
+      body * {
+        visibility: hidden !important;
+      }
+      #rxSlipModal, #rxSlipModal * {
+        visibility: visible !important;
+      }
+      #rxSlipModal {
+        position: absolute !important;
+        left: 0 !important;
+        top: 0 !important;
+        width: 100% !important;
+        display: block !important;
+        padding: 0 !important;
+        margin: 0 !important;
+        background: #fff !important;
+      }
+      #rxSlipModal .modal-backdrop-custom,
+      #rxSlipModal .rx-modal-toolbar,
+      #rxSlipModal .btn-close-modal {
+        display: none !important;
+      }
+      #rxSlipModal .modal-dialog-box {
+        border: none !important;
+        box-shadow: none !important;
+        max-width: 100% !important;
+        width: 100% !important;
+      }
+      #rxSlipModal .rx-pad-slip {
+        padding: 20px !important;
+      }
     }
   </style>
 </head>
@@ -2708,6 +3275,7 @@ $currentTheme = ($userTheme === 'light') ? 'light' : 'dark';
         <i class="fas fa-chevron-down" style="font-size:.7rem;color:var(--text-muted);margin-left:4px;"></i>
       </div>
       <div class="user-dropdown-menu">
+        <a href="javascript:void(0)" onclick="switchTab('prescriptions', document.getElementById('tab-prescriptions'))" class="dropdown-item"><i class="fas fa-glasses"></i> My Prescriptions</a>
         <a href="settings.php" class="dropdown-item"><i class="fas fa-user-edit"></i> Profile Settings</a>
         <a href="change_password.php" class="dropdown-item"><i class="fas fa-key"></i> Change Password</a>
         <div style="height:1px;background:var(--border-color);margin:4px 0;"></div>
@@ -2812,6 +3380,105 @@ $currentTheme = ($userTheme === 'light') ? 'light' : 'dark';
   </div>
   <?php endif; ?>
 
+  <!-- Active Optical Prescription Highlight Card (When available) -->
+  <?php if ($latestRx): 
+    $rxDate = new DateTime($latestRx['created_at']);
+    $rxDoc = !empty($latestRx['doctor_name']) ? ('Dr. ' . sanitize($latestRx['doctor_name'])) : 'Attending Optometrist';
+    $rxOdAdd = $latestRx['od_add'] ?? $latestRx['add_power'] ?? '';
+    $rxOsAdd = $latestRx['os_add'] ?? $latestRx['add_power'] ?? '';
+    $rxNotes = $latestRx['notes'] ?? $latestRx['recommendations'] ?? '';
+  ?>
+  <div class="rx-highlight-card">
+    <div class="rx-card-topbar">
+      <div style="display:flex;align-items:center;gap:12px;flex-wrap:wrap;">
+        <div class="rx-badge-pill">
+          <i class="fas fa-glasses"></i>
+          <span>Active Optical Prescription</span>
+        </div>
+        <div class="rx-topbar-meta">
+          <span><i class="fas fa-calendar-check me-1"></i> Exam Date: <strong><?= $rxDate->format('M j, Y') ?></strong></span>
+          <span><i class="fas fa-user-doctor me-1"></i> <?= $rxDoc ?></span>
+        </div>
+      </div>
+      <div class="rx-topbar-actions">
+        <button type="button" class="btn-rx-action primary" onclick="openRxModal(<?= (int)$latestRx['id'] ?>)">
+          <i class="fas fa-file-prescription"></i> <span>View Official Copy</span>
+        </button>
+        <button type="button" class="btn-rx-action print" onclick="printRxDirect(<?= (int)$latestRx['id'] ?>)">
+          <i class="fas fa-print"></i> <span>Print Copy</span>
+        </button>
+      </div>
+    </div>
+
+    <!-- Rx Quick Specs Grid -->
+    <div class="rx-specs-table-wrapper">
+      <table class="rx-specs-table">
+        <thead>
+          <tr>
+            <th class="th-eye">Eye</th>
+            <th>SPH <span class="rx-th-hint">(Sphere)</span></th>
+            <th>CYL <span class="rx-th-hint">(Cylinder)</span></th>
+            <th>AXIS <span class="rx-th-hint">(Orientation)</span></th>
+            <th>ADD <span class="rx-th-hint">(Near Reading)</span></th>
+            <?php if (!empty($latestRx['od_va']) || !empty($latestRx['os_va'])): ?>
+            <th>VA <span class="rx-th-hint">(Acuity)</span></th>
+            <?php endif; ?>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td class="td-eye eye-od"><span class="eye-badge od">OD</span> Right Eye</td>
+            <td class="td-val font-mono"><?= htmlspecialchars((string)($latestRx['od_sphere'] ?? '—'), ENT_QUOTES) ?></td>
+            <td class="td-val font-mono"><?= htmlspecialchars((string)($latestRx['od_cylinder'] ?? '—'), ENT_QUOTES) ?></td>
+            <td class="td-val font-mono"><?= !empty($latestRx['od_axis']) ? htmlspecialchars((string)$latestRx['od_axis'], ENT_QUOTES) . '°' : '—' ?></td>
+            <td class="td-val font-mono"><?= htmlspecialchars((string)($rxOdAdd ?: '—'), ENT_QUOTES) ?></td>
+            <?php if (!empty($latestRx['od_va']) || !empty($latestRx['os_va'])): ?>
+            <td class="td-val font-mono"><?= htmlspecialchars((string)($latestRx['od_va'] ?? '—'), ENT_QUOTES) ?></td>
+            <?php endif; ?>
+          </tr>
+          <tr>
+            <td class="td-eye eye-os"><span class="eye-badge os">OS</span> Left Eye</td>
+            <td class="td-val font-mono"><?= htmlspecialchars((string)($latestRx['os_sphere'] ?? '—'), ENT_QUOTES) ?></td>
+            <td class="td-val font-mono"><?= htmlspecialchars((string)($latestRx['os_cylinder'] ?? '—'), ENT_QUOTES) ?></td>
+            <td class="td-val font-mono"><?= !empty($latestRx['os_axis']) ? htmlspecialchars((string)$latestRx['os_axis'], ENT_QUOTES) . '°' : '—' ?></td>
+            <td class="td-val font-mono"><?= htmlspecialchars((string)($rxOsAdd ?: '—'), ENT_QUOTES) ?></td>
+            <?php if (!empty($latestRx['od_va']) || !empty($latestRx['os_va'])): ?>
+            <td class="td-val font-mono"><?= htmlspecialchars((string)($latestRx['os_va'] ?? '—'), ENT_QUOTES) ?></td>
+            <?php endif; ?>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+
+    <!-- Rx Card Footer -->
+    <div class="rx-card-footer">
+      <div class="rx-footer-pills">
+        <?php if (!empty($latestRx['pd'])): ?>
+        <div class="rx-info-pill">
+          <i class="fas fa-arrows-left-right"></i>
+          <span><strong>PD:</strong> <?= htmlspecialchars((string)$latestRx['pd'], ENT_QUOTES) ?> mm</span>
+        </div>
+        <?php endif; ?>
+        <?php if (!empty($latestRx['lens_type'])): ?>
+        <div class="rx-info-pill">
+          <i class="fas fa-layer-group"></i>
+          <span><strong>Lens:</strong> <?= htmlspecialchars((string)$latestRx['lens_type'], ENT_QUOTES) ?></span>
+        </div>
+        <?php endif; ?>
+      </div>
+      <?php if (!empty($rxNotes)): ?>
+      <div class="rx-notes-snippet">
+        <i class="fas fa-info-circle me-1"></i>
+        <span><strong>Advice:</strong> <?= htmlspecialchars((string)$rxNotes, ENT_QUOTES) ?></span>
+      </div>
+      <?php endif; ?>
+      <a href="javascript:void(0)" onclick="switchTab('prescriptions', document.getElementById('tab-prescriptions'))" class="rx-all-link">
+        <span>Prescription History (<?= $totalRxCount ?>)</span> <i class="fas fa-chevron-right ms-1"></i>
+      </a>
+    </div>
+  </div>
+  <?php endif; ?>
+
   <!-- Stats Bento Row -->
   <div class="stats-row">
     <div class="stat-pill">
@@ -2830,6 +3497,10 @@ $currentTheme = ($userTheme === 'light') ? 'light' : 'dark';
       <div class="stat-pill-icon amber"><i class="fas fa-hourglass-start"></i></div>
       <div><div class="stat-pill-val"><?= $pendingCount ?></div><div class="stat-pill-lbl">Pending Review</div></div>
     </div>
+    <div class="stat-pill" onclick="switchTab('prescriptions', document.getElementById('tab-prescriptions'))" style="cursor:pointer;" title="View My Prescriptions">
+      <div class="stat-pill-icon indigo"><i class="fas fa-glasses"></i></div>
+      <div><div class="stat-pill-val"><?= $totalRxCount ?></div><div class="stat-pill-lbl">Prescriptions</div></div>
+    </div>
   </div>
 
   <!-- TABS -->
@@ -2841,6 +3512,12 @@ $currentTheme = ($userTheme === 'light') ? 'light' : 'dark';
       <i class="fas fa-history"></i> My Appointments
       <?php if ($upcomingCount > 0): ?>
       <span style="background:var(--clr-primary-light);color:#fff;border-radius:100px;padding:2px 8px;font-size:.68rem;margin-left:4px;font-weight:800;"><?= $upcomingCount ?></span>
+      <?php endif; ?>
+    </button>
+    <button class="tab-btn" onclick="switchTab('prescriptions',this)" id="tab-prescriptions">
+      <i class="fas fa-glasses"></i> My Prescriptions
+      <?php if ($totalRxCount > 0): ?>
+      <span style="background:linear-gradient(135deg,#7C3AED,#6D28D9);color:#fff;border-radius:100px;padding:2px 8px;font-size:.68rem;margin-left:4px;font-weight:800;"><?= $totalRxCount ?></span>
       <?php endif; ?>
     </button>
   </div>
@@ -3340,6 +4017,146 @@ $currentTheme = ($userTheme === 'light') ? 'light' : 'dark';
     <?php endif; ?>
   </div>
 
+  <!-- TAB: PRESCRIPTIONS -->
+  <div class="tab-panel" id="panel-prescriptions">
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:22px;flex-wrap:wrap;gap:12px;">
+      <div>
+        <h4 style="font-size:1.25rem;font-weight:900;color:var(--text-primary);margin:0 0 4px;letter-spacing:-0.02em;">
+          <i class="fas fa-glasses me-2" style="color:#7C3AED;"></i>My Optical Prescriptions
+        </h4>
+        <p style="font-size:.84rem;color:var(--text-muted);margin:0;font-weight:600;">
+          Your verified eye refraction measurements, pupillary distance, and optical records issued by Gueco Optical Clinic.
+        </p>
+      </div>
+      <?php if (!empty($patientRxList)): ?>
+      <span class="badge" style="background:rgba(124,58,237,0.12);color:#7C3AED;border:1px solid rgba(124,58,237,0.25);font-size:.82rem;font-weight:800;padding:6px 14px;border-radius:100px;">
+        <i class="fas fa-file-medical me-1"></i> <?= $totalRxCount ?> <?= $totalRxCount === 1 ? 'Record' : 'Records' ?> On File
+      </span>
+      <?php endif; ?>
+    </div>
+
+    <?php if (empty($patientRxList)): ?>
+    <div class="empty-state" style="padding:60px 20px;text-align:center;">
+      <div style="width:84px;height:84px;border-radius:50%;background:rgba(124,58,237,0.12);color:#7C3AED;font-size:2.2rem;display:flex;align-items:center;justify-content:center;margin:0 auto 18px;border:2px dashed rgba(124,58,237,0.3);">
+        <i class="fas fa-glasses"></i>
+      </div>
+      <h5 style="font-size:1.15rem;font-weight:800;color:var(--text-primary);margin-bottom:8px;">No Prescriptions on File Yet</h5>
+      <p style="max-width:440px;margin:0 auto 20px;color:var(--text-muted);font-size:.88rem;line-height:1.6;">
+        Once your licensed optometrist completes your eye examination at Gueco Optical Clinic, your verified optical prescription copy will appear here 24/7.
+      </p>
+      <button type="button" class="btn btn-primary" onclick="switchTab('book', document.getElementById('tab-book'))" style="border-radius:100px;padding:11px 26px;font-weight:800;font-size:.88rem;">
+        <i class="fas fa-calendar-plus me-1"></i> Book an Eye Consultation
+      </button>
+    </div>
+    <?php else: ?>
+    <div class="rx-card-list">
+      <?php foreach ($patientRxList as $idx => $rx): 
+        $dRx = new DateTime($rx['created_at']);
+        $doc = !empty($rx['doctor_name']) ? ('Dr. ' . sanitize($rx['doctor_name'])) : 'Attending Optometrist';
+        $isLatest = ($idx === 0);
+        $odAdd = $rx['od_add'] ?? $rx['add_power'] ?? '';
+        $osAdd = $rx['os_add'] ?? $rx['add_power'] ?? '';
+        $notes = $rx['notes'] ?? $rx['recommendations'] ?? '';
+      ?>
+      <div class="rx-record-card <?= $isLatest ? 'latest-rx' : '' ?>">
+        <!-- Top row -->
+        <div class="rx-card-topbar">
+          <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;">
+            <span class="badge" style="background:var(--bg-hover);color:var(--text-primary);border:1px solid var(--border-color);font-family:monospace;font-size:.82rem;font-weight:700;padding:5px 10px;border-radius:8px;">
+              Rx #<?= $rx['id'] ?>
+            </span>
+            <?php if ($isLatest): ?>
+            <span class="badge" style="background:rgba(16,185,129,0.15);color:#059669;border:1px solid rgba(16,185,129,0.3);font-size:.76rem;font-weight:800;padding:4px 10px;border-radius:100px;">
+              <span class="status-dot dot-green pulse me-1"></span> Current / Active
+            </span>
+            <?php endif; ?>
+            <div class="rx-topbar-meta">
+              <span><i class="fas fa-calendar-alt me-1"></i> <?= $dRx->format('F j, Y · h:i A') ?></span>
+              <span><i class="fas fa-user-doctor me-1"></i> <?= $doc ?></span>
+            </div>
+          </div>
+          <div class="rx-topbar-actions">
+            <button type="button" class="btn-rx-action primary" onclick="openRxModal(<?= (int)$rx['id'] ?>)">
+              <i class="fas fa-file-prescription"></i> <span>View Official Slip</span>
+            </button>
+            <button type="button" class="btn-rx-action print" onclick="printRxDirect(<?= (int)$rx['id'] ?>)">
+              <i class="fas fa-print"></i> <span>Print</span>
+            </button>
+            <button type="button" class="btn-rx-action print" onclick="copyRxValues(<?= (int)$rx['id'] ?>)" title="Copy prescription grades to clipboard">
+              <i class="fas fa-copy"></i> <span>Copy</span>
+            </button>
+          </div>
+        </div>
+
+        <!-- Optical Specs Grid -->
+        <div class="rx-specs-table-wrapper">
+          <table class="rx-specs-table">
+            <thead>
+              <tr>
+                <th class="th-eye">Eye</th>
+                <th>SPH <span class="rx-th-hint">(Sphere)</span></th>
+                <th>CYL <span class="rx-th-hint">(Cylinder)</span></th>
+                <th>AXIS <span class="rx-th-hint">(Orientation)</span></th>
+                <th>ADD <span class="rx-th-hint">(Near Reading)</span></th>
+                <?php if (!empty($rx['od_va']) || !empty($rx['os_va'])): ?>
+                <th>VA <span class="rx-th-hint">(Acuity)</span></th>
+                <?php endif; ?>
+              </tr>
+            </thead>
+            <tbody>
+              <tr>
+                <td class="td-eye eye-od"><span class="eye-badge od">OD</span> Right Eye</td>
+                <td class="td-val font-mono"><?= htmlspecialchars((string)($rx['od_sphere'] ?? '—'), ENT_QUOTES) ?></td>
+                <td class="td-val font-mono"><?= htmlspecialchars((string)($rx['od_cylinder'] ?? '—'), ENT_QUOTES) ?></td>
+                <td class="td-val font-mono"><?= !empty($rx['od_axis']) ? htmlspecialchars((string)$rx['od_axis'], ENT_QUOTES) . '°' : '—' ?></td>
+                <td class="td-val font-mono"><?= htmlspecialchars((string)($odAdd ?: '—'), ENT_QUOTES) ?></td>
+                <?php if (!empty($rx['od_va']) || !empty($rx['os_va'])): ?>
+                <td class="td-val font-mono"><?= htmlspecialchars((string)($rx['od_va'] ?? '—'), ENT_QUOTES) ?></td>
+                <?php endif; ?>
+              </tr>
+              <tr>
+                <td class="td-eye eye-os"><span class="eye-badge os">OS</span> Left Eye</td>
+                <td class="td-val font-mono"><?= htmlspecialchars((string)($rx['os_sphere'] ?? '—'), ENT_QUOTES) ?></td>
+                <td class="td-val font-mono"><?= htmlspecialchars((string)($rx['os_cylinder'] ?? '—'), ENT_QUOTES) ?></td>
+                <td class="td-val font-mono"><?= !empty($rx['os_axis']) ? htmlspecialchars((string)$rx['os_axis'], ENT_QUOTES) . '°' : '—' ?></td>
+                <td class="td-val font-mono"><?= htmlspecialchars((string)($osAdd ?: '—'), ENT_QUOTES) ?></td>
+                <?php if (!empty($rx['od_va']) || !empty($rx['os_va'])): ?>
+                <td class="td-val font-mono"><?= htmlspecialchars((string)($rx['os_va'] ?? '—'), ENT_QUOTES) ?></td>
+                <?php endif; ?>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+
+        <!-- Details Pills & Notes -->
+        <div class="rx-card-footer">
+          <div class="rx-footer-pills">
+            <?php if (!empty($rx['pd'])): ?>
+            <div class="rx-info-pill">
+              <i class="fas fa-arrows-left-right"></i>
+              <span><strong>PD (Pupillary Distance):</strong> <?= htmlspecialchars((string)$rx['pd'], ENT_QUOTES) ?> mm</span>
+            </div>
+            <?php endif; ?>
+            <?php if (!empty($rx['lens_type'])): ?>
+            <div class="rx-info-pill">
+              <i class="fas fa-layer-group"></i>
+              <span><strong>Lens Type:</strong> <?= htmlspecialchars((string)$rx['lens_type'], ENT_QUOTES) ?></span>
+            </div>
+            <?php endif; ?>
+          </div>
+          <?php if (!empty($notes)): ?>
+          <div class="rx-notes-snippet" style="max-width:100%;margin-top:6px;">
+            <i class="fas fa-notes-medical me-1"></i>
+            <span><strong>Clinical Instructions / Notes:</strong> <?= htmlspecialchars((string)$notes, ENT_QUOTES) ?></span>
+          </div>
+          <?php endif; ?>
+        </div>
+      </div>
+      <?php endforeach; ?>
+    </div>
+    <?php endif; ?>
+  </div>
+
 </div><!-- /page-wrap -->
 
 <!-- ============================================================
@@ -3489,6 +4306,140 @@ $currentTheme = ($userTheme === 'light') ? 'light' : 'dark';
         </button>
       </div>
     </form>
+  </div>
+</div>
+
+<!-- ============================================================
+     OFFICIAL CLINIC PRESCRIPTION SLIP MODAL (PRINT READY)
+     ============================================================ -->
+<div id="rxSlipModal" class="modal-overlay">
+  <div class="modal-backdrop-custom" onclick="closeRxModal()"></div>
+  <div class="modal-dialog-box rx-slip-dialog">
+    <!-- Close X button in top right of modal -->
+    <button type="button" class="btn-close-modal" onclick="closeRxModal()" aria-label="Close" style="position:absolute;top:16px;right:16px;z-index:10;background:rgba(15,23,42,0.08);border:none;border-radius:50%;width:34px;height:34px;cursor:pointer;color:#0F172A;display:flex;align-items:center;justify-content:center;">
+      <i class="fas fa-times"></i>
+    </button>
+
+    <!-- Prescription Sheet Pad -->
+    <div class="rx-pad-slip" id="rxPrintPad">
+      <div class="rx-watermark-symbol">℞</div>
+
+      <!-- Header -->
+      <div class="rx-slip-header">
+        <div class="rx-slip-brand">
+          <img src="../assets/images/logo.png?v=2" alt="Logo" class="rx-slip-logo">
+          <div>
+            <div class="rx-slip-clinic-name">GUECO OPTICAL CLINIC</div>
+            <div class="rx-slip-clinic-sub">Professional Eye Care &amp; Optical Services</div>
+          </div>
+        </div>
+        <div class="rx-slip-contacts">
+          <div>Capas, Tarlac &middot; Angeles City, Pampanga</div>
+          <div>Tel: (045) 123-4567 &middot; Mobile: 0917-123-4567</div>
+          <div style="color:#00ADEF;font-weight:700;">guecooptical@gmail.com</div>
+        </div>
+      </div>
+
+      <!-- Patient & Exam Meta Ribbon -->
+      <div class="rx-patient-ribbon">
+        <div>
+          <div class="rx-ribbon-label">Patient Name</div>
+          <div class="rx-ribbon-val" id="modalRxPatientName"><?= htmlspecialchars((string)$patientFullName, ENT_QUOTES) ?></div>
+        </div>
+        <div>
+          <div class="rx-ribbon-label">Age / Gender</div>
+          <div class="rx-ribbon-val" id="modalRxPatientDemographics">
+            <?= $patientAge ? ($patientAge . ' yrs') : '—' ?> / <?= !empty($patient['gender']) ? ucfirst($patient['gender']) : '—' ?>
+          </div>
+        </div>
+        <div>
+          <div class="rx-ribbon-label">Date of Exam</div>
+          <div class="rx-ribbon-val" id="modalRxDate">—</div>
+        </div>
+      </div>
+
+      <!-- Rx Symbol Banner -->
+      <div class="rx-symbol-banner">
+        <div class="rx-big-symbol">℞</div>
+        <div class="rx-symbol-text">Optical Prescription &middot; Refraction Record <span id="modalRxIdBadge" style="margin-left:8px;font-family:monospace;color:#00ADEF;"></span></div>
+      </div>
+
+      <!-- Optical Refraction Table -->
+      <table class="rx-pad-table">
+        <thead>
+          <tr>
+            <th style="width:130px;text-align:left;padding-left:14px;">EYE</th>
+            <th>SPH (Sphere)</th>
+            <th>CYL (Cylinder)</th>
+            <th>AXIS</th>
+            <th>ADD (Near)</th>
+            <th>VA (Acuity)</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td class="td-eye-name" style="color:#00ADEF;"><span class="eye-badge od" style="width:24px;height:20px;font-size:.65rem;margin-right:6px;">OD</span> Right Eye</td>
+            <td id="modalRxOdSph">—</td>
+            <td id="modalRxOdCyl">—</td>
+            <td id="modalRxOdAxis">—</td>
+            <td id="modalRxOdAdd">—</td>
+            <td id="modalRxOdVa">—</td>
+          </tr>
+          <tr>
+            <td class="td-eye-name" style="color:#7C3AED;"><span class="eye-badge os" style="width:24px;height:20px;font-size:.65rem;margin-right:6px;">OS</span> Left Eye</td>
+            <td id="modalRxOsSph">—</td>
+            <td id="modalRxOsCyl">—</td>
+            <td id="modalRxOsAxis">—</td>
+            <td id="modalRxOsAdd">—</td>
+            <td id="modalRxOsVa">—</td>
+          </tr>
+        </tbody>
+      </table>
+
+      <!-- PD & Instructions Grid -->
+      <div class="rx-pad-details-grid">
+        <div class="rx-pad-box">
+          <div class="rx-pad-box-lbl">Pupillary Distance (PD)</div>
+          <div class="rx-pad-box-val" id="modalRxPd">—</div>
+        </div>
+        <div class="rx-pad-box">
+          <div class="rx-pad-box-lbl">Recommended Lens Type</div>
+          <div class="rx-pad-box-val" id="modalRxLens">—</div>
+        </div>
+      </div>
+
+      <!-- Clinical Remarks Box -->
+      <div class="rx-pad-box" style="margin-bottom:16px;">
+        <div class="rx-pad-box-lbl">Doctor's Clinical Notes / Remarks</div>
+        <div class="rx-pad-box-val" id="modalRxNotes" style="font-style:italic;">No special remarks.</div>
+      </div>
+
+      <!-- Doctor Signature & Stamp Footer -->
+      <div class="rx-doctor-signature-section">
+        <div class="rx-digital-seal">
+          <div class="rx-seal-badge"><i class="fas fa-certificate"></i></div>
+          <div>
+            <div style="font-weight:800;color:#0F172A;font-size:.76rem;">AUTHENTIC OPTICAL RECORD</div>
+            <div style="color:#64748B;font-size:.68rem;">Gueco Optical Clinic Patient Portal Verified</div>
+          </div>
+        </div>
+        <div class="rx-signature-block">
+          <div class="rx-signature-line" id="modalRxDoctorName">Dr. Clinic Optometrist</div>
+          <div class="rx-signature-sub">Licensed Optometrist</div>
+          <div class="rx-signature-sub" style="font-size:.65rem;color:#94A3B8;">PRC Reg. Optometry Specialist</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Modal Footer Actions (Hidden on Print) -->
+    <div class="rx-modal-toolbar">
+      <button type="button" class="btn btn-secondary" onclick="closeRxModal()" style="border-radius:10px;padding:9px 18px;font-size:.85rem;font-weight:700;">
+        <i class="fas fa-times me-1"></i> Close
+      </button>
+      <button type="button" class="btn btn-primary" onclick="window.print()" style="border-radius:10px;padding:9px 24px;font-size:.85rem;font-weight:800;background:linear-gradient(135deg,#00ADEF,#235EAE);border:none;box-shadow:0 4px 14px rgba(0,173,239,0.35);">
+        <i class="fas fa-print me-1"></i> Print Prescription Copy
+      </button>
+    </div>
   </div>
 </div>
 
@@ -4307,10 +5258,14 @@ document.addEventListener('click', function(e) {
   );
 });
 
-// Auto open history tab if returned from an edit
+// Auto open tab if returned from an edit or direct navigation
 <?php if (($_SESSION['open_tab'] ?? '') === 'history'): unset($_SESSION['open_tab']); ?>
 window.addEventListener('DOMContentLoaded', () => {
   switchTab('history', document.getElementById('tab-history'));
+});
+<?php elseif (($_SESSION['open_tab'] ?? '') === 'prescriptions'): unset($_SESSION['open_tab']); ?>
+window.addEventListener('DOMContentLoaded', () => {
+  switchTab('prescriptions', document.getElementById('tab-prescriptions'));
 });
 <?php endif; ?>
 
@@ -4627,8 +5582,105 @@ document.addEventListener('keydown', function(e) {
   if (e.key === 'Escape') {
     closeConfirmModal();
     closeEditModal();
+    closeRxModal();
   }
 });
+
+// ── OPTICAL PRESCRIPTIONS DATA & MODAL LOGIC ──────────────────
+const patientPrescriptionsData = <?= json_encode($patientRxList, JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT) ?>;
+const patientProfileData = {
+  name: <?= json_encode($patientFullName) ?>,
+  age: <?= json_encode($patientAge) ?>,
+  gender: <?= json_encode(!empty($patient['gender']) ? ucfirst($patient['gender']) : '') ?>
+};
+
+function openRxModal(rxId) {
+  const rx = patientPrescriptionsData.find(item => Number(item.id) === Number(rxId));
+  if (!rx) return;
+
+  const d = new Date(rx.created_at);
+  const formattedDate = !isNaN(d.getTime()) 
+    ? d.toLocaleDateString('en-US', { year: 'numeric', month: 'short', day: 'numeric' })
+    : rx.created_at;
+  
+  const docName = rx.doctor_name ? ('Dr. ' + rx.doctor_name) : 'Attending Optometrist';
+  const odAdd = rx.od_add || rx.add_power || '—';
+  const osAdd = rx.os_add || rx.add_power || '—';
+  const notes = rx.notes || rx.recommendations || 'No special clinical remarks.';
+  const pdVal = rx.pd ? (rx.pd + ' mm') : 'Standard';
+  const lensVal = rx.lens_type || 'Single Vision / As Advised';
+
+  document.getElementById('modalRxIdBadge').textContent = 'Rx #' + rx.id;
+  document.getElementById('modalRxDate').textContent = formattedDate;
+  document.getElementById('modalRxDoctorName').textContent = docName;
+  
+  document.getElementById('modalRxOdSph').textContent = rx.od_sphere || '—';
+  document.getElementById('modalRxOdCyl').textContent = rx.od_cylinder || '—';
+  document.getElementById('modalRxOdAxis').textContent = rx.od_axis ? (rx.od_axis + '°') : '—';
+  document.getElementById('modalRxOdAdd').textContent = odAdd;
+  document.getElementById('modalRxOdVa').textContent = rx.od_va || '—';
+
+  document.getElementById('modalRxOsSph').textContent = rx.os_sphere || '—';
+  document.getElementById('modalRxOsCyl').textContent = rx.os_cylinder || '—';
+  document.getElementById('modalRxOsAxis').textContent = rx.os_axis ? (rx.os_axis + '°') : '—';
+  document.getElementById('modalRxOsAdd').textContent = osAdd;
+  document.getElementById('modalRxOsVa').textContent = rx.os_va || '—';
+
+  document.getElementById('modalRxPd').textContent = pdVal;
+  document.getElementById('modalRxLens').textContent = lensVal;
+  document.getElementById('modalRxNotes').textContent = notes;
+
+  const modal = document.getElementById('rxSlipModal');
+  if (modal) {
+    modal.classList.add('open');
+    modal.classList.add('active');
+  }
+}
+
+function closeRxModal() {
+  const modal = document.getElementById('rxSlipModal');
+  if (modal) {
+    modal.classList.remove('open');
+    modal.classList.remove('active');
+  }
+}
+
+function printRxDirect(rxId) {
+  openRxModal(rxId);
+  setTimeout(() => {
+    window.print();
+  }, 250);
+}
+
+function copyRxValues(rxId) {
+  const rx = patientPrescriptionsData.find(item => Number(item.id) === Number(rxId));
+  if (!rx) return;
+
+  const odAdd = rx.od_add || rx.add_power || '—';
+  const osAdd = rx.os_add || rx.add_power || '—';
+  const text = `Gueco Optical Clinic Prescription (Rx #${rx.id})\nOD (Right Eye): SPH ${rx.od_sphere || '0.00'} | CYL ${rx.od_cylinder || '0.00'} | AXIS ${rx.od_axis ? rx.od_axis + '°' : '0°'} | ADD ${odAdd}\nOS (Left Eye): SPH ${rx.os_sphere || '0.00'} | CYL ${rx.os_cylinder || '0.00'} | AXIS ${rx.os_axis ? rx.os_axis + '°' : '0°'} | ADD ${osAdd}\nPD: ${rx.pd ? rx.pd + 'mm' : 'N/A'}`;
+
+  if (navigator.clipboard && navigator.clipboard.writeText) {
+    navigator.clipboard.writeText(text).then(() => {
+      if (typeof Swal !== 'undefined') {
+        Swal.fire({
+          toast: true,
+          position: 'top-end',
+          icon: 'success',
+          title: 'Prescription copied to clipboard!',
+          showConfirmButton: false,
+          timer: 2500,
+          background: 'var(--bg-card)',
+          color: 'var(--text-primary)'
+        });
+      } else {
+        alert('Prescription values copied to clipboard!');
+      }
+    });
+  } else {
+    alert(text);
+  }
+}
 </script>
 </body>
 </html>
