@@ -999,11 +999,6 @@ html:not([data-theme="dark"]) .btn-secondary:hover {
 
 /* ─── Responsive & Mobile Drawer System ─────────────────────── */
 .sidebar-backdrop {
-  display: none;
-  position: fixed;
-  inset: 0;
-/* Mobile Sidebar Backdrop Overlay */
-.sidebar-backdrop {
   display: block;
   position: fixed;
   inset: 0;
@@ -1032,27 +1027,6 @@ body.sidebar-open {
   touch-action: manipulation;
 }
 
-.sidebar-close-btn {
-  background: rgba(255, 255, 255, 0.08);
-  border: 1px solid var(--border-light);
-  color: var(--text-primary);
-  width: 32px;
-  height: 32px;
-  border-radius: 50%;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  font-size: 0.9rem;
-  margin-left: auto;
-  cursor: pointer;
-  transition: all 0.2s ease;
-  flex-shrink: 0;
-}
-.sidebar-close-btn:hover {
-  background: rgba(239, 68, 68, 0.15);
-  color: var(--clr-danger);
-}
-
 @media (max-width: 992px) {
   html, body {
     overflow-x: hidden !important;
@@ -1066,7 +1040,7 @@ body.sidebar-open {
   }
   .sidebar {
     position: fixed;
-    transform: translateX(-105%);
+    transform: translateX(-105%) !important;
     top: 0; left: 0; bottom: 0;
     width: 280px;
     max-width: 82vw;

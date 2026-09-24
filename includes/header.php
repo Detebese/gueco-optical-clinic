@@ -108,9 +108,6 @@ $currentTheme = ($userTheme === 'light') ? 'light' : 'dark';
         <h6>Gueco Optical</h6>
         <span>Clinic Management</span>
       </div>
-      <button type="button" class="sidebar-close-btn d-lg-none" onclick="window.toggleSidebarMobile(false)" aria-label="Close Sidebar">
-        <i class="fas fa-times"></i>
-      </button>
     </div>
 
     <!-- User Info -->
