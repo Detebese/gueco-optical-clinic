@@ -2427,9 +2427,85 @@ $currentTheme = ($userTheme === 'light') ? 'light' : 'dark';
       background: var(--bg-card); border: 1.5px solid var(--border-color); border-radius: 22px;
       box-shadow: 0 2px 8px rgba(15, 23, 42, 0.04);
     }
-    .empty-state i { font-size: 3rem; opacity: .4; display: block; margin-bottom: 14px; color: var(--clr-primary); }
-    [data-theme="dark"] .empty-state i { color: var(--clr-primary-light); }
+    .empty-state > i:first-child,
+    .empty-state-icon {
+      font-size: 3rem; opacity: .4; display: block; margin-bottom: 14px; color: var(--clr-primary);
+    }
+    [data-theme="dark"] .empty-state > i:first-child,
+    [data-theme="dark"] .empty-state-icon {
+      color: var(--clr-primary-light);
+    }
     .empty-state p { font-size: .98rem; color: var(--text-muted); line-height: 1.6; margin: 0; }
+
+    /* Universal Button Contrast & Styling (Guaranteed 100% Contrast & Visibility in Light & Dark Mode) */
+    .btn-primary,
+    .btn-book-cta,
+    [data-theme="light"] .btn-primary,
+    [data-theme="dark"] .btn-primary {
+      background: linear-gradient(135deg, #00ADEF 0%, #235EAE 100%) !important;
+      border: 1px solid rgba(255, 255, 255, 0.2) !important;
+      color: #FFFFFF !important;
+      text-shadow: 0 1px 2px rgba(0, 0, 0, 0.25) !important;
+      box-shadow: 0 4px 14px rgba(0, 173, 239, 0.35) !important;
+      display: inline-flex !important;
+      align-items: center !important;
+      justify-content: center !important;
+      gap: 8px !important;
+      text-decoration: none !important;
+      cursor: pointer !important;
+    }
+    .btn-primary:hover,
+    .btn-book-cta:hover,
+    [data-theme="light"] .btn-primary:hover,
+    [data-theme="dark"] .btn-primary:hover {
+      background: linear-gradient(135deg, #0284C7 0%, #1D4ED8 100%) !important;
+      color: #FFFFFF !important;
+      box-shadow: 0 6px 20px rgba(0, 173, 239, 0.45) !important;
+      transform: translateY(-2px);
+    }
+    .btn-primary:active,
+    .btn-book-cta:active,
+    [data-theme="light"] .btn-primary:active,
+    [data-theme="dark"] .btn-primary:active {
+      transform: translateY(1px);
+      box-shadow: 0 2px 8px rgba(0, 173, 239, 0.25) !important;
+    }
+    .btn-primary i,
+    .btn-book-cta i,
+    .btn-book i,
+    .btn-wizard-next i,
+    .btn-ticket-action i,
+    .btn-modal-save i,
+    [data-theme="light"] .btn-primary i,
+    [data-theme="dark"] .btn-primary i {
+      font-size: 1rem !important;
+      display: inline-block !important;
+      margin: 0 !important;
+      opacity: 1 !important;
+      color: #FFFFFF !important;
+      line-height: 1 !important;
+    }
+
+    /* Guard against nested elements inside empty-state */
+    .empty-state .btn,
+    .empty-state button,
+    .empty-state a.btn {
+      display: inline-flex !important;
+      align-items: center !important;
+      justify-content: center !important;
+      gap: 8px !important;
+      line-height: normal !important;
+    }
+    .empty-state .btn i,
+    .empty-state button i,
+    .empty-state a.btn i {
+      font-size: 1rem !important;
+      display: inline-block !important;
+      margin: 0 !important;
+      opacity: 1 !important;
+      color: #FFFFFF !important;
+      line-height: 1 !important;
+    }
 
     /* MODAL SYSTEM */
     .modal-overlay {
@@ -4318,8 +4394,9 @@ $currentTheme = ($userTheme === 'light') ? 'light' : 'dark';
       <p style="max-width:440px;margin:0 auto 20px;color:var(--text-muted);font-size:.88rem;line-height:1.6;">
         Once your licensed optometrist completes your eye examination at Gueco Optical Clinic, your verified optical prescription copy will appear here 24/7.
       </p>
-      <button type="button" class="btn btn-primary" onclick="switchTab('book', document.getElementById('tab-book'))" style="border-radius:100px;padding:11px 26px;font-weight:800;font-size:.88rem;">
-        <i class="fas fa-calendar-plus me-1"></i> Book an Eye Consultation
+      <button type="button" class="btn btn-primary btn-book-cta" onclick="switchTab('book', document.getElementById('tab-book'))" style="border-radius:100px;padding:12px 28px;font-weight:800;font-size:.92rem;color:#ffffff !important;display:inline-flex;align-items:center;justify-content:center;gap:9px;">
+        <i class="fas fa-calendar-plus" style="font-size:1.05rem !important;color:#ffffff !important;display:inline-block !important;margin:0 !important;opacity:1 !important;line-height:1 !important;"></i>
+        <span style="color:#ffffff !important;font-weight:800;">Book an Eye Consultation</span>
       </button>
     </div>
     <?php else: ?>
@@ -4710,8 +4787,9 @@ $currentTheme = ($userTheme === 'light') ? 'light' : 'dark';
       <button type="button" class="btn btn-secondary" onclick="closeRxModal()" style="border-radius:10px;padding:9px 18px;font-size:.85rem;font-weight:700;">
         <i class="fas fa-times me-1"></i> Close
       </button>
-      <button type="button" class="btn btn-primary" onclick="window.print()" style="border-radius:10px;padding:9px 24px;font-size:.85rem;font-weight:800;background:linear-gradient(135deg,#00ADEF,#235EAE);border:none;box-shadow:0 4px 14px rgba(0,173,239,0.35);">
-        <i class="fas fa-print me-1"></i> Print Prescription Copy
+      <button type="button" class="btn btn-primary" onclick="window.print()" style="border-radius:10px;padding:9px 24px;font-size:.85rem;font-weight:800;background:linear-gradient(135deg,#00ADEF,#235EAE);border:none;box-shadow:0 4px 14px rgba(0,173,239,0.35);color:#ffffff !important;display:inline-flex;align-items:center;gap:7px;">
+        <i class="fas fa-print" style="color:#ffffff !important;font-size:.9rem !important;opacity:1 !important;margin:0 !important;display:inline-block !important;"></i>
+        <span style="color:#ffffff !important;font-weight:800;">Print Prescription Copy</span>
       </button>
     </div>
   </div>
