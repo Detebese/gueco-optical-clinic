@@ -65,17 +65,34 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action']) && $_POST['
         $address   = sanitize(trim($_POST['address'] ?? ''));
         $birthdate = sanitize(trim($_POST['birthdate'] ?? ''));
 
+        $cleanPhone = preg_replace('/[^0-9]/', '', $phone);
+
         if (empty($lastName)) {
             $error = 'Please enter your last name.';
+            $errorField = 'last_name';
+        } elseif (!preg_match("/^[a-zA-Z\s\-\.\p{L}]+$/u", $lastName)) {
+            $error = 'Last name must contain letters and characters only (no numbers).';
             $errorField = 'last_name';
         } elseif (empty($firstName)) {
             $error = 'Please enter your first name.';
             $errorField = 'first_name';
+        } elseif (!preg_match("/^[a-zA-Z\s\-\.\p{L}]+$/u", $firstName)) {
+            $error = 'First name must contain letters and characters only (no numbers).';
+            $errorField = 'first_name';
+        } elseif (!empty($middleName) && !preg_match("/^[a-zA-Z\s\-\.\p{L}]+$/u", $middleName)) {
+            $error = 'Middle name must contain letters and characters only (no numbers).';
+            $errorField = 'middle_name';
         } elseif (empty($phone)) {
-            $error = 'Please provide your 11-digit mobile contact number.';
+            $error = 'Please enter your contact number.';
             $errorField = 'phone';
-        } elseif (strlen(preg_replace('/[^0-9]/', '', $phone)) !== 11) {
+        } elseif (!preg_match('/^[0-9]+$/', $phone)) {
+            $error = 'Contact number must contain numbers only.';
+            $errorField = 'phone';
+        } elseif (strlen($cleanPhone) !== 11) {
             $error = 'Contact number must be exactly 11 digits (e.g., 09123456789).';
+            $errorField = 'phone';
+        } elseif (!str_starts_with($cleanPhone, '09')) {
+            $error = 'Contact number must start with 09 (e.g., 09123456789).';
             $errorField = 'phone';
         } elseif (empty($gender) || !in_array($gender, ['male', 'female', 'other'])) {
             $error = 'Please select your biological sex / gender.';
@@ -548,24 +565,24 @@ if (!empty($rawBirth)) {
       <div class="row g-3">
         <div class="col-sm-6 form-group">
           <label class="form-label"><i class="fas fa-user me-1"></i>Last Name <span style="color:var(--clr-danger)">*</span></label>
-          <input type="text" name="last_name" class="form-control <?= $errorField === 'last_name' ? 'is-invalid' : '' ?>" placeholder="e.g. Dela Cruz" value="<?= $valLastName ?>" required onblur="formatNameField(this)">
+          <input type="text" name="last_name" class="form-control <?= $errorField === 'last_name' ? 'is-invalid' : '' ?>" placeholder="e.g. Dela Cruz" value="<?= $valLastName ?>" required oninput="this.value = this.value.replace(/[^a-zA-Z\s\-\.\ñ\Ñ]/g, '')" onblur="formatNameField(this)">
         </div>
         <div class="col-sm-6 form-group">
           <label class="form-label"><i class="fas fa-user me-1"></i>First Name <span style="color:var(--clr-danger)">*</span></label>
-          <input type="text" name="first_name" class="form-control <?= $errorField === 'first_name' ? 'is-invalid' : '' ?>" placeholder="e.g. Juan" value="<?= $valFirstName ?>" required onblur="formatNameField(this)">
+          <input type="text" name="first_name" class="form-control <?= $errorField === 'first_name' ? 'is-invalid' : '' ?>" placeholder="e.g. Juan" value="<?= $valFirstName ?>" required oninput="this.value = this.value.replace(/[^a-zA-Z\s\-\.\ñ\Ñ]/g, '')" onblur="formatNameField(this)">
         </div>
       </div>
 
       <div class="form-group">
         <label class="form-label"><i class="fas fa-user me-1"></i>Middle Name <span style="color:var(--text-subtle);font-weight:400;text-transform:none;">(optional)</span></label>
-        <input type="text" name="middle_name" class="form-control <?= $errorField === 'middle_name' ? 'is-invalid' : '' ?>" placeholder="e.g. Santos (leave blank if none)" value="<?= $valMiddleName ?>" onblur="formatNameField(this)">
+        <input type="text" name="middle_name" class="form-control <?= $errorField === 'middle_name' ? 'is-invalid' : '' ?>" placeholder="e.g. Santos (leave blank if none)" value="<?= $valMiddleName ?>" oninput="this.value = this.value.replace(/[^a-zA-Z\s\-\.\ñ\Ñ]/g, '')" onblur="formatNameField(this)">
       </div>
 
       <!-- Contact Number & Sex -->
       <div class="row g-3">
         <div class="col-sm-7 form-group">
           <label class="form-label"><i class="fas fa-phone me-1"></i>Contact Number <span style="color:var(--clr-danger)">*</span></label>
-          <input type="tel" name="phone" maxlength="11" minlength="11" oninput="this.value = this.value.replace(/[^0-9]/g, '')" class="form-control" placeholder="09XXXXXXXXX" value="<?= $valPhone ?>" required>
+          <input type="tel" name="phone" inputmode="numeric" maxlength="11" minlength="11" oninput="this.value = this.value.replace(/[^0-9]/g, '').slice(0, 11)" pattern="^09[0-9]{9}$" class="form-control <?= $errorField === 'phone' ? 'is-invalid' : '' ?>" placeholder="09XXXXXXXXX" value="<?= $valPhone ?>" required>
         </div>
         <div class="col-sm-5 form-group">
           <label class="form-label"><i class="fas fa-venus-mars me-1"></i>Sex <span style="color:var(--clr-danger)">*</span></label>
@@ -628,6 +645,7 @@ if (!empty($rawBirth)) {
     function formatNameField(el) {
       if (!el || !el.value) return;
       el.value = el.value
+        .replace(/[^a-zA-Z\s\-\.\ñ\Ñ]/g, '')
         .replace(/([a-z])([A-Z])/g, '$1 $2')
         .replace(/\s+/g, ' ')
         .trim()

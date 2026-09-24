@@ -31,6 +31,14 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $bdate    = sanitize($_POST['birthdate'] ?? '');
         
         $cleanPhone = preg_replace('/[^0-9]/', '', $phone);
+        if (!empty($phone)) {
+            if (strlen($cleanPhone) !== 11 || !str_starts_with($cleanPhone, '09')) {
+                $_SESSION['flash_msg'] = 'Contact number must be exactly 11 digits starting with 09 (e.g., 09123456789).';
+                $_SESSION['flash_type'] = 'danger';
+                header('Location: settings.php');
+                exit;
+            }
+        }
 
         $bdateFormatted = null;
         if (!empty($bdate)) {
@@ -595,7 +603,7 @@ $currentTheme = ($userTheme === 'light') ? 'light' : 'dark';
       <div class="row g-3 mb-3">
         <div class="col-md-6">
           <label style="display:block;font-size:.78rem;font-weight:800;text-transform:uppercase;letter-spacing:.06em;color:var(--text-muted);margin-bottom:7px;"><i class="fas fa-phone me-1"></i>Contact Number</label>
-          <input type="tel" name="phone" maxlength="11" minlength="11" oninput="this.value = this.value.replace(/[^0-9]/g, '')" class="field-control" value="<?= htmlspecialchars($patient['phone'] ?? '') ?>" placeholder="09xxxxxxxxx">
+          <input type="tel" name="phone" inputmode="numeric" maxlength="11" minlength="11" oninput="this.value = this.value.replace(/[^0-9]/g, '').slice(0, 11)" pattern="^09[0-9]{9}$" class="field-control" value="<?= htmlspecialchars($patient['phone'] ?? '') ?>" placeholder="09XXXXXXXXX">
         </div>
         <div class="col-md-6">
           <label style="display:block;font-size:.78rem;font-weight:800;text-transform:uppercase;letter-spacing:.06em;color:var(--text-muted);margin-bottom:7px;"><i class="fas fa-venus-mars me-1"></i>Biological Sex / Gender</label>
