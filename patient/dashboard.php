@@ -1529,7 +1529,215 @@ $currentTheme = ($userTheme === 'light') ? 'light' : 'dark';
       transform: translateY(-2px) !important;
     }
     .patient-swal-popup .swal2-deny:active {
-      transform: translateY(2px) !important;
+      transform: translateY(1px) !important;
+    }
+
+    /* ─── CUTE WELCOME MODAL DESIGN ────────────────────────── */
+    .swal2-popup.cute-welcome-swal-popup {
+      border-radius: 32px !important;
+      font-family: 'Plus Jakarta Sans', 'Poppins', sans-serif !important;
+      padding: 34px 26px 28px !important;
+      border: 2px solid rgba(0, 173, 239, 0.28) !important;
+      background: var(--bg-card) !important;
+      color: var(--text-primary) !important;
+      box-shadow: 0 25px 65px -10px rgba(35, 94, 174, 0.35), 0 0 35px rgba(0, 173, 239, 0.15) !important;
+      max-width: 440px !important;
+      width: 92% !important;
+      overflow: visible !important;
+      text-align: center !important;
+    }
+    [data-theme="dark"] .swal2-popup.cute-welcome-swal-popup {
+      background: linear-gradient(180deg, #18253F 0%, #111A2E 100%) !important;
+      border: 2px solid rgba(56, 189, 248, 0.35) !important;
+      box-shadow: 0 30px 80px -10px rgba(0, 0, 0, 0.85), 0 0 45px rgba(56, 189, 248, 0.2) !important;
+    }
+
+    .cute-modal-wrapper {
+      position: relative;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+    }
+
+    /* Cute Avatar / Mascot Icon */
+    .cute-avatar-container {
+      position: relative;
+      width: 100px;
+      height: 100px;
+      margin: 0 auto 16px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+    .cute-avatar-circle {
+      width: 86px;
+      height: 86px;
+      border-radius: 50%;
+      background: linear-gradient(135deg, rgba(0, 173, 239, 0.15), rgba(245, 158, 11, 0.18));
+      border: 2.5px solid rgba(0, 173, 239, 0.4);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      position: relative;
+      z-index: 2;
+      box-shadow: 0 10px 25px rgba(0, 173, 239, 0.25);
+    }
+    [data-theme="dark"] .cute-avatar-circle {
+      background: linear-gradient(135deg, rgba(56, 189, 248, 0.2), rgba(251, 191, 36, 0.2));
+      border-color: rgba(56, 189, 248, 0.5);
+    }
+    .cute-wave-emoji {
+      font-size: 2.7rem;
+      display: inline-block;
+      transform-origin: 70% 70%;
+      animation: cuteWave 2.2s infinite ease-in-out;
+      filter: drop-shadow(0 4px 8px rgba(0,0,0,0.15));
+    }
+    .cute-sparkle-1 {
+      position: absolute;
+      top: -4px;
+      right: -2px;
+      font-size: 1.35rem;
+      animation: cuteFloat 2.6s infinite ease-in-out;
+    }
+    .cute-sparkle-2 {
+      position: absolute;
+      bottom: 2px;
+      left: -4px;
+      font-size: 1.25rem;
+      animation: cuteBob 2.8s infinite ease-in-out;
+    }
+    .cute-avatar-glow {
+      position: absolute;
+      inset: -10px;
+      border-radius: 50%;
+      background: radial-gradient(circle, rgba(0, 173, 239, 0.3) 0%, rgba(245, 158, 11, 0.15) 50%, transparent 70%);
+      z-index: 1;
+      animation: cutePulseGlow 3s infinite alternate ease-in-out;
+      pointer-events: none;
+    }
+
+    /* Cute Greeting Tag / Pill */
+    .cute-greeting-pill {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      padding: 5px 15px;
+      border-radius: 100px;
+      background: rgba(0, 173, 239, 0.12);
+      border: 1px solid rgba(0, 173, 239, 0.25);
+      color: var(--clr-primary);
+      font-size: 0.76rem;
+      font-weight: 800;
+      letter-spacing: 0.6px;
+      text-transform: uppercase;
+      margin-bottom: 10px;
+    }
+    [data-theme="dark"] .cute-greeting-pill {
+      background: rgba(56, 189, 248, 0.14);
+      border-color: rgba(56, 189, 248, 0.3);
+      color: #38BDF8;
+    }
+
+    /* Cute Title & Message */
+    .cute-modal-title {
+      font-size: 1.5rem !important;
+      font-weight: 900 !important;
+      letter-spacing: -0.025em !important;
+      color: var(--text-primary) !important;
+      margin: 0 0 6px !important;
+      line-height: 1.25 !important;
+    }
+    .cute-modal-text {
+      font-size: 0.94rem !important;
+      font-weight: 600 !important;
+      color: var(--text-secondary) !important;
+      line-height: 1.55 !important;
+      margin: 0 0 16px !important;
+    }
+
+    /* Cute Tip Card */
+    .cute-modal-tip {
+      background: var(--bg-hover);
+      border: 1.5px dashed rgba(0, 173, 239, 0.32);
+      border-radius: 18px;
+      padding: 12px 16px;
+      font-size: 0.82rem;
+      color: var(--text-secondary);
+      font-weight: 600;
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      text-align: left;
+      margin-bottom: 22px;
+      width: 100%;
+    }
+    [data-theme="dark"] .cute-modal-tip {
+      background: rgba(255, 255, 255, 0.04);
+      border-color: rgba(56, 189, 248, 0.3);
+    }
+    .cute-modal-tip i {
+      color: #EC4899;
+      font-size: 1.15rem;
+      flex-shrink: 0;
+      animation: cuteHeartbeat 1.8s infinite;
+    }
+
+    /* Cute Button */
+    .cute-welcome-confirm-btn {
+      border-radius: 100px !important;
+      padding: 13px 38px !important;
+      font-size: 0.94rem !important;
+      font-weight: 800 !important;
+      letter-spacing: 0.3px !important;
+      border: none !important;
+      background: linear-gradient(135deg, #00ADEF 0%, #235EAE 100%) !important;
+      color: #FFFFFF !important;
+      box-shadow: 0 8px 24px rgba(0, 173, 239, 0.4), 0 2px 4px rgba(0, 0, 0, 0.1) !important;
+      cursor: pointer !important;
+      transition: all 0.22s cubic-bezier(0.16, 1, 0.3, 1) !important;
+      display: inline-flex !important;
+      align-items: center !important;
+      justify-content: center !important;
+      gap: 8px !important;
+    }
+    .cute-welcome-confirm-btn:hover {
+      transform: translateY(-2px) scale(1.03) !important;
+      box-shadow: 0 12px 30px rgba(0, 173, 239, 0.55) !important;
+      background: linear-gradient(135deg, #38BDF8 0%, #235EAE 100%) !important;
+    }
+    .cute-welcome-confirm-btn:active {
+      transform: translateY(1px) scale(0.98) !important;
+    }
+
+    /* Keyframe Animations */
+    @keyframes cuteWave {
+      0%, 100% { transform: rotate(0deg); }
+      15% { transform: rotate(16deg); }
+      30% { transform: rotate(-10deg); }
+      45% { transform: rotate(14deg); }
+      60% { transform: rotate(-6deg); }
+      75% { transform: rotate(8deg); }
+    }
+    @keyframes cuteFloat {
+      0%, 100% { transform: translateY(0) rotate(0deg) scale(1); }
+      50% { transform: translateY(-6px) rotate(10deg) scale(1.15); }
+    }
+    @keyframes cuteBob {
+      0%, 100% { transform: translateY(0) rotate(0deg) scale(1); }
+      50% { transform: translateY(5px) rotate(-8deg) scale(1.1); }
+    }
+    @keyframes cutePulseGlow {
+      0% { opacity: 0.5; transform: scale(0.95); }
+      100% { opacity: 0.9; transform: scale(1.1); }
+    }
+    @keyframes cuteHeartbeat {
+      0%, 100% { transform: scale(1); }
+      14% { transform: scale(1.25); }
+      28% { transform: scale(1); }
+      42% { transform: scale(1.25); }
+      70% { transform: scale(1); }
     }
 
     @keyframes cardPulseGlow {
@@ -4277,6 +4485,49 @@ function showAppointmentDetails(btn) {
   });
 }
 
+// ── CUTE WELCOME POPUP MODAL (REDESIGNED GREETING) ───────────
+function showCuteWelcomeModal(msg, title = 'Welcome Back!') {
+  if (typeof Swal === 'undefined') {
+    alert(msg || 'Welcome back!');
+    return;
+  }
+  
+  let cleanMsg = msg ? msg.replace(/^Security verification passed!\s*/i, '').trim() : 'Great to see you again!';
+  let displayTitle = title ? title.replace(/[!✨👋]/g, '').trim() : 'Welcome Back!';
+  
+  Swal.fire({
+    html: `
+      <div class="cute-modal-wrapper">
+        <div class="cute-avatar-container">
+          <div class="cute-avatar-glow"></div>
+          <div class="cute-avatar-circle">
+            <span class="cute-wave-emoji">👋</span>
+            <span class="cute-sparkle-1">✨</span>
+            <span class="cute-sparkle-2">👓</span>
+          </div>
+        </div>
+        <div class="cute-greeting-pill">
+          <i class="fas fa-sparkles"></i> Happy to see you!
+        </div>
+        <h2 class="cute-modal-title">${displayTitle} ✨</h2>
+        <p class="cute-modal-text">${cleanMsg}</p>
+        <div class="cute-modal-tip">
+          <i class="fas fa-heart"></i>
+          <span><strong>Doctor's Tip:</strong> Take regular screen breaks to keep your eyesight refreshed!</span>
+        </div>
+      </div>
+    `,
+    showConfirmButton: true,
+    confirmButtonText: "Let's Go! ✨",
+    buttonsStyling: false,
+    customClass: {
+      popup: 'cute-welcome-swal-popup',
+      confirmButton: 'cute-welcome-confirm-btn'
+    },
+    background: 'var(--bg-card)'
+  });
+}
+
 // ── SWEETALERT2 MODAL NOTIFICATIONS (MATCHING ADMIN) ──────────
 function showPopupModal(msg, type = 'info', title = null) {
   if (!msg) return;
@@ -4346,7 +4597,13 @@ document.addEventListener('DOMContentLoaded', function() {
     const title = pFlash.dataset.title;
     pFlash.remove();
     if (msg) {
-      showPopupModal(msg, type, title);
+      const isWelcome = (title && title.toLowerCase().includes('welcome')) || 
+                        (msg && msg.toLowerCase().includes('welcome'));
+      if (isWelcome) {
+        showCuteWelcomeModal(msg, title);
+      } else {
+        showPopupModal(msg, type, title);
+      }
     }
   }
   if (window.history.replaceState) {
