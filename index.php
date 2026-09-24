@@ -12,9 +12,11 @@ $errorField = '';
 $tab   = $_GET['tab'] ?? 'login'; // 'login' or 'register'
 $showModal = false;
 
-if (isset($_GET['registered'])) {
+if (isset($_GET['registered']) || isset($_GET['existing']) || (isset($_GET['tab']) && in_array($_GET['tab'], ['login', 'register', 'forgot']))) {
     $showModal = true;
-    $tab = 'login';
+    if (isset($_GET['registered']) || isset($_GET['existing'])) {
+        $tab = 'login';
+    }
 }
 
 // ── REGISTER (Email & Password Only with Real Domain Verification) ──
@@ -2193,7 +2195,7 @@ $currentTheme = ($userTheme === 'light') ? 'light' : 'dark';
         <input type="hidden" name="csrf_token" value="<?= generateCsrfToken() ?>">
         <div class="form-group">
           <label class="form-label"><i class="fas fa-envelope"></i>Email Address</label>
-          <input type="email" name="email" class="form-control" placeholder="name@example.com" value="<?= (isset($_POST['action']) && $_POST['action'] === 'login') ? htmlspecialchars($_POST['email'] ?? '') : '' ?>" required autocomplete="email">
+          <input type="email" name="email" id="loginEmail" class="form-control" placeholder="name@example.com" value="<?= htmlspecialchars($_POST['email'] ?? ($_GET['email'] ?? ($_SESSION['prefill_email'] ?? ''))) ?>" required autocomplete="email">
         </div>
         <div class="form-group">
           <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:8px;">
@@ -2609,14 +2611,22 @@ function showToast(msg, isError = false) {
 <?php endif; ?>
 
 <?php if (isset($_SESSION['flash_msg'])): ?>
-  setTimeout(() => showPopModal(
-    <?= json_encode($_SESSION['flash_type'] === 'error' ? 'Notice' : ($_SESSION['flash_type'] === 'success' ? 'Success!' : 'Notice')) ?>,
-    <?= json_encode($_SESSION['flash_msg']) ?>,
-    <?= json_encode($_SESSION['flash_type'] === 'error' ? 'error' : 'success') ?>
-  ), 300);
+  setTimeout(() => {
+    showPopModal(
+      <?= json_encode($_SESSION['flash_title'] ?? ($_SESSION['flash_type'] === 'error' ? 'Notice' : ($_SESSION['flash_type'] === 'success' ? 'Success!' : 'Notice'))) ?>,
+      <?= json_encode($_SESSION['flash_msg']) ?>,
+      <?= json_encode($_SESSION['flash_type'] ?? 'info') ?>
+    );
+    <?php if (isset($_SESSION['prefill_email']) || isset($_GET['existing'])): ?>
+      const passField = document.getElementById('loginPass');
+      if (passField) passField.focus();
+    <?php endif; ?>
+  }, 350);
   <?php 
     unset($_SESSION['flash_msg']);
     unset($_SESSION['flash_type']);
+    unset($_SESSION['flash_title']);
+    unset($_SESSION['prefill_email']);
   ?>
 <?php endif; ?>
 

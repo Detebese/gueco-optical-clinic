@@ -68,7 +68,7 @@ $fullName = ucwords(strtolower($fullName));
 $db = getDB();
 
 try {
-    // Ensure google_id and avatar columns exist in patients table
+    // Ensure google_id, avatar, and auth_provider columns exist in patients table
     try {
         $colGid = $db->query("SHOW COLUMNS FROM patients LIKE 'google_id'")->fetch();
         if (!$colGid) {
@@ -78,51 +78,60 @@ try {
         if (!$colAv) {
             $db->exec("ALTER TABLE patients ADD COLUMN avatar VARCHAR(500) NULL AFTER gender");
         }
+        $colProv = $db->query("SHOW COLUMNS FROM patients LIKE 'auth_provider'")->fetch();
+        if (!$colProv) {
+            $db->exec("ALTER TABLE patients ADD COLUMN auth_provider VARCHAR(20) DEFAULT 'email' AFTER status");
+            $db->exec("UPDATE patients SET auth_provider = 'email' WHERE auth_provider IS NULL OR auth_provider = ''");
+        }
     } catch (Exception $eCol) {
         // Table column checks failed or already exist
     }
 
-    // 1. Check if patient exists with this Google ID
-    $stmt = $db->prepare("SELECT * FROM patients WHERE google_id = ? LIMIT 1");
-    $stmt->execute([$googleId]);
-    $patient = $stmt->fetch(PDO::FETCH_ASSOC);
+    // Check if a patient already exists with this email (case-insensitive)
+    $stmtEmail = $db->prepare("SELECT * FROM patients WHERE LOWER(TRIM(email)) = LOWER(TRIM(?)) LIMIT 1");
+    $stmtEmail->execute([$email]);
+    $patient = $stmtEmail->fetch(PDO::FETCH_ASSOC);
 
     if ($patient) {
-        // Existing linked account - update avatar if available
+        // Check if account was registered with email & password (or auth_provider is 'email')
+        $isEmailRegistered = empty($patient['auth_provider']) 
+                          || $patient['auth_provider'] === 'email';
+
+        if ($isEmailRegistered) {
+            // Patient registered with email & password: require email and password login
+            $_SESSION['flash_msg']     = 'This account (' . htmlspecialchars($email) . ') is already registered. Please log in using your email and password.';
+            $_SESSION['flash_type']    = 'warning';
+            $_SESSION['flash_title']   = 'Account Already Registered';
+            $_SESSION['prefill_email'] = $email;
+
+            header('Location: index.php?tab=login&email=' . urlencode($email) . '&existing=1');
+            exit;
+        }
+
+        // Account was created via Google — update avatar if provided
         if (!empty($picture) && empty($patient['avatar'])) {
             $db->prepare("UPDATE patients SET avatar = ? WHERE id = ?")->execute([$picture, $patient['id']]);
         }
     } else {
-        // 2. Check if a patient exists with the same email (case-insensitive)
-        $stmtEmail = $db->prepare("SELECT * FROM patients WHERE LOWER(TRIM(email)) = LOWER(TRIM(?)) LIMIT 1");
-        $stmtEmail->execute([$email]);
-        $patient = $stmtEmail->fetch(PDO::FETCH_ASSOC);
-
-        if ($patient) {
-            // Existing email account - link Google ID
-            $db->prepare("UPDATE patients SET google_id = ?, avatar = COALESCE(avatar, ?) WHERE id = ?")
-               ->execute([$googleId, $picture ?: null, $patient['id']]);
-        } else {
-            // 3. New patient - auto-register
-            $randomPassword = password_hash(bin2hex(random_bytes(32)), PASSWORD_DEFAULT);
-            $firstName = trim((string)($userInfo['given_name'] ?? ''));
-            $lastName  = trim((string)($userInfo['family_name'] ?? ''));
-            if (empty($firstName) && empty($lastName)) {
-                $nameParts = preg_split('/\s+/', $fullName);
-                $firstName = $nameParts[0] ?? '';
-                $lastName  = count($nameParts) > 1 ? end($nameParts) : '';
-            }
-            $stmtInsert = $db->prepare(
-                "INSERT INTO patients (first_name, last_name, full_name, email, password, google_id, avatar, status)
-                 VALUES (?, ?, ?, ?, ?, ?, ?, 'active')"
-            );
-            $stmtInsert->execute([$firstName, $lastName, $fullName, $email, $randomPassword, $googleId, $picture ?: null]);
-            $newId = (int)$db->lastInsertId();
-
-            $stmtNew = $db->prepare("SELECT * FROM patients WHERE id = ? LIMIT 1");
-            $stmtNew->execute([$newId]);
-            $patient = $stmtNew->fetch(PDO::FETCH_ASSOC);
+        // New patient registering with Google
+        $randomPassword = password_hash(bin2hex(random_bytes(32)), PASSWORD_DEFAULT);
+        $firstName = trim((string)($userInfo['given_name'] ?? ''));
+        $lastName  = trim((string)($userInfo['family_name'] ?? ''));
+        if (empty($firstName) && empty($lastName)) {
+            $nameParts = preg_split('/\s+/', $fullName);
+            $firstName = $nameParts[0] ?? '';
+            $lastName  = count($nameParts) > 1 ? end($nameParts) : '';
         }
+        $stmtInsert = $db->prepare(
+            "INSERT INTO patients (first_name, last_name, full_name, email, password, google_id, avatar, auth_provider, status)
+             VALUES (?, ?, ?, ?, ?, ?, ?, 'google', 'active')"
+        );
+        $stmtInsert->execute([$firstName, $lastName, $fullName, $email, $randomPassword, $googleId, $picture ?: null]);
+        $newId = (int)$db->lastInsertId();
+
+        $stmtNew = $db->prepare("SELECT * FROM patients WHERE id = ? LIMIT 1");
+        $stmtNew->execute([$newId]);
+        $patient = $stmtNew->fetch(PDO::FETCH_ASSOC);
     }
 
     if (!$patient || ($patient['status'] ?? 'active') === 'inactive') {
