@@ -268,6 +268,62 @@ $currentTheme = ($userTheme === 'light') ? 'light' : 'dark';
   <style>
     *,*::before,*::after { box-sizing:border-box; margin:0; padding:0; }
 
+    /* ─── UI Controls Caret & Text-Selection Prevention (Patient Portal) ─── */
+    button,
+    [type="button"],
+    [type="reset"],
+    [type="submit"],
+    .tab-btn,
+    .step-node,
+    .slot-btn,
+    .qdate-btn,
+    .btn-wizard-next,
+    .btn-wizard-back,
+    .btn-book,
+    .btn-ticket-action,
+    .btn-close-modal,
+    .btn-modal-cancel,
+    .btn-modal-save,
+    .edit-btn,
+    .cancel-btn,
+    .theme-btn,
+    .user-chip,
+    .dropdown-item,
+    .badge,
+    .welcome-date-badge,
+    .ticket-stub-left,
+    .ticket-tag,
+    .ticket-countdown,
+    .form-card-header {
+      -webkit-user-select: none;
+      -moz-user-select: none;
+      -ms-user-select: none;
+      user-select: none;
+    }
+
+    button,
+    [type="button"],
+    [type="reset"],
+    [type="submit"],
+    .tab-btn,
+    .step-node,
+    .slot-btn,
+    .qdate-btn,
+    .btn-wizard-next,
+    .btn-wizard-back,
+    .btn-book,
+    .btn-ticket-action,
+    .btn-close-modal,
+    .btn-modal-cancel,
+    .btn-modal-save,
+    .edit-btn,
+    .cancel-btn,
+    .theme-btn,
+    .user-chip,
+    .dropdown-item {
+      cursor: pointer;
+    }
+
     :root { 
       /* Brand Color Tokens */
       --clr-primary:       #235EAE;

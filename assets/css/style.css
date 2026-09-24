@@ -123,6 +123,45 @@ input[type="password"]::-ms-clear {
   display: none;
 }
 
+/* ─── UI Controls Caret & Text-Selection Prevention (Admin & Staff) ─── */
+button,
+[type="button"],
+[type="reset"],
+[type="submit"],
+.btn,
+.nav-link,
+.sidebar-link,
+.tab-btn,
+.nav-tabs .nav-link,
+.nav-pills .nav-link,
+.segmented-control,
+.segmented-btn,
+.badge,
+.table thead th,
+.card-header,
+.modal-header,
+.dropdown-item,
+.page-link,
+.pagination,
+.btn-close,
+.close-btn,
+.sidebar-logo,
+.sidebar-user,
+.theme-btn {
+  -webkit-user-select: none;
+  -moz-user-select: none;
+  -ms-user-select: none;
+  user-select: none;
+}
+
+button,
+[type="button"],
+[type="reset"],
+[type="submit"],
+.btn {
+  cursor: pointer;
+}
+
 /* ─── Layout: Floating Sidebar + Main Area ────────────────── */
 .app-wrapper {
   display: flex;
@@ -726,6 +765,11 @@ input[type="password"]::-ms-clear {
   cursor: pointer;
   transition: var(--transition);
   display: inline-flex; align-items: center; justify-content: center; gap: 8px;
+  -webkit-user-select: none;
+  -moz-user-select: none;
+  -ms-user-select: none;
+  user-select: none;
+  -webkit-tap-highlight-color: transparent;
 }
 
 .btn-sm { padding: 6px 14px; font-size: .76rem; border-radius: 9999px; }
@@ -821,6 +865,11 @@ html:not([data-theme="dark"]) .btn-secondary:hover {
   align-items: center;
   justify-content: center;
   line-height: 1.2;
+  -webkit-user-select: none;
+  -moz-user-select: none;
+  -ms-user-select: none;
+  user-select: none;
+  -webkit-tap-highlight-color: transparent;
 }
 
 .segmented-btn:hover {

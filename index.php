@@ -467,6 +467,42 @@ $currentTheme = ($userTheme === 'light') ? 'light' : 'dark';
       --shadow-xl:        0 24px 48px rgba(0, 0, 0, 0.12);
     }
 
+    /* ─── UI Controls Caret & Text-Selection Prevention ─────── */
+    button,
+    [type="button"],
+    [type="reset"],
+    [type="submit"],
+    .btn,
+    .btn-primary,
+    .btn-secondary,
+    .auth-tab,
+    .auth-tabs,
+    .auth-header,
+    .close-btn,
+    .topbar,
+    .nav-links a,
+    .theme-btn,
+    .badge,
+    .form-label,
+    .faq-trigger {
+      -webkit-user-select: none;
+      -moz-user-select: none;
+      -ms-user-select: none;
+      user-select: none;
+    }
+
+    button,
+    [type="button"],
+    [type="reset"],
+    [type="submit"],
+    .btn,
+    .auth-tab,
+    .close-btn,
+    .theme-btn,
+    .faq-trigger {
+      cursor: pointer;
+    }
+
     body { 
       font-family:'Plus Jakarta Sans','Poppins',sans-serif; background:var(--bg-body); 
       color:var(--text-primary); min-height:100vh; font-size:16px;
@@ -803,6 +839,7 @@ $currentTheme = ($userTheme === 'light') ? 'light' : 'dark';
       border-radius: 16px;
       border: 1.5px solid rgba(255, 255, 255, 0.16);
       box-shadow: inset 0 2px 6px rgba(0, 0, 0, 0.25);
+      -webkit-user-select: none; -moz-user-select: none; user-select: none;
     }
     [data-theme="light"] .auth-tabs {
       background: #F1F5F9;
@@ -814,6 +851,8 @@ $currentTheme = ($userTheme === 'light') ? 'light' : 'dark';
       color: #94A3B8; background: transparent; border: none; border-radius: 12px;
       font-family: inherit; transition: all .2s cubic-bezier(0.16, 1, 0.3, 1);
       display: flex; align-items: center; justify-content: center; gap: 8px;
+      -webkit-user-select: none; -moz-user-select: none; user-select: none;
+      -webkit-tap-highlight-color: transparent; outline: none;
     }
     [data-theme="light"] .auth-tab { color: #475569; }
     .auth-tab:hover { color: var(--text-primary); }
@@ -2131,14 +2170,14 @@ $currentTheme = ($userTheme === 'light') ? 'light' : 'dark';
           <p class="auth-sub">Gueco Optical Clinic &bull; Appointments &amp; Care</p>
         </div>
       </div>
-      <button class="close-btn" onclick="closeAuthModal()" title="Close"><i class="fas fa-times"></i></button>
+      <button type="button" class="close-btn" onclick="closeAuthModal()" title="Close"><i class="fas fa-times"></i></button>
     </div>
     
     <div class="auth-tabs">
-      <button class="auth-tab <?= $tab === 'login' ? 'active' : '' ?>" onclick="switchTab('login')">
+      <button type="button" class="auth-tab <?= $tab === 'login' ? 'active' : '' ?>" onclick="switchTab('login')">
         <i class="fas fa-sign-in-alt"></i> Login
       </button>
-      <button class="auth-tab <?= $tab === 'register' ? 'active' : '' ?>" onclick="switchTab('register')">
+      <button type="button" class="auth-tab <?= $tab === 'register' ? 'active' : '' ?>" onclick="switchTab('register')">
         <i class="fas fa-user-plus"></i> Register
       </button>
     </div>
