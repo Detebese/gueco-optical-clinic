@@ -67,25 +67,29 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             }
         } catch (Exception $e) {}
 
-        // Fetch current avatar
-        $currStmt = $db->prepare("SELECT avatar FROM patients WHERE id = ?");
+        // Fetch current patient record to check for changes
+        $currStmt = $db->prepare("SELECT phone, gender, address, birthdate, avatar FROM patients WHERE id = ?");
         $currStmt->execute([$patientId]);
-        $currentAvatar = $currStmt->fetchColumn() ?: '';
+        $currentPatient = $currStmt->fetch() ?: [];
         $currStmt->closeCursor();
+
+        $currentAvatar = $currentPatient['avatar'] ?? '';
 
         $avatarUpdated = false;
         $newAvatarVal = $currentAvatar;
 
         // Handle Avatar Removal
         if ($removeAvatar) {
-            if (!empty($currentAvatar) && !str_starts_with($currentAvatar, 'http')) {
-                $oldFile = __DIR__ . '/../' . ltrim($currentAvatar, '/');
-                if (file_exists($oldFile)) {
-                    @unlink($oldFile);
+            if (!empty($currentAvatar)) {
+                if (!str_starts_with($currentAvatar, 'http')) {
+                    $oldFile = __DIR__ . '/../' . ltrim($currentAvatar, '/');
+                    if (file_exists($oldFile)) {
+                        @unlink($oldFile);
+                    }
                 }
+                $newAvatarVal = null;
+                $avatarUpdated = true;
             }
-            $newAvatarVal = null;
-            $avatarUpdated = true;
         }
 
         // Handle Avatar File Upload
@@ -135,6 +139,25 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                     exit;
                 }
             }
+        }
+
+        // Check if any fields actually changed
+        $currPhone     = $currentPatient['phone'] ?? null;
+        $currGender    = $currentPatient['gender'] ?? null;
+        $currAddress   = $currentPatient['address'] ?? null;
+        $currBirthdate = $currentPatient['birthdate'] ?? null;
+
+        $phoneChanged     = (($phoneVal ?? '') !== ($currPhone ?? ''));
+        $genderChanged    = (($genderVal ?? '') !== ($currGender ?? ''));
+        $addressChanged   = (trim($addressVal ?? '') !== trim($currAddress ?? ''));
+        $birthdateChanged = (($bdateFormatted ?? '') !== ($currBirthdate ?? ''));
+        $avatarChanged    = $avatarUpdated;
+
+        if (!$phoneChanged && !$genderChanged && !$addressChanged && !$birthdateChanged && !$avatarChanged) {
+            $_SESSION['flash_msg'] = 'No changes were made. Your profile is already up to date!';
+            $_SESSION['flash_type'] = 'info';
+            header('Location: settings.php');
+            exit;
         }
         
         try {
@@ -836,7 +859,7 @@ $currentTheme = ($userTheme === 'light') ? 'light' : 'dark';
   <div id="patientFlashMsg"
        data-msg="<?= htmlspecialchars((string)$flashMsg, ENT_QUOTES) ?>"
        data-type="<?= htmlspecialchars((string)$flashType, ENT_QUOTES) ?>"
-       data-title="<?= htmlspecialchars((string)($flashType === 'success' ? 'Success!' : 'Notice'), ENT_QUOTES) ?>"
+       data-title="<?= htmlspecialchars((string)($flashType === 'success' ? 'Success!' : ($flashType === 'info' ? 'No Changes Detected' : 'Notice')), ENT_QUOTES) ?>"
        style="display:none"></div>
   <?php endif; ?>
 
@@ -850,7 +873,7 @@ $currentTheme = ($userTheme === 'light') ? 'light' : 'dark';
       </div>
     </div>
 
-    <form method="POST" enctype="multipart/form-data">
+    <form method="POST" enctype="multipart/form-data" id="profileForm">
       <input type="hidden" name="csrf_token" value="<?= generateCsrfToken() ?>">
       <input type="hidden" name="action" value="update_profile">
       <input type="hidden" name="remove_avatar" id="removeAvatarInput" value="0">
@@ -990,8 +1013,10 @@ function showPopupModal(msg, type = 'info', title = null) {
   }
   const isError = (type === 'danger' || type === 'error');
   const isSuccess = (type === 'success');
-  const iconType = isSuccess ? 'success' : (isError ? 'error' : 'info');
-  const titleText = title || (isSuccess ? 'Success!' : (isError ? 'Notice' : 'Information'));
+  const isWarning = (type === 'warning');
+  const isInfo = (type === 'info');
+  const iconType = isSuccess ? 'success' : (isError ? 'error' : (isWarning ? 'warning' : 'info'));
+  const titleText = title || (isSuccess ? 'Success!' : (isError ? 'Notice' : (isInfo ? 'No Changes Detected' : 'Information')));
 
   Swal.fire({
     title: titleText,
@@ -1096,6 +1121,42 @@ document.addEventListener('DOMContentLoaded', function() {
     if (msg) {
       showPopupModal(msg, type, title);
     }
+  }
+
+  // Profile form change detection to prevent duplicate/unnecessary submits
+  const profileForm = document.getElementById('profileForm');
+  if (profileForm) {
+    const origPhone = profileForm.querySelector('[name="phone"]')?.value.trim() || '';
+    const origGender = profileForm.querySelector('[name="gender"]')?.value.trim() || '';
+    const origBirthdate = profileForm.querySelector('[name="birthdate"]')?.value.trim() || '';
+    const origAddress = profileForm.querySelector('[name="address"]')?.value.trim() || '';
+
+    profileForm.addEventListener('submit', function(e) {
+      const curPhone = profileForm.querySelector('[name="phone"]')?.value.trim() || '';
+      const curGender = profileForm.querySelector('[name="gender"]')?.value.trim() || '';
+      const curBirthdate = profileForm.querySelector('[name="birthdate"]')?.value.trim() || '';
+      const curAddress = profileForm.querySelector('[name="address"]')?.value.trim() || '';
+      const avatarInput = document.getElementById('avatarInput');
+      const removeInput = document.getElementById('removeAvatarInput');
+
+      const hasNewAvatar = !!(avatarInput && avatarInput.files && avatarInput.files.length > 0);
+      const isRemovingAvatar = !!(removeInput && removeInput.value === '1');
+
+      const isChanged = (
+        hasNewAvatar ||
+        isRemovingAvatar ||
+        curPhone !== origPhone ||
+        curGender !== origGender ||
+        curBirthdate !== origBirthdate ||
+        curAddress !== origAddress
+      );
+
+      if (!isChanged) {
+        e.preventDefault();
+        showPopupModal('No changes were made. Your profile is already up to date!', 'info', 'No Changes Detected');
+        return false;
+      }
+    });
   }
 });
 </script>
