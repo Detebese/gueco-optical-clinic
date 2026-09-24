@@ -588,7 +588,7 @@ $currentTheme = ($userTheme === 'light') ? 'light' : 'dark';
       align-items: center;
       justify-content: center;
       font-size: 0.82rem;
-      cursor: pointer;
+      cursor: pointer !important;
       box-shadow: 0 4px 10px rgba(0, 0, 0, 0.25);
       transition: transform 0.2s cubic-bezier(0.16, 1, 0.3, 1), background-color 0.2s;
     }
@@ -605,13 +605,7 @@ $currentTheme = ($userTheme === 'light') ? 'light' : 'dark';
       font-size: 1.05rem;
       font-weight: 800;
       color: var(--text-primary);
-      margin-bottom: 4px;
-    }
-    .profile-avatar-desc {
-      font-size: 0.82rem;
-      color: var(--text-muted);
-      line-height: 1.5;
-      margin-bottom: 12px;
+      margin-bottom: 8px;
     }
     .profile-avatar-actions {
       display: flex;
@@ -630,7 +624,7 @@ $currentTheme = ($userTheme === 'light') ? 'light' : 'dark';
       color: #FFFFFF !important;
       background: linear-gradient(135deg, #00ADEF, #235EAE);
       border: none;
-      cursor: pointer;
+      cursor: pointer !important;
       box-shadow: 0 4px 14px rgba(0, 173, 239, 0.3);
       transition: all 0.2s ease;
       text-decoration: none;
@@ -651,7 +645,7 @@ $currentTheme = ($userTheme === 'light') ? 'light' : 'dark';
       color: #EF4444;
       background: rgba(239, 68, 68, 0.08);
       border: 1px solid rgba(239, 68, 68, 0.25);
-      cursor: pointer;
+      cursor: pointer !important;
       transition: all 0.2s ease;
     }
     .btn-avatar-remove:hover {
@@ -838,21 +832,18 @@ $currentTheme = ($userTheme === 'light') ? 'light' : 'dark';
             <?= strtoupper(substr($patient['full_name'] ?? ($_SESSION['patient_name'] ?? 'P'), 0, 1)) ?>
           </div>
           
-          <label for="avatarInput" class="avatar-camera-btn" title="Choose new profile photo">
+          <button type="button" class="avatar-camera-btn" onclick="document.getElementById('avatarInput').click()" title="Choose new profile photo">
             <i class="fas fa-camera"></i>
-          </label>
+          </button>
         </div>
 
         <div class="profile-avatar-meta">
-          <h4 class="profile-avatar-title">Profile Photo</h4>
-          <p class="profile-avatar-desc">
-            Personalize your account with a photo. Supported formats: JPG, PNG, WEBP, or GIF (max 5MB).
-          </p>
+          <h4 class="profile-avatar-title" style="margin-bottom:12px;">Profile Photo</h4>
           <div class="profile-avatar-actions">
-            <label for="avatarInput" class="btn-avatar-upload">
+            <button type="button" class="btn-avatar-upload" onclick="document.getElementById('avatarInput').click()">
               <i class="fas fa-upload me-1"></i> Choose New Photo
-            </label>
-            <input type="file" name="avatar" id="avatarInput" accept="image/png, image/jpeg, image/jpg, image/webp, image/gif" class="d-none" onchange="previewAvatar(event)">
+            </button>
+            <input type="file" name="avatar" id="avatarInput" accept="image/png, image/jpeg, image/jpg, image/webp, image/gif" style="display:none;" onchange="previewAvatar(event)">
             
             <button type="button" class="btn-avatar-remove <?= $hasAvatar ? '' : 'd-none' ?>" id="btnRemoveAvatar" onclick="handleRemoveAvatar()">
               <i class="fas fa-trash-alt me-1"></i> Remove Photo
@@ -976,6 +967,8 @@ function showPopupModal(msg, type = 'info', title = null) {
       popup: 'patient-swal-popup'
     }
   });
+}
+
 // Avatar Preview & Removal Handler
 function previewAvatar(event) {
   const file = event.target.files && event.target.files[0];
