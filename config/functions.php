@@ -589,3 +589,24 @@ function issuePatientLoginOTP(array $patient): string {
     return $otp;
 }
 
+/**
+ * Validate password security standards:
+ * - At least 8 characters long
+ * - At least one capital letter (A–Z)
+ * - At least one special character (!@#$%^&*, etc.)
+ *
+ * @param string $password
+ * @return string|null Error description or null if valid
+ */
+function validatePasswordStrength(string $password): ?string {
+    if (strlen($password) < 8) {
+        return 'Password must be at least 8 characters long.';
+    }
+    if (!preg_match('/[A-Z]/', $password)) {
+        return 'Password must contain at least one capital letter (A–Z).';
+    }
+    if (!preg_match('/[^a-zA-Z0-9]/', $password)) {
+        return 'Password must contain at least one special character (e.g. !@#$%^&*).';
+    }
+    return null;
+}

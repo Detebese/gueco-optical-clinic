@@ -68,8 +68,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         if (empty($currPass) || empty($newPass) || empty($confPass)) {
             $_SESSION['flash_msg'] = 'All fields are required.';
             $_SESSION['flash_type'] = 'danger';
-        } elseif (strlen($newPass) < 6) {
-            $_SESSION['flash_msg'] = 'New password must be at least 6 characters.';
+        } elseif ($passErr = validatePasswordStrength($newPass)) {
+            $_SESSION['flash_msg'] = $passErr;
             $_SESSION['flash_type'] = 'danger';
         } elseif ($newPass !== $confPass) {
             $_SESSION['flash_msg'] = 'New passwords do not match.';
@@ -201,6 +201,71 @@ $currentTheme = ($userTheme === 'light') ? 'light' : 'dark';
       -ms-user-select: auto !important;
       user-select: auto !important;
       cursor: pointer !important;
+    }
+
+    /* Password Security Requirements Indicator Box */
+    .pass-req-box {
+      margin-top: 8px;
+      margin-bottom: 16px;
+      padding: 10px 14px;
+      border-radius: 14px;
+      background: rgba(35, 94, 174, 0.1);
+      border: 1px solid rgba(0, 173, 239, 0.25);
+      font-size: 0.82rem;
+      transition: all 0.25s ease;
+    }
+    [data-theme="light"] .pass-req-box {
+      background: #F8FAFC;
+      border: 1px solid #CBD5E1;
+    }
+    .pass-req-header {
+      font-weight: 800;
+      color: #38BDF8;
+      margin-bottom: 8px;
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      font-size: 0.82rem;
+    }
+    [data-theme="light"] .pass-req-header {
+      color: #0284C7;
+    }
+    .pass-req-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 6px 14px;
+    }
+    @media (max-width: 480px) {
+      .pass-req-grid {
+        grid-template-columns: 1fr;
+      }
+    }
+    .pass-req-item {
+      display: flex;
+      align-items: center;
+      gap: 7px;
+      font-weight: 600;
+      color: #94A3B8;
+      font-size: 0.8rem;
+      transition: all 0.2s ease;
+    }
+    [data-theme="light"] .pass-req-item {
+      color: #64748B;
+    }
+    .pass-req-item i {
+      font-size: 0.85rem;
+      color: #94A3B8;
+      transition: all 0.2s ease;
+    }
+    [data-theme="light"] .pass-req-item i {
+      color: #94A3B8;
+    }
+    .pass-req-item.valid {
+      color: #10B981 !important;
+    }
+    .pass-req-item.valid i {
+      color: #10B981 !important;
+      transform: scale(1.08);
     }
 
     /* SweetAlert2 Overrides */
@@ -580,12 +645,23 @@ $currentTheme = ($userTheme === 'light') ? 'light' : 'dark';
 
       <div class="mb-3">
         <label style="display:block;font-size:.78rem;font-weight:800;text-transform:uppercase;letter-spacing:.06em;color:var(--text-muted);margin-bottom:7px;"><i class="fas fa-key me-1"></i>New Password</label>
-        <input type="password" name="new_password" class="field-control" required minlength="6" placeholder="Min. 6 characters">
+        <input type="password" id="settingNewPass" name="new_password" class="field-control" required minlength="8" placeholder="At least 8 chars, 1 capital, 1 special">
       </div>
 
-      <div class="mb-4">
+      <div class="mb-3">
         <label style="display:block;font-size:.78rem;font-weight:800;text-transform:uppercase;letter-spacing:.06em;color:var(--text-muted);margin-bottom:7px;"><i class="fas fa-check-double me-1"></i>Confirm Password</label>
-        <input type="password" name="confirm_password" class="field-control" required minlength="6" placeholder="Re-enter new password">
+        <input type="password" id="settingConfirmPass" name="confirm_password" class="field-control" required minlength="8" placeholder="Re-enter new password">
+      </div>
+
+      <!-- Real-time Password Security Requirements -->
+      <div class="pass-req-box" id="settingPassRules">
+        <div class="pass-req-header"><i class="fas fa-shield-halved"></i> Password Security Requirements:</div>
+        <div class="pass-req-grid">
+          <div class="pass-req-item" id="setReqLength"><i class="fas fa-circle-xmark"></i> At least 8 characters</div>
+          <div class="pass-req-item" id="setReqUpper"><i class="fas fa-circle-xmark"></i> At least 1 capital letter (A–Z)</div>
+          <div class="pass-req-item" id="setReqSpecial"><i class="fas fa-circle-xmark"></i> At least 1 special char (!@#$...)</div>
+          <div class="pass-req-item" id="setReqMatch"><i class="fas fa-circle-xmark"></i> Passwords match</div>
+        </div>
       </div>
 
       <button type="submit" class="btn-warning"><i class="fas fa-lock me-2"></i> Update Password</button>
@@ -676,6 +752,82 @@ document.addEventListener('DOMContentLoaded', function() {
     }
   }
 });
+
+// Real-time Password Security Requirements Validator (Settings)
+(function() {
+  const passEl = document.getElementById('settingNewPass');
+  const confirmEl = document.getElementById('settingConfirmPass');
+  const reqLen = document.getElementById('setReqLength');
+  const reqUpp = document.getElementById('setReqUpper');
+  const reqSpe = document.getElementById('setReqSpecial');
+  const reqMat = document.getElementById('setReqMatch');
+
+  if (!passEl) return;
+
+  function setReq(el, ok) {
+    if (!el) return;
+    const icon = el.querySelector('i');
+    if (ok) {
+      el.classList.add('valid');
+      if (icon) icon.className = 'fas fa-circle-check';
+    } else {
+      el.classList.remove('valid');
+      if (icon) icon.className = 'fas fa-circle-xmark';
+    }
+  }
+
+  function validate() {
+    const val = passEl.value || '';
+    const conf = confirmEl ? confirmEl.value : '';
+
+    const hasLen = val.length >= 8;
+    const hasUpp = /[A-Z]/.test(val);
+    const hasSpe = /[^a-zA-Z0-9]/.test(val);
+    const hasMat = val.length > 0 && conf.length > 0 && val === conf;
+
+    setReq(reqLen, hasLen);
+    setReq(reqUpp, hasUpp);
+    setReq(reqSpe, hasSpe);
+    if (reqMat) setReq(reqMat, hasMat);
+
+    return hasLen && hasUpp && hasSpe && (confirmEl ? hasMat : true);
+  }
+
+  passEl.addEventListener('input', validate);
+  if (confirmEl) confirmEl.addEventListener('input', validate);
+
+  const form = passEl.closest('form');
+  if (form) {
+    form.addEventListener('submit', function(e) {
+      const val = passEl.value || '';
+      const conf = confirmEl ? confirmEl.value : '';
+      if (val.length < 8) {
+        e.preventDefault();
+        passEl.focus();
+        showPopupModal('New password must be at least 8 characters long.', 'danger', 'Security Requirement');
+        return false;
+      }
+      if (!/[A-Z]/.test(val)) {
+        e.preventDefault();
+        passEl.focus();
+        showPopupModal('New password must contain at least one capital letter (A–Z).', 'danger', 'Security Requirement');
+        return false;
+      }
+      if (!/[^a-zA-Z0-9]/.test(val)) {
+        e.preventDefault();
+        passEl.focus();
+        showPopupModal('New password must contain at least one special character (e.g. !@#$%^&*).', 'danger', 'Security Requirement');
+        return false;
+      }
+      if (confirmEl && val !== conf) {
+        e.preventDefault();
+        confirmEl.focus();
+        showPopupModal('New passwords do not match. Please verify both fields.', 'danger', 'Notice');
+        return false;
+      }
+    });
+  }
+})();
 </script>
 </body>
 </html>
