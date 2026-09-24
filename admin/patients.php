@@ -79,12 +79,22 @@ include __DIR__ . '/../includes/header.php';
         <?php foreach ($patients as $i => $p): 
             $patientName = getPatientDisplayName($p);
             $initial = strtoupper(substr($patientName, 0, 1)) ?: 'P';
+            $hasAvatar = !empty($p['avatar']);
+            $avatarSrc = '';
+            if ($hasAvatar) {
+                $avatarSrc = str_starts_with($p['avatar'], 'http') ? $p['avatar'] : (BASE_URL . ltrim($p['avatar'], '/'));
+            }
         ?>
         <tr>
           <td class="pat-67fd48"><?= $pg['offset']+$i+1 ?></td>
           <td>
             <div class="pat-3b6fff">
-              <div class="pat-ec276b"><?= $initial ?></div>
+              <?php if ($hasAvatar): ?>
+                <img src="<?= htmlspecialchars($avatarSrc) ?>" alt="<?= htmlspecialchars($patientName) ?>" class="pat-avatar-img" onerror="this.style.display='none'; this.nextElementSibling.style.display='flex';">
+                <div class="pat-ec276b" style="display:none;"><?= $initial ?></div>
+              <?php else: ?>
+                <div class="pat-ec276b"><?= $initial ?></div>
+              <?php endif; ?>
               <div>
                 <div class="pat-bac3c9"><?= sanitize($patientName) ?></div>
                 <div class="pat-26a4f5"><?= sanitize($p['email'] ?? '') ?></div>
