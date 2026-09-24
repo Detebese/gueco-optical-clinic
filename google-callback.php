@@ -141,19 +141,26 @@ try {
         exit;
     }
 
-    // Successfully authenticated - establish pending patient session and issue OTP
+    // Successfully authenticated with Google - establish patient session
     session_regenerate_id(true);
     $_SESSION['patient_id']     = (int)$patient['id'];
     $_SESSION['patient_name']   = $patient['full_name'];
     $_SESSION['patient_email']  = $patient['email'];
     $_SESSION['patient_avatar'] = $patient['avatar'] ?: $picture;
-    $_SESSION['patient_2fa_verified'] = false;
+    $_SESSION['patient_2fa_verified'] = true;
 
-    // Issue 6-digit verification OTP
-    issuePatientLoginOTP($patient);
+    // Check if essential profile setup is complete
+    if (!isPatientProfileComplete((int)$patient['id'])) {
+        header('Location: complete-profile.php');
+        exit;
+    }
 
-    // Redirect to verification screen
-    header('Location: verify-otp.php');
+    $_SESSION['flash_msg']   = 'Signed in successfully! Welcome, ' . htmlspecialchars($patient['full_name'] ?: 'Patient') . '.';
+    $_SESSION['flash_type']  = 'success';
+    $_SESSION['flash_title'] = 'Welcome Back!';
+
+    // Redirect directly to dashboard
+    header('Location: patient/dashboard.php');
     exit;
 
 } catch (Exception $e) {

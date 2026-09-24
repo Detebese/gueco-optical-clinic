@@ -161,12 +161,19 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action']) && $_POST['
                     $_SESSION['patient_name']   = $patient['full_name'];
                     $_SESSION['patient_email']  = $patient['email'];
                     $_SESSION['patient_avatar'] = $patient['avatar'] ?? '';
-                    $_SESSION['patient_2fa_verified'] = false;
+                    $_SESSION['patient_2fa_verified'] = true;
 
-                    // Issue 6-digit verification OTP
-                    issuePatientLoginOTP($patient);
+                    // If profile is incomplete, guide them to complete profile; otherwise go directly to dashboard
+                    if (!isPatientProfileComplete((int)$patient['id'])) {
+                        header('Location: complete-profile.php');
+                        exit;
+                    }
 
-                    header('Location: verify-otp.php');
+                    $_SESSION['flash_msg']   = 'Welcome back, ' . htmlspecialchars($patient['full_name'] ?: 'Patient') . '!';
+                    $_SESSION['flash_type']  = 'success';
+                    $_SESSION['flash_title'] = 'Welcome Back!';
+
+                    header('Location: patient/dashboard.php');
                     exit;
                 } else {
                     recordFailedAttempt($rlKey, 900);
