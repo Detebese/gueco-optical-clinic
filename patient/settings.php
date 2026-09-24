@@ -66,40 +66,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         header('Location: settings.php');
         exit;
     }
-
-    // Change Password
-    if ($action === 'change_password') {
-        $currPass = $_POST['current_password'] ?? '';
-        $newPass = $_POST['new_password'] ?? '';
-        $confPass = $_POST['confirm_password'] ?? '';
-        
-        if (empty($currPass) || empty($newPass) || empty($confPass)) {
-            $_SESSION['flash_msg'] = 'All fields are required.';
-            $_SESSION['flash_type'] = 'danger';
-        } elseif ($passErr = validatePasswordStrength($newPass)) {
-            $_SESSION['flash_msg'] = $passErr;
-            $_SESSION['flash_type'] = 'danger';
-        } elseif ($newPass !== $confPass) {
-            $_SESSION['flash_msg'] = 'New passwords do not match.';
-            $_SESSION['flash_type'] = 'danger';
-        } else {
-            $chkPass = $db->prepare("SELECT password FROM patients WHERE id=?");
-            $chkPass->execute([$patientId]);
-            $hash = $chkPass->fetchColumn();
-            
-            if (password_verify($currPass, $hash)) {
-                $newHash = password_hash($newPass, PASSWORD_DEFAULT);
-                $db->prepare("UPDATE patients SET password=? WHERE id=?")->execute([$newHash, $patientId]);
-                $_SESSION['flash_msg'] = 'Password changed successfully!';
-                $_SESSION['flash_type'] = 'success';
-            } else {
-                $_SESSION['flash_msg'] = 'Incorrect current password.';
-                $_SESSION['flash_type'] = 'danger';
-            }
-        }
-        header('Location: settings.php#password');
-        exit;
-    }
 }
 
 // Patient info
@@ -114,7 +80,7 @@ $currentTheme = ($userTheme === 'light') ? 'light' : 'dark';
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Account Settings — Gueco Optical Clinic</title>
+  <title>Profile Settings — Gueco Optical Clinic</title>
   
   <!-- Immediate Theme Initialization & Caret Browsing Prevention -->
   <script>
@@ -574,7 +540,7 @@ $currentTheme = ($userTheme === 'light') ? 'light' : 'dark';
       </div>
       <div class="user-dropdown-menu">
         <a href="settings.php" class="dropdown-item"><i class="fas fa-user-edit"></i> Profile Settings</a>
-        <a href="settings.php#password" class="dropdown-item"><i class="fas fa-key"></i> Change Password</a>
+        <a href="change_password.php" class="dropdown-item"><i class="fas fa-key"></i> Change Password</a>
         <div style="height:1px;background:var(--border-color);margin:4px 0;"></div>
         <a href="logout.php" class="dropdown-item danger"><i class="fas fa-sign-out-alt"></i> Sign Out</a>
       </div>
@@ -648,50 +614,6 @@ $currentTheme = ($userTheme === 'light') ? 'light' : 'dark';
       </div>
 
       <button type="submit" class="btn-primary"><i class="fas fa-save me-2"></i> Save Profile</button>
-    </form>
-  </div>
-
-  <!-- Change Password Card -->
-  <div class="form-card" id="password">
-    <div class="card-header-flex">
-      <div class="card-icon orange"><i class="fas fa-key"></i></div>
-      <div>
-        <h2 class="card-title">Change Password</h2>
-        <p class="card-subtitle">Ensure your account remains secure</p>
-      </div>
-    </div>
-
-    <form method="POST">
-      <input type="hidden" name="csrf_token" value="<?= generateCsrfToken() ?>">
-      <input type="hidden" name="action" value="change_password">
-      
-      <div class="mb-3">
-        <label style="display:block;font-size:.78rem;font-weight:800;text-transform:uppercase;letter-spacing:.06em;color:var(--text-muted);margin-bottom:7px;"><i class="fas fa-lock me-1"></i>Current Password</label>
-        <input type="password" name="current_password" class="field-control" required placeholder="••••••••">
-      </div>
-
-      <div class="mb-3">
-        <label style="display:block;font-size:.78rem;font-weight:800;text-transform:uppercase;letter-spacing:.06em;color:var(--text-muted);margin-bottom:7px;"><i class="fas fa-key me-1"></i>New Password</label>
-        <input type="password" id="settingNewPass" name="new_password" class="field-control" required minlength="8" placeholder="At least 8 chars, 1 capital, 1 special">
-      </div>
-
-      <div class="mb-3">
-        <label style="display:block;font-size:.78rem;font-weight:800;text-transform:uppercase;letter-spacing:.06em;color:var(--text-muted);margin-bottom:7px;"><i class="fas fa-check-double me-1"></i>Confirm Password</label>
-        <input type="password" id="settingConfirmPass" name="confirm_password" class="field-control" required minlength="8" placeholder="Re-enter new password">
-      </div>
-
-      <!-- Real-time Password Security Requirements -->
-      <div class="pass-req-box" id="settingPassRules">
-        <div class="pass-req-header"><i class="fas fa-shield-halved"></i> Password Security Requirements:</div>
-        <div class="pass-req-grid">
-          <div class="pass-req-item" id="setReqLength"><i class="fas fa-circle-xmark"></i> At least 8 characters</div>
-          <div class="pass-req-item" id="setReqUpper"><i class="fas fa-circle-xmark"></i> At least 1 capital letter (A–Z)</div>
-          <div class="pass-req-item" id="setReqSpecial"><i class="fas fa-circle-xmark"></i> At least 1 special char (!@#$...)</div>
-          <div class="pass-req-item" id="setReqMatch"><i class="fas fa-circle-xmark"></i> Passwords match</div>
-        </div>
-      </div>
-
-      <button type="submit" class="btn-warning"><i class="fas fa-lock me-2"></i> Update Password</button>
     </form>
   </div>
 
@@ -779,82 +701,6 @@ document.addEventListener('DOMContentLoaded', function() {
     }
   }
 });
-
-// Real-time Password Security Requirements Validator (Settings)
-(function() {
-  const passEl = document.getElementById('settingNewPass');
-  const confirmEl = document.getElementById('settingConfirmPass');
-  const reqLen = document.getElementById('setReqLength');
-  const reqUpp = document.getElementById('setReqUpper');
-  const reqSpe = document.getElementById('setReqSpecial');
-  const reqMat = document.getElementById('setReqMatch');
-
-  if (!passEl) return;
-
-  function setReq(el, ok) {
-    if (!el) return;
-    const icon = el.querySelector('i');
-    if (ok) {
-      el.classList.add('valid');
-      if (icon) icon.className = 'fas fa-circle-check';
-    } else {
-      el.classList.remove('valid');
-      if (icon) icon.className = 'fas fa-circle-xmark';
-    }
-  }
-
-  function validate() {
-    const val = passEl.value || '';
-    const conf = confirmEl ? confirmEl.value : '';
-
-    const hasLen = val.length >= 8;
-    const hasUpp = /[A-Z]/.test(val);
-    const hasSpe = /[^a-zA-Z0-9]/.test(val);
-    const hasMat = val.length > 0 && conf.length > 0 && val === conf;
-
-    setReq(reqLen, hasLen);
-    setReq(reqUpp, hasUpp);
-    setReq(reqSpe, hasSpe);
-    if (reqMat) setReq(reqMat, hasMat);
-
-    return hasLen && hasUpp && hasSpe && (confirmEl ? hasMat : true);
-  }
-
-  passEl.addEventListener('input', validate);
-  if (confirmEl) confirmEl.addEventListener('input', validate);
-
-  const form = passEl.closest('form');
-  if (form) {
-    form.addEventListener('submit', function(e) {
-      const val = passEl.value || '';
-      const conf = confirmEl ? confirmEl.value : '';
-      if (val.length < 8) {
-        e.preventDefault();
-        passEl.focus();
-        showPopupModal('New password must be at least 8 characters long.', 'danger', 'Security Requirement');
-        return false;
-      }
-      if (!/[A-Z]/.test(val)) {
-        e.preventDefault();
-        passEl.focus();
-        showPopupModal('New password must contain at least one capital letter (A–Z).', 'danger', 'Security Requirement');
-        return false;
-      }
-      if (!/[^a-zA-Z0-9]/.test(val)) {
-        e.preventDefault();
-        passEl.focus();
-        showPopupModal('New password must contain at least one special character (e.g. !@#$%^&*).', 'danger', 'Security Requirement');
-        return false;
-      }
-      if (confirmEl && val !== conf) {
-        e.preventDefault();
-        confirmEl.focus();
-        showPopupModal('New passwords do not match. Please verify both fields.', 'danger', 'Notice');
-        return false;
-      }
-    });
-  }
-})();
 </script>
 </body>
 </html>

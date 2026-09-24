@@ -2501,7 +2501,7 @@ $currentTheme = ($userTheme === 'light') ? 'light' : 'dark';
       </div>
       <div class="user-dropdown-menu">
         <a href="settings.php" class="dropdown-item"><i class="fas fa-user-edit"></i> Profile Settings</a>
-        <a href="settings.php#password" class="dropdown-item"><i class="fas fa-key"></i> Change Password</a>
+        <a href="change_password.php" class="dropdown-item"><i class="fas fa-key"></i> Change Password</a>
         <div style="height:1px;background:var(--border-color);margin:4px 0;"></div>
         <a href="logout.php" class="dropdown-item danger"><i class="fas fa-sign-out-alt"></i> Sign Out</a>
       </div>
