@@ -136,7 +136,7 @@ include __DIR__ . '/../includes/header.php';
 <!-- ─── Bento Top Metric Cards Row (4 Responsive Cards) ─── -->
 <div class="row g-3 mb-4">
   <!-- Card 1: Sales this month (Clickable Month Filter) -->
-  <div class="col-lg-3 col-sm-6">
+  <div class="col-6 col-lg-3">
     <div class="bento-stat" style="--stat-color:#235EAE; --stat-rgb:35, 94, 174; cursor: pointer;" onclick="openDashMonthPicker()" title="Click to change month">
       <div class="bento-stat-glow"></div>
       <div class="bento-stat-left">
@@ -162,7 +162,7 @@ include __DIR__ . '/../includes/header.php';
   </div>
 
   <!-- Card 2: Total Patients -->
-  <div class="col-lg-3 col-sm-6">
+  <div class="col-6 col-lg-3">
     <div class="bento-stat" style="--stat-color:#0EA5E9; --stat-rgb:14, 165, 233;">
       <div class="bento-stat-glow"></div>
       <div class="bento-stat-left">
@@ -181,7 +181,7 @@ include __DIR__ . '/../includes/header.php';
   </div>
 
   <!-- Card 3: Today's Appointments -->
-  <div class="col-lg-3 col-sm-6">
+  <div class="col-6 col-lg-3">
     <div class="bento-stat" style="--stat-color:#10B981; --stat-rgb:16, 185, 129;">
       <div class="bento-stat-glow"></div>
       <div class="bento-stat-left">
@@ -205,7 +205,7 @@ include __DIR__ . '/../includes/header.php';
   $stockColor = $isLowStock ? '#EF4444' : '#8B5CF6';
   $stockRgb   = $isLowStock ? '239, 68, 68' : '139, 92, 246';
   ?>
-  <div class="col-lg-3 col-sm-6">
+  <div class="col-6 col-lg-3">
     <div class="bento-stat" style="--stat-color:<?= $stockColor ?>; --stat-rgb:<?= $stockRgb ?>;">
       <div class="bento-stat-glow"></div>
       <div class="bento-stat-left">

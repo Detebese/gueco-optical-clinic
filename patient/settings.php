@@ -529,6 +529,25 @@ $currentTheme = ($userTheme === 'light') ? 'light' : 'dark';
       transition: all .2s;
     }
     .back-link:hover { color: var(--clr-primary); transform: translateX(-3px); }
+
+    @media (max-width: 640px) {
+      .page-wrap { padding: 16px 12px 60px; }
+      .topbar { padding: 0 14px; height: 60px; }
+      .topbar-brand { gap: 10px; }
+      .topbar-logo { width: 36px; height: 36px; border-radius: 8px; }
+      .topbar-name { font-size: .92rem; }
+      .topbar-sub { display: none; }
+      .user-chip { padding: 3px 10px 3px 3px; }
+      .user-name { font-size: .82rem; }
+      .form-card { padding: 20px 16px; border-radius: 18px; margin-bottom: 20px; }
+      .card-header-flex { gap: 12px; margin-bottom: 20px; }
+      .card-icon { width: 42px; height: 42px; font-size: 1.05rem; border-radius: 12px; }
+      .card-title { font-size: 1.15rem; }
+      .card-subtitle { font-size: .8rem; }
+      .field-control { padding: 11px 14px; font-size: .88rem; border-radius: 12px; }
+      .btn-primary, .btn-warning { width: 100%; justify-content: center; padding: 12px 18px; }
+      .pass-req-box { padding: 10px 12px; border-radius: 12px; }
+    }
   </style>
 </head>
 <body>

@@ -81,7 +81,7 @@ include __DIR__ . '/../includes/header.php';
 <!-- ─── Bento Top Metric Cards Row (4 Responsive Cards) ─── -->
 <div class="row g-3 mb-4">
   <!-- Card 1: Today's Revenue -->
-  <div class="col-lg-3 col-sm-6">
+  <div class="col-6 col-lg-3">
     <div class="bento-stat" style="--stat-color:#10B981; --stat-rgb:16, 185, 129;">
       <div class="bento-stat-glow"></div>
       <div class="bento-stat-left">
@@ -100,7 +100,7 @@ include __DIR__ . '/../includes/header.php';
   </div>
 
   <!-- Card 2: Transactions Today -->
-  <div class="col-lg-3 col-sm-6">
+  <div class="col-6 col-lg-3">
     <div class="bento-stat" style="--stat-color:#0EA5E9; --stat-rgb:14, 165, 233;">
       <div class="bento-stat-glow"></div>
       <div class="bento-stat-left">
@@ -119,7 +119,7 @@ include __DIR__ . '/../includes/header.php';
   </div>
 
   <!-- Card 3: Appointments Today -->
-  <div class="col-lg-3 col-sm-6">
+  <div class="col-6 col-lg-3">
     <div class="bento-stat" style="--stat-color:#8B5CF6; --stat-rgb:139, 92, 246;">
       <div class="bento-stat-glow"></div>
       <div class="bento-stat-left">
@@ -143,7 +143,7 @@ include __DIR__ . '/../includes/header.php';
   $stockColor = $isLowStock ? '#EF4444' : '#E09A67';
   $stockRgb   = $isLowStock ? '239, 68, 68' : '224, 154, 103';
   ?>
-  <div class="col-lg-3 col-sm-6">
+  <div class="col-6 col-lg-3">
     <div class="bento-stat" style="--stat-color:<?= $stockColor ?>; --stat-rgb:<?= $stockRgb ?>;">
       <div class="bento-stat-glow"></div>
       <div class="bento-stat-left">

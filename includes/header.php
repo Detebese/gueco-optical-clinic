@@ -47,6 +47,25 @@ $currentTheme = ($userTheme === 'light') ? 'light' : 'dark';
         e.preventDefault();
       }
     });
+
+    function toggleSidebarMobile(forceState) {
+      var sb = document.getElementById('sidebar');
+      var bd = document.getElementById('sidebarBackdrop');
+      if (!sb) return;
+      var willOpen = (typeof forceState === 'boolean') ? forceState : !sb.classList.contains('open');
+      if (willOpen) {
+        sb.classList.add('open');
+        if (bd) bd.classList.add('show');
+      } else {
+        sb.classList.remove('open');
+        if (bd) bd.classList.remove('show');
+      }
+    }
+
+    // Close mobile sidebar on Escape key
+    window.addEventListener('keydown', function(e) {
+      if (e.key === 'Escape') toggleSidebarMobile(false);
+    });
   </script>
 
   <!-- Bootstrap 5 -->
@@ -72,6 +91,9 @@ $currentTheme = ($userTheme === 'light') ? 'light' : 'dark';
 <?php unset($_SESSION['flash_msg'], $_SESSION['flash_type']); endif; ?>
 
 <div class="app-wrapper">
+
+  <!-- Mobile Sidebar Backdrop Overlay -->
+  <div class="sidebar-backdrop" id="sidebarBackdrop" onclick="toggleSidebarMobile(false)"></div>
 
   <!-- SIDEBAR (Floating Modern Dock) -->
   <aside class="sidebar" id="sidebar">
@@ -117,7 +139,7 @@ $currentTheme = ($userTheme === 'light') ? 'light' : 'dark';
     <header class="app-header">
       <div class="header-left">
         <!-- Mobile menu toggle -->
-        <button id="sidebarToggle" class="header-icon-btn d-lg-none me-2" onclick="document.getElementById('sidebar').classList.toggle('open')">
+        <button id="sidebarToggle" type="button" class="header-icon-btn d-lg-none me-2" onclick="toggleSidebarMobile()" aria-label="Toggle Navigation Menu">
           <i class="fas fa-bars"></i>
         </button>
         <div class="header-greeting">

@@ -63,7 +63,7 @@ include __DIR__ . '/../includes/header.php';
 <!-- Stats -->
 <div class="row g-3 mb-4">
   <!-- Card 1: Total Patients -->
-  <div class="col-lg-3 col-sm-6">
+  <div class="col-6 col-lg-3">
     <div class="bento-stat" style="--stat-color:#0EA5E9; --stat-rgb:14, 165, 233;">
       <div class="bento-stat-glow"></div>
       <div class="bento-stat-left">
@@ -82,7 +82,7 @@ include __DIR__ . '/../includes/header.php';
   </div>
 
   <!-- Card 2: Today's Appointments -->
-  <div class="col-lg-3 col-sm-6">
+  <div class="col-6 col-lg-3">
     <div class="bento-stat" style="--stat-color:#10B981; --stat-rgb:16, 185, 129;">
       <div class="bento-stat-glow"></div>
       <div class="bento-stat-left">
@@ -101,7 +101,7 @@ include __DIR__ . '/../includes/header.php';
   </div>
 
   <!-- Card 3: Pending Confirmations -->
-  <div class="col-lg-3 col-sm-6">
+  <div class="col-6 col-lg-3">
     <div class="bento-stat" style="--stat-color:#F59E0B; --stat-rgb:245, 158, 11;">
       <div class="bento-stat-glow"></div>
       <div class="bento-stat-left">
@@ -120,7 +120,7 @@ include __DIR__ . '/../includes/header.php';
   </div>
 
   <!-- Card 4: Prescriptions Written -->
-  <div class="col-lg-3 col-sm-6">
+  <div class="col-6 col-lg-3">
     <div class="bento-stat" style="--stat-color:#8B5CF6; --stat-rgb:139, 92, 246;">
       <div class="bento-stat-glow"></div>
       <div class="bento-stat-left">

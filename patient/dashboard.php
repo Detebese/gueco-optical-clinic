@@ -2193,33 +2193,287 @@ $currentTheme = ($userTheme === 'light') ? 'light' : 'dark';
     }
     .btn-modal-save:disabled { opacity: .45; cursor: not-allowed; transform: none; box-shadow: none; }
 
+    .appt-actions-wrap {
+      display: flex; flex-direction: column; align-items: flex-end; gap: 10px; flex-shrink: 0;
+    }
+
     @media (max-width: 992px) {
       .book-grid-layout { grid-template-columns: 1fr !important; }
       .ticket-card { flex-direction: column; }
       .ticket-stub-left {
         border-right: none; border-bottom: 2px dashed #CBD5E1;
-        width: 100%; flex-direction: row; gap: 16px; padding: 20px 24px;
+        width: 100%; flex-direction: row; gap: 16px; padding: 18px 22px;
+        justify-content: flex-start;
       }
       [data-theme="dark"] .ticket-stub-left {
         border-bottom-color: rgba(255, 255, 255, 0.22);
       }
       .ticket-stub-right {
         border-left: none; border-top: 2px dashed #CBD5E1;
-        width: 100%; flex-direction: row; justify-content: space-between; padding: 18px 24px;
+        width: 100%; flex-direction: row; justify-content: space-between; padding: 16px 22px;
+        align-items: center;
       }
       [data-theme="dark"] .ticket-stub-right {
         border-top-color: rgba(255, 255, 255, 0.22);
       }
       .ticket-notch-top, .ticket-notch-bottom { display: none; }
     }
+
     @media (max-width: 640px) {
-      .appt-item { flex-direction: column; align-items: flex-start; gap: 14px; }
-      .appt-divider { display: none; }
-      .page-wrap { padding: 20px 14px 60px; }
-      .topbar { padding: 0 16px; }
-      .welcome-title { font-size: 1.35rem; }
-      .stepper-wrap { padding: 0; }
-      .step-text { font-size: .72rem; }
+      /* Page wrap & Topbar */
+      .page-wrap { padding: 16px 12px 60px; }
+      .topbar { padding: 0 14px; height: 60px; }
+      .topbar-brand { gap: 10px; }
+      .topbar-logo { width: 36px; height: 36px; border-radius: 8px; }
+      .topbar-name { font-size: .92rem; }
+      .topbar-sub { display: none; }
+      .user-chip { padding: 3px 10px 3px 3px; }
+      .user-name { font-size: .82rem; }
+
+      /* Welcome Header */
+      .welcome-header {
+        flex-direction: column;
+        align-items: flex-start;
+        gap: 12px;
+        margin-bottom: 20px;
+      }
+      .welcome-title { font-size: 1.35rem; letter-spacing: -0.02em; }
+      .welcome-subtitle { font-size: .82rem; line-height: 1.45; }
+      .welcome-date-badge {
+        align-self: flex-start;
+        padding: 6px 14px;
+        font-size: .78rem;
+        border-radius: 9999px;
+      }
+
+      /* Stats Row: Balanced 2x2 Bento Grid */
+      .stats-row {
+        grid-template-columns: repeat(2, 1fr) !important;
+        gap: 10px !important;
+        margin-bottom: 20px !important;
+      }
+      .stat-pill {
+        padding: 12px 14px !important;
+        gap: 10px !important;
+        border-radius: 16px !important;
+      }
+      .stat-pill-icon {
+        width: 38px !important;
+        height: 38px !important;
+        font-size: 1.05rem !important;
+        border-radius: 12px !important;
+        flex-shrink: 0 !important;
+      }
+      .stat-pill-val {
+        font-size: 1.35rem !important;
+        line-height: 1.1 !important;
+      }
+      .stat-pill-lbl {
+        font-size: .7rem !important;
+        font-weight: 700 !important;
+        margin-top: 2px !important;
+        white-space: nowrap !important;
+        overflow: hidden !important;
+        text-overflow: ellipsis !important;
+      }
+
+      /* Boarding Pass Ticket Card */
+      .ticket-card {
+        border-radius: 18px !important;
+        margin-bottom: 20px !important;
+      }
+      .ticket-stub-left {
+        padding: 12px 16px !important;
+        gap: 10px !important;
+        flex-wrap: wrap !important;
+      }
+      .ticket-day { font-size: 1.8rem !important; }
+      .ticket-month { font-size: .76rem !important; margin-top: 0 !important; }
+      .ticket-weekday { font-size: .72rem !important; }
+      .ticket-time-chip { font-size: .72rem !important; padding: 4px 8px !important; margin-top: 0 !important; }
+      .ticket-body { padding: 14px 16px !important; }
+      .ticket-header-row { flex-wrap: wrap !important; gap: 6px !important; margin-bottom: 8px !important; }
+      .ticket-tag { font-size: .68rem !important; padding: 3px 8px !important; }
+      .ticket-countdown { font-size: .68rem !important; padding: 3px 8px !important; }
+      .ticket-title { font-size: 1.05rem !important; margin-bottom: 8px !important; }
+      .ticket-service-badge { font-size: .72rem !important; padding: 4px 10px !important; margin-bottom: 8px !important; }
+      .ticket-meta { gap: 4px !important; }
+      .ticket-meta-item { font-size: .72rem !important; }
+      .ticket-stub-right {
+        padding: 12px 16px !important;
+        gap: 8px !important;
+      }
+      .ticket-status-pill { padding: 5px 12px !important; font-size: .72rem !important; }
+      .btn-ticket-action { padding: 8px 14px !important; font-size: .78rem !important; }
+
+      /* Tab Bar: 50/50 Equal Segmented Control */
+      .tab-bar {
+        display: grid !important;
+        grid-template-columns: 1fr 1fr !important;
+        gap: 8px !important;
+        margin-bottom: 18px !important;
+      }
+      .tab-btn {
+        width: 100% !important;
+        justify-content: center !important;
+        padding: 11px 8px !important;
+        font-size: .82rem !important;
+        border-radius: 14px !important;
+        gap: 6px !important;
+      }
+
+      /* Booking Form Card */
+      .form-card { border-radius: 18px !important; }
+      .form-card-header { padding: 16px 14px !important; gap: 10px !important; }
+      .form-card-icon { width: 38px !important; height: 38px !important; font-size: 1rem !important; border-radius: 10px !important; }
+      .form-card-title { font-size: 1.05rem !important; }
+      .form-card-sub { font-size: .76rem !important; line-height: 1.35 !important; }
+      .form-card-body { padding: 16px 12px !important; }
+
+      /* Stepper */
+      .stepper-wrap {
+        padding: 0 4px !important;
+        margin-bottom: 22px !important;
+      }
+      .stepper-track-bg, .stepper-track-fill {
+        top: 17px !important;
+        left: 20px !important;
+        right: 20px !important;
+        height: 3px !important;
+      }
+      .step-circle {
+        width: 34px !important;
+        height: 34px !important;
+        font-size: .76rem !important;
+      }
+      .step-text {
+        font-size: .68rem !important;
+        margin-top: 5px !important;
+      }
+
+      /* Step 1: Purpose Cards -> Native-like Horizontal Option Tiles */
+      .purpose-grid {
+        grid-template-columns: 1fr !important;
+        gap: 10px !important;
+        margin-bottom: 18px !important;
+      }
+      .purpose-card {
+        flex-direction: row !important;
+        align-items: center !important;
+        gap: 12px !important;
+        padding: 12px 14px !important;
+        border-radius: 16px !important;
+      }
+      .purpose-card-icon {
+        width: 42px !important;
+        height: 42px !important;
+        font-size: 1.15rem !important;
+        border-radius: 12px !important;
+        flex-shrink: 0 !important;
+      }
+      .purpose-card-title { font-size: .9rem !important; margin-bottom: 2px !important; }
+      .purpose-card-desc { font-size: .74rem !important; line-height: 1.35 !important; }
+
+      /* Step 2: Services Grid */
+      .service-grid {
+        grid-template-columns: 1fr !important;
+        gap: 10px !important;
+        margin-bottom: 18px !important;
+      }
+      .service-card {
+        padding: 14px 14px !important;
+        border-radius: 16px !important;
+      }
+      .service-title { font-size: .9rem !important; }
+      .service-desc { font-size: .75rem !important; line-height: 1.35 !important; }
+
+      /* Step 3: Quick Dates Horizontal Carousel */
+      .quick-dates {
+        display: flex !important;
+        gap: 8px !important;
+        overflow-x: auto !important;
+        flex-wrap: nowrap !important;
+        padding-bottom: 8px !important;
+        -webkit-overflow-scrolling: touch !important;
+        scrollbar-width: none !important;
+      }
+      .quick-dates::-webkit-scrollbar { display: none !important; }
+      .qdate-btn {
+        flex-shrink: 0 !important;
+        padding: 8px 14px !important;
+        font-size: .78rem !important;
+      }
+
+      /* Time Slots Grid: 3 Even Columns on Mobile */
+      .slots-grid, #slotGrid .slot-grid, .edit-slots-container .slot-grid {
+        grid-template-columns: repeat(3, 1fr) !important;
+        gap: 8px !important;
+      }
+      .slot-btn {
+        padding: 8px 4px !important;
+        font-size: .8rem !important;
+        border-radius: 10px !important;
+      }
+      .slot-btn .slot-time { font-size: .78rem !important; }
+      .slot-btn .slot-period { font-size: .62rem !important; }
+
+      /* Wizard Navigation Buttons */
+      .wizard-nav-bar {
+        display: flex !important;
+        gap: 8px !important;
+        margin-top: 18px !important;
+        padding-top: 16px !important;
+      }
+      .btn-wizard-back, .btn-wizard-next {
+        flex: 1 !important;
+        justify-content: center !important;
+        padding: 12px 14px !important;
+        font-size: .84rem !important;
+        border-radius: 12px !important;
+        margin-left: 0 !important;
+      }
+
+      /* History Appointments Cards */
+      .appt-item {
+        flex-direction: column !important;
+        align-items: stretch !important;
+        gap: 12px !important;
+        padding: 14px !important;
+        border-radius: 18px !important;
+      }
+      .appt-divider { display: none !important; }
+      .appt-date-box {
+        width: 100% !important;
+        flex-direction: row !important;
+        justify-content: flex-start !important;
+        align-items: center !important;
+        gap: 10px !important;
+        padding: 8px 12px !important;
+        border-radius: 12px !important;
+      }
+      .appt-day { font-size: 1.35rem !important; }
+      .appt-month { font-size: .76rem !important; }
+      .appt-info { width: 100% !important; }
+      .appt-actions-wrap {
+        width: 100% !important;
+        flex-direction: row !important;
+        justify-content: space-between !important;
+        align-items: center !important;
+        padding-top: 10px !important;
+        border-top: 1px dashed var(--border-color) !important;
+      }
+      .appt-item > .status-badge {
+        align-self: flex-start !important;
+        margin-top: 4px !important;
+      }
+
+      /* Modals */
+      .modal-overlay { padding: 10px !important; }
+      .modal-dialog-box { border-radius: 18px !important; }
+      .edit-modal-dialog { max-height: 94vh !important; border-radius: 18px !important; }
+      .edit-modal-header { padding: 14px 16px !important; }
+      .edit-modal-body { padding: 14px 14px !important; }
+      .edit-modal-footer { padding: 12px 14px !important; }
     }
   </style>
 </head>
@@ -2788,7 +3042,7 @@ $currentTheme = ($userTheme === 'light') ? 'light' : 'dark';
         </div>
         <?php endif; ?>
       </div>
-      <div style="display:flex;flex-direction:column;align-items:flex-end;gap:10px;flex-shrink:0;">
+      <div class="appt-actions-wrap">
         <span class="status-badge status-<?= $a['status'] ?>">
           <?php if ($a['status'] === 'pending'): ?>
             <i class="fas fa-hourglass-half status-badge-icon me-1"></i>
