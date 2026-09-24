@@ -177,6 +177,7 @@ $currentTheme = ($userTheme === 'light') ? 'light' : 'dark';
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Security Verification — Gueco Optical Clinic</title>
   
+  <!-- Immediate Theme Initialization & Caret Browsing Prevention -->
   <script>
     (function() {
       try {
@@ -191,6 +192,13 @@ $currentTheme = ($userTheme === 'light') ? 'light' : 'dark';
         document.documentElement.setAttribute("data-theme", "<?= $currentTheme ?>");
       }
     })();
+
+    // Prevent accidental browser Caret Browsing (F7) activation
+    window.addEventListener('keydown', function(e) {
+      if (e.key === 'F7' || e.keyCode === 118) {
+        e.preventDefault();
+      }
+    });
   </script>
 
   <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
@@ -201,6 +209,44 @@ $currentTheme = ($userTheme === 'light') ? 'light' : 'dark';
 
   <style>
     *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    /* ─── Universal Caret & Text-Selection Prevention ─────── */
+    *, *::before, *::after {
+      caret-color: transparent;
+    }
+
+    body, h1, h2, h3, h4, h5, h6, p, span, div, a, label, li, ul, ol, section, main, header, footer, nav,
+    button, [type="button"], [type="reset"], [type="submit"], .btn, .theme-btn, .card {
+      -webkit-user-select: none;
+      -moz-user-select: none;
+      -ms-user-select: none;
+      user-select: none;
+    }
+
+    h1, h2, h3, h4, h5, h6, p, label, .card {
+      cursor: default;
+    }
+
+    button, [type="button"], [type="reset"], [type="submit"], .btn, a, .theme-btn {
+      cursor: pointer;
+    }
+
+    input, textarea, [contenteditable="true"], .allow-select {
+      -webkit-user-select: text !important;
+      -moz-user-select: text !important;
+      -ms-user-select: text !important;
+      user-select: text !important;
+      cursor: text !important;
+      caret-color: auto !important;
+    }
+
+    select {
+      -webkit-user-select: auto !important;
+      -moz-user-select: auto !important;
+      -ms-user-select: auto !important;
+      user-select: auto !important;
+      cursor: pointer !important;
+    }
 
     :root {
       --clr-bronze-light: #27AAE2;

@@ -25,7 +25,7 @@ $currentTheme = ($userTheme === 'light') ? 'light' : 'dark';
   <title><?= sanitize($pageTitle) ?> — Gueco Optical</title>
   <meta name="description" content="Gueco Optical Clinic Management System">
 
-  <!-- Immediate Theme Initialization -->
+  <!-- Immediate Theme Initialization & Caret Browsing Prevention -->
   <script>
     (function() {
       try {
@@ -40,6 +40,13 @@ $currentTheme = ($userTheme === 'light') ? 'light' : 'dark';
         document.documentElement.setAttribute("data-theme", "<?= $currentTheme ?>");
       }
     })();
+
+    // Prevent accidental browser Caret Browsing (F7) activation
+    window.addEventListener('keydown', function(e) {
+      if (e.key === 'F7' || e.keyCode === 118) {
+        e.preventDefault();
+      }
+    });
   </script>
 
   <!-- Bootstrap 5 -->

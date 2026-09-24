@@ -239,7 +239,7 @@ $currentTheme = ($userTheme === 'light') ? 'light' : 'dark';
   <title>Patient Portal — Gueco Optical Clinic</title>
   <meta name="description" content="Book and manage your eye care appointments at Gueco Optical Clinic, Capas, Tarlac.">
   
-  <!-- Immediate Theme Initialization -->
+  <!-- Immediate Theme Initialization & Caret Browsing Prevention -->
   <script>
     (function() {
       try {
@@ -254,6 +254,13 @@ $currentTheme = ($userTheme === 'light') ? 'light' : 'dark';
         document.documentElement.setAttribute("data-theme", "<?= $currentTheme ?>");
       }
     })();
+
+    // Prevent accidental browser Caret Browsing (F7) activation
+    window.addEventListener('keydown', function(e) {
+      if (e.key === 'F7' || e.keyCode === 118) {
+        e.preventDefault();
+      }
+    });
   </script>
 
   <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
@@ -268,7 +275,12 @@ $currentTheme = ($userTheme === 'light') ? 'light' : 'dark';
   <style>
     *,*::before,*::after { box-sizing:border-box; margin:0; padding:0; }
 
-    /* ─── UI Controls Caret & Text-Selection Prevention (Patient Portal) ─── */
+    /* ─── Universal Caret & Text-Selection Prevention (Patient Portal) ─── */
+    *, *::before, *::after {
+      caret-color: transparent;
+    }
+
+    body, h1, h2, h3, h4, h5, h6, p, span, div, a, label, li, ul, ol, section, main, header, footer, nav, table, tr, th, td,
     button,
     [type="button"],
     [type="reset"],
@@ -294,17 +306,24 @@ $currentTheme = ($userTheme === 'light') ? 'light' : 'dark';
     .ticket-stub-left,
     .ticket-tag,
     .ticket-countdown,
-    .form-card-header {
+    .form-card-header,
+    .patient-ticket-card,
+    .card {
       -webkit-user-select: none;
       -moz-user-select: none;
       -ms-user-select: none;
       user-select: none;
     }
 
+    h1, h2, h3, h4, h5, h6, p, label, .card, table {
+      cursor: default;
+    }
+
     button,
     [type="button"],
     [type="reset"],
     [type="submit"],
+    a,
     .tab-btn,
     .step-node,
     .slot-btn,
@@ -322,6 +341,26 @@ $currentTheme = ($userTheme === 'light') ? 'light' : 'dark';
     .user-chip,
     .dropdown-item {
       cursor: pointer;
+    }
+
+    input,
+    textarea,
+    [contenteditable="true"],
+    .allow-select {
+      -webkit-user-select: text !important;
+      -moz-user-select: text !important;
+      -ms-user-select: text !important;
+      user-select: text !important;
+      cursor: text !important;
+      caret-color: auto !important;
+    }
+
+    select {
+      -webkit-user-select: auto !important;
+      -moz-user-select: auto !important;
+      -ms-user-select: auto !important;
+      user-select: auto !important;
+      cursor: pointer !important;
     }
 
     :root { 
