@@ -129,35 +129,38 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action']) && $_POST['
                 $hasMiddleName = in_array('middle_name', $existingCols);
                 $hasLastName   = in_array('last_name', $existingCols);
 
-                $setClauses = [
-                    "full_name = ?", 
-                    "phone = ?", 
-                    "gender = ?", 
-                    "address = ?",
-                    "birthdate = COALESCE(?, birthdate)",
-                    "updated_at = NOW()"
-                ];
-                $params = [
-                    $fullName,
-                    $cleanPhone,
-                    $gender,
-                    $address,
-                    $birthdateFormatted
-                ];
+                $setClauses = [];
+                $params = [];
 
-                if ($hasLastName) {
-                    array_unshift($setClauses, "last_name = ?");
-                    array_unshift($params, $lastName);
-                }
                 if ($hasFirstName) {
-                    array_splice($setClauses, $hasLastName ? 1 : 0, 0, "first_name = ?");
-                    array_splice($params, $hasLastName ? 1 : 0, 0, $firstName);
+                    $setClauses[] = "first_name = ?";
+                    $params[] = $firstName;
                 }
                 if ($hasMiddleName) {
-                    $midPos = ($hasLastName ? 1 : 0) + ($hasFirstName ? 1 : 0);
-                    array_splice($setClauses, $midPos, 0, "middle_name = ?");
-                    array_splice($params, $midPos, 0, $middleName ?: null);
+                    $setClauses[] = "middle_name = ?";
+                    $params[] = (!empty($middleName) ? $middleName : null);
                 }
+                if ($hasLastName) {
+                    $setClauses[] = "last_name = ?";
+                    $params[] = $lastName;
+                }
+
+                $setClauses[] = "full_name = ?";
+                $params[] = $fullName;
+
+                $setClauses[] = "phone = ?";
+                $params[] = $cleanPhone;
+
+                $setClauses[] = "gender = ?";
+                $params[] = $gender;
+
+                $setClauses[] = "address = ?";
+                $params[] = $address;
+
+                $setClauses[] = "birthdate = COALESCE(?, birthdate)";
+                $params[] = $birthdateFormatted;
+
+                $setClauses[] = "updated_at = NOW()";
 
                 $params[] = $patientId;
                 $sql = "UPDATE patients SET " . implode(", ", $setClauses) . " WHERE id = ?";
