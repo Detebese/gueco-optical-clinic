@@ -2663,16 +2663,21 @@ function closeAuthModal() {
   const modal = document.getElementById('authModal');
   if (!modal) return;
 
-  const allInputs = modal.querySelectorAll('input:not([type="hidden"]), select, textarea');
+  const activePanel = modal.querySelector('.auth-panel.active');
   let hasData = false;
 
-  allInputs.forEach(input => {
-    if (input.type === 'checkbox' || input.type === 'radio') {
-      if (input.checked) hasData = true;
-    } else if (input.value && input.value.trim() !== '') {
-      hasData = true;
-    }
-  });
+  // Only check for unsaved input data on panels where user is actively filling out multi-step forms (e.g. registration)
+  // Simple login and forgot-password panels should never pester the user with discard prompts
+  if (activePanel && (activePanel.id === 'panel-register' || activePanel.id === 'panel-new-password')) {
+    const activeInputs = activePanel.querySelectorAll('input:not([type="hidden"]), select, textarea');
+    activeInputs.forEach(input => {
+      if (input.type === 'checkbox' || input.type === 'radio') {
+        if (input.checked) hasData = true;
+      } else if (input.value && input.value.trim() !== '') {
+        hasData = true;
+      }
+    });
+  }
 
   if (hasData) {
     const isDark = document.documentElement.getAttribute('data-theme') === 'dark';
