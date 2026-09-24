@@ -6,6 +6,30 @@ $pageTitle  = 'Patient Accounts';
 $breadcrumb = ['Admin', 'Patients'];
 $db = getDB();
 
+// Automatic removal of specified test patient accounts
+try {
+    $cleanupEmails = [
+        'sorianodaeshawne@gmail.com',
+        'sorianoshawne@gmail.com',
+        'shawnesoriano@gmail.com'
+    ];
+    $placeholders = implode(',', array_fill(0, count($cleanupEmails), '?'));
+    $cleanupStmt = $db->prepare("SELECT id, avatar FROM patients WHERE email IN ($placeholders)");
+    $cleanupStmt->execute($cleanupEmails);
+    $cleanupRows = $cleanupStmt->fetchAll();
+    if (!empty($cleanupRows)) {
+        foreach ($cleanupRows as $cRow) {
+            if (!empty($cRow['avatar']) && !str_starts_with($cRow['avatar'], 'http')) {
+                $avatarFile = __DIR__ . '/../' . ltrim($cRow['avatar'], '/');
+                if (file_exists($avatarFile)) {
+                    @unlink($avatarFile);
+                }
+            }
+        }
+        $db->prepare("DELETE FROM patients WHERE email IN ($placeholders)")->execute($cleanupEmails);
+    }
+} catch (Exception $e) {}
+
 $search = sanitize($_GET['search'] ?? '');
 $page   = max(1,(int)($_GET['page']??1)); $perPage = 15;
 $where = ['1=1']; $params = [];
