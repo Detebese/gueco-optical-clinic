@@ -56,7 +56,7 @@ if ($_SERVER['REQUEST_METHOD']==='POST' && ($_POST['action']??'')==='toggle') {
     header('Location: patients.php'); exit;
 }
 
-$extraHead = '<link rel="stylesheet" href="'.BASE_URL.'assets/css/pages/patients.css">';
+$extraHead = '<link rel="stylesheet" href="'.BASE_URL.'assets/css/pages/patients.css?v='.time().'">';
 include __DIR__ . '/../includes/header.php';
 ?>
 <div class="section-header">
@@ -90,7 +90,7 @@ include __DIR__ . '/../includes/header.php';
           <td>
             <div class="pat-3b6fff">
               <?php if ($hasAvatar): ?>
-                <img src="<?= htmlspecialchars($avatarSrc) ?>" alt="<?= htmlspecialchars($patientName) ?>" class="pat-avatar-img" onerror="this.style.display='none'; this.nextElementSibling.style.display='flex';">
+                <img src="<?= htmlspecialchars($avatarSrc) ?>" alt="<?= htmlspecialchars($patientName) ?>" class="pat-avatar-img" width="34" height="34" style="width:34px;height:34px;min-width:34px;min-height:34px;max-width:34px;max-height:34px;border-radius:50%;object-fit:cover;flex-shrink:0;display:inline-block;" onerror="this.style.display='none'; this.nextElementSibling.style.display='flex';">
                 <div class="pat-ec276b" style="display:none;"><?= $initial ?></div>
               <?php else: ?>
                 <div class="pat-ec276b"><?= $initial ?></div>
