@@ -2022,7 +2022,11 @@ if (!function_exists('getSiteSetting')) {
 <section class="hero" id="about">
   <div class="hero-text">
     <div class="badge-est"><i class="fas fa-certificate text-warning me-1"></i><?= htmlspecialchars(getSiteSetting($siteSettings, 'hero_badge', 'Established in 1986')) ?></div>
-    <h1><?= getSiteSetting($siteSettings, 'hero_headline', 'See the World <span>Clearly</span> &amp; <span>Beautifully</span>') ?></h1>
+    <?php
+    $hLine = strip_tags(getSiteSetting($siteSettings, 'hero_headline', 'See the World'));
+    $hHigh = strip_tags(getSiteSetting($siteSettings, 'hero_highlight', 'Clearly & Beautifully'));
+    ?>
+    <h1><?= htmlspecialchars($hLine) ?><?php if (!empty($hHigh)): ?> <span><?= htmlspecialchars($hHigh) ?></span><?php endif; ?></h1>
     <p><?= htmlspecialchars(getSiteSetting($siteSettings, 'hero_description', 'Providing exceptional, comprehensive eye care services to the Capas community. We combine state-of-the-art technology with compassionate care to help you achieve your best vision.')) ?></p>
     
     <div class="stats">

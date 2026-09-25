@@ -80,7 +80,8 @@ $settCount = (int)$db->query("SELECT COUNT(*) FROM site_settings")->fetchColumn(
 if ($settCount === 0) {
     $settDefaults = [
         ['hero_badge',        'Established in 1986'],
-        ['hero_headline',     'See the World <span>Clearly</span> &amp; <span>Beautifully</span>'],
+        ['hero_headline',     'See the World'],
+        ['hero_highlight',    'Clearly & Beautifully'],
         ['hero_description',  'Providing exceptional, comprehensive eye care services to the Capas community. We combine state-of-the-art technology with compassionate care to help you achieve your best vision.'],
         ['stat1_value',       '40+'],
         ['stat1_label',       'Years of Service'],
@@ -102,6 +103,15 @@ if ($settCount === 0) {
     foreach ($settDefaults as $s) $sIns->execute($s);
 }
 
+// ── Auto-migrate legacy <span> from hero_headline if present ────────────────
+try {
+    $existingHeadline = $db->query("SELECT setting_value FROM site_settings WHERE setting_key = 'hero_headline'")->fetchColumn();
+    if ($existingHeadline && strpos($existingHeadline, '<span') !== false) {
+        $db->prepare("UPDATE site_settings SET setting_value = 'See the World' WHERE setting_key = 'hero_headline'")->execute();
+        $db->prepare("INSERT INTO site_settings (setting_key, setting_value) VALUES ('hero_highlight', 'Clearly & Beautifully') ON DUPLICATE KEY UPDATE setting_value = 'Clearly & Beautifully'")->execute();
+    }
+} catch (Throwable $e) {}
+
 // ── POST Handler ─────────────────────────────────────────────────────────────
 $reopenData = null;
 $activeTab  = $_POST['active_tab'] ?? $_GET['tab'] ?? 'homepage';
@@ -113,7 +123,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
     // ── HOMEPAGE SETTINGS ──
     if ($action === 'save_homepage') {
-        $keys = ['hero_badge','hero_headline','hero_description',
+        $keys = ['hero_badge','hero_headline','hero_highlight','hero_description',
                  'stat1_value','stat1_label','stat2_value','stat2_label','stat3_value','stat3_label',
                  'card1_icon','card1_title','card1_desc',
                  'card2_icon','card2_title','card2_desc',
@@ -311,17 +321,35 @@ document.addEventListener("DOMContentLoaded", function() {
       <div class="pm-form-grid">
         <div class="pm-form-group">
           <label class="pm-label"><i class="fas fa-certificate"></i> Badge Text</label>
-          <input type="text" name="hero_badge" class="form-control" value="<?= gs($settings,'hero_badge','Established in 1986') ?>" placeholder="e.g. Established in 1986">
-          <small class="pm-hint">The small badge pill shown above the headline</small>
+          <input type="text" name="hero_badge" id="heroBadgeInput" class="form-control" value="<?= gs($settings,'hero_badge','Established in 1986') ?>" placeholder="e.g. Established in 1986" oninput="updateHeroLivePreview()">
+          <small class="pm-hint">Top pill badge</small>
         </div>
-        <div class="pm-form-group pm-span-2">
-          <label class="pm-label"><i class="fas fa-heading"></i> Main Headline</label>
-          <input type="text" name="hero_headline" class="form-control" value="<?= gs($settings,'hero_headline','See the World Clearly &amp; Beautifully') ?>" placeholder="Main headline text">
-          <small class="pm-hint">You can use &lt;span&gt; tags for colored words</small>
+        <div class="pm-form-group">
+          <label class="pm-label"><i class="fas fa-font"></i> Main Headline</label>
+          <input type="text" name="hero_headline" id="heroHeadlineInput" class="form-control" value="<?= gs($settings,'hero_headline','See the World') ?>" placeholder="e.g. See the World" oninput="updateHeroLivePreview()">
+          <small class="pm-hint">Normal headline text</small>
+        </div>
+        <div class="pm-form-group">
+          <label class="pm-label"><i class="fas fa-wand-magic-sparkles"></i> Highlighted Words (Gradient Accent)</label>
+          <input type="text" name="hero_highlight" id="heroHighlightInput" class="form-control" value="<?= gs($settings,'hero_highlight','Clearly & Beautifully') ?>" placeholder="e.g. Clearly & Beautifully" oninput="updateHeroLivePreview()">
+          <small class="pm-hint">Words highlighted with luxury blue gradient</small>
         </div>
         <div class="pm-form-group pm-span-3">
           <label class="pm-label"><i class="fas fa-align-left"></i> Description</label>
-          <textarea name="hero_description" class="form-control" rows="3" placeholder="Hero description text..."><?= gs($settings,'hero_description') ?></textarea>
+          <textarea name="hero_description" id="heroDescInput" class="form-control" rows="3" placeholder="Hero description text..." oninput="updateHeroLivePreview()"><?= gs($settings,'hero_description') ?></textarea>
+        </div>
+      </div>
+
+      <!-- Real-Time Hero Preview -->
+      <div class="pm-hero-preview-box">
+        <div class="pm-hero-preview-head"><i class="fas fa-desktop"></i> Live Landing Page Preview</div>
+        <div class="pm-hero-preview-body">
+          <div class="badge-est" id="prevHeroBadge" style="margin-bottom:8px; display:inline-flex;"><i class="fas fa-certificate text-warning me-1"></i><span><?= gs($settings,'hero_badge','Established in 1986') ?></span></div>
+          <h2 class="pm-hero-preview-h1">
+            <span id="prevHeroHeadline"><?= gs($settings,'hero_headline','See the World') ?></span>
+            <span class="pm-hero-grad-text" id="prevHeroHighlight"><?= gs($settings,'hero_highlight','Clearly & Beautifully') ?></span>
+          </h2>
+          <p class="pm-hero-preview-desc" id="prevHeroDesc"><?= gs($settings,'hero_description') ?></p>
         </div>
       </div>
     </div>
@@ -330,7 +358,7 @@ document.addEventListener("DOMContentLoaded", function() {
     <div class="pm-section-card">
       <div class="pm-section-head">
         <div class="pm-section-icon" style="background:linear-gradient(135deg,#1E74BD,#27AAE2);">
-          <i class="fas fa-chart-bar"></i>
+          <i class="fas fa-chart-line"></i>
         </div>
         <div>
           <h5 class="pm-section-title">Statistics</h5>
@@ -374,29 +402,53 @@ document.addEventListener("DOMContentLoaded", function() {
         ['card2','fa-glasses','Premium Eyewear','Choose from a wide selection of stylish frames, premium lenses, and comfortable contact lenses sourced from top international brands.'],
         ['card3','fa-map-marker-alt','Convenient Location','Located in the heart of Capas, Tarlac. We provide a comfortable, welcoming environment with modern facilities for all our patients.'],
       ];
+      $optIcons = [
+        'fa-user-md'              => 'Doctor / Optometrist',
+        'fa-glasses'              => 'Eyewear & Frames',
+        'fa-map-marker-alt'       => 'Location & Clinic',
+        'fa-eye'                  => 'Eye Examination',
+        'fa-stethoscope'          => 'Medical Care',
+        'fa-award'                => 'Quality & Certified',
+        'fa-shield-halved'        => 'Warranty & Protection',
+        'fa-clock'                => 'Fast Service / Timings',
+        'fa-heart'                => 'Patient Care',
+        'fa-microscope'           => 'Modern Equipment',
+        'fa-calendar-check'       => 'Appointment Booking',
+        'fa-clipboard-list'       => 'Prescriptions & Records',
+        'fa-hospital'             => 'Clinic Facility',
+        'fa-headset'              => 'Patient Support',
+        'fa-thumbs-up'            => 'Trusted Service',
+        'fa-hand-holding-medical' => 'Care & Compassion',
+      ];
       foreach ($cardDefs as [$k,$di,$dt,$dd]):
+        $savedIcon = gs($settings,"{$k}_icon",$di);
       ?>
       <div class="pm-card-editor">
         <div class="pm-card-editor-preview">
-          <div class="pm-card-icon-preview"><i class="fas <?= gs($settings,"{$k}_icon",$di) ?>"></i></div>
+          <div class="pm-card-icon-preview" id="iconPrevBox_<?= $k ?>"><i class="fas <?= $savedIcon ?>"></i></div>
           <div>
-            <div class="pm-card-title-preview"><?= gs($settings,"{$k}_title",$dt) ?></div>
-            <div class="pm-card-desc-preview"><?= gs($settings,"{$k}_desc",$dd) ?></div>
+            <div class="pm-card-title-preview" id="titlePrev_<?= $k ?>"><?= gs($settings,"{$k}_title",$dt) ?></div>
+            <div class="pm-card-desc-preview" id="descPrev_<?= $k ?>"><?= gs($settings,"{$k}_desc",$dd) ?></div>
           </div>
         </div>
         <div class="pm-form-grid">
           <div class="pm-form-group">
-            <label class="pm-label">Icon Class</label>
-            <input type="text" name="<?= $k ?>_icon" class="form-control" value="<?= gs($settings,"{$k}_icon",$di) ?>" placeholder="e.g. fa-user-md">
-            <small class="pm-hint">FontAwesome 6 class (e.g. fa-eye)</small>
+            <label class="pm-label"><i class="fas fa-icons"></i> Card Icon</label>
+            <select name="<?= $k ?>_icon" class="form-select pm-icon-select" onchange="updateCardIconPreview('<?= $k ?>', this.value)">
+              <?php foreach ($optIcons as $iVal => $iLbl): ?>
+              <option value="<?= $iVal ?>" <?= $savedIcon === $iVal ? 'selected' : '' ?>>
+                <?= $iLbl ?> (<?= $iVal ?>)
+              </option>
+              <?php endforeach; ?>
+            </select>
           </div>
           <div class="pm-form-group pm-span-2">
-            <label class="pm-label">Title</label>
-            <input type="text" name="<?= $k ?>_title" class="form-control" value="<?= gs($settings,"{$k}_title",$dt) ?>">
+            <label class="pm-label"><i class="fas fa-heading"></i> Title</label>
+            <input type="text" name="<?= $k ?>_title" class="form-control" value="<?= gs($settings,"{$k}_title",$dt) ?>" oninput="document.getElementById('titlePrev_<?= $k ?>').textContent = this.value">
           </div>
           <div class="pm-form-group pm-span-3">
-            <label class="pm-label">Description</label>
-            <textarea name="<?= $k ?>_desc" class="form-control" rows="2"><?= gs($settings,"{$k}_desc",$dd) ?></textarea>
+            <label class="pm-label"><i class="fas fa-align-left"></i> Description</label>
+            <textarea name="<?= $k ?>_desc" class="form-control" rows="2" oninput="document.getElementById('descPrev_<?= $k ?>').textContent = this.value"><?= gs($settings,"{$k}_desc",$dd) ?></textarea>
           </div>
         </div>
       </div>
@@ -670,9 +722,19 @@ document.addEventListener("DOMContentLoaded", function() {
         <input type="hidden" name="csrf_token" value="<?= generateCsrfToken() ?>">
         <input type="hidden" name="active_tab" value="faqs">
         <div class="form-group">
-          <label class="form-label">Icon Class</label>
-          <input type="text" name="faq_icon" class="form-control" value="fa-circle-question" placeholder="e.g. fa-eye, fa-calendar-check">
-          <small class="form-text text-muted">FontAwesome 6 icon class</small>
+          <label class="form-label"><i class="fas fa-icons"></i> Question Icon</label>
+          <select name="faq_icon" class="form-select">
+            <option value="fa-circle-question">General Information (fa-circle-question)</option>
+            <option value="fa-eye">Eye Examination (fa-eye)</option>
+            <option value="fa-calendar-check">Appointments &amp; Scheduling (fa-calendar-check)</option>
+            <option value="fa-clipboard-list">What to Bring / Requirements (fa-clipboard-list)</option>
+            <option value="fa-glasses">Eyewear, Frames &amp; Lenses (fa-glasses)</option>
+            <option value="fa-shield-halved">Warranties &amp; Protection (fa-shield-halved)</option>
+            <option value="fa-user-shield">Privacy &amp; Health Records (fa-user-shield)</option>
+            <option value="fa-clock">Processing Time &amp; Schedule (fa-clock)</option>
+            <option value="fa-stethoscope">Doctor Consultations (fa-stethoscope)</option>
+            <option value="fa-heart">Patient Care &amp; Services (fa-heart)</option>
+          </select>
         </div>
         <div class="form-group">
           <label class="form-label">Question <span style="color:var(--clr-danger)">*</span></label>
@@ -708,8 +770,19 @@ document.addEventListener("DOMContentLoaded", function() {
         <input type="hidden" name="active_tab" value="faqs">
         <input type="hidden" name="faq_id" id="editFaqId">
         <div class="form-group">
-          <label class="form-label">Icon Class</label>
-          <input type="text" name="faq_icon" id="editFaqIcon" class="form-control">
+          <label class="form-label"><i class="fas fa-icons"></i> Question Icon</label>
+          <select name="faq_icon" id="editFaqIcon" class="form-select">
+            <option value="fa-circle-question">General Information (fa-circle-question)</option>
+            <option value="fa-eye">Eye Examination (fa-eye)</option>
+            <option value="fa-calendar-check">Appointments &amp; Scheduling (fa-calendar-check)</option>
+            <option value="fa-clipboard-list">What to Bring / Requirements (fa-clipboard-list)</option>
+            <option value="fa-glasses">Eyewear, Frames &amp; Lenses (fa-glasses)</option>
+            <option value="fa-shield-halved">Warranties &amp; Protection (fa-shield-halved)</option>
+            <option value="fa-user-shield">Privacy &amp; Health Records (fa-user-shield)</option>
+            <option value="fa-clock">Processing Time &amp; Schedule (fa-clock)</option>
+            <option value="fa-stethoscope">Doctor Consultations (fa-stethoscope)</option>
+            <option value="fa-heart">Patient Care &amp; Services (fa-heart)</option>
+          </select>
         </div>
         <div class="form-group">
           <label class="form-label">Question <span style="color:var(--clr-danger)">*</span></label>
@@ -736,6 +809,37 @@ document.addEventListener("DOMContentLoaded", function() {
 </div>
 
 <script>
+// ── Hero live preview ────────────────────────────────────────────────────────
+function updateHeroLivePreview() {
+    const badge = document.getElementById('heroBadgeInput') ? document.getElementById('heroBadgeInput').value : '';
+    const headline = document.getElementById('heroHeadlineInput') ? document.getElementById('heroHeadlineInput').value : '';
+    const highlight = document.getElementById('heroHighlightInput') ? document.getElementById('heroHighlightInput').value : '';
+    const desc = document.getElementById('heroDescInput') ? document.getElementById('heroDescInput').value : '';
+
+    const prevBadge = document.getElementById('prevHeroBadge');
+    if (prevBadge) {
+        const badgeSpan = prevBadge.querySelector('span');
+        if (badgeSpan) badgeSpan.textContent = badge;
+    }
+
+    const prevHl = document.getElementById('prevHeroHeadline');
+    if (prevHl) prevHl.textContent = headline + (headline && highlight ? ' ' : '');
+
+    const prevHg = document.getElementById('prevHeroHighlight');
+    if (prevHg) prevHg.textContent = highlight;
+
+    const prevDesc = document.getElementById('prevHeroDesc');
+    if (prevDesc) prevDesc.textContent = desc;
+}
+
+// ── Card Icon preview ────────────────────────────────────────────────────────
+function updateCardIconPreview(cardKey, iconClass) {
+    const box = document.getElementById('iconPrevBox_' + cardKey);
+    if (box) {
+        box.innerHTML = '<i class="fas ' + iconClass + '"></i>';
+    }
+}
+
 // ── Tab switching ────────────────────────────────────────────────────────────
 function switchTab(tab) {
     document.querySelectorAll('.pm-tab').forEach(t => t.classList.remove('active'));

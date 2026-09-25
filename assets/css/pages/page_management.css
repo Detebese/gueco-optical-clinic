@@ -603,3 +603,59 @@
   .pm-tab { padding: 9px 14px; font-size: 0.82rem; }
   .pm-search-box   { min-width: 180px; }
 }
+
+/* ── Hero Live Preview Box ──────────────────────────────────── */
+.pm-hero-preview-box {
+  background: linear-gradient(135deg, rgba(35, 94, 174, 0.08), rgba(0, 173, 239, 0.04));
+  border: 1.5px dashed rgba(0, 173, 239, 0.35);
+  border-radius: 18px;
+  padding: 20px 24px;
+  margin-top: 18px;
+  transition: all 0.25s ease;
+}
+.pm-hero-preview-head {
+  font-size: 0.76rem;
+  font-weight: 800;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: var(--clr-primary);
+  margin-bottom: 12px;
+  display: flex;
+  align-items: center;
+  gap: 7px;
+}
+.pm-hero-preview-body {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.pm-hero-preview-h1 {
+  font-size: 1.85rem;
+  font-weight: 900;
+  line-height: 1.25;
+  color: var(--text-primary);
+  margin: 0;
+  letter-spacing: -0.02em;
+}
+.pm-hero-grad-text {
+  background: linear-gradient(135deg, #00ADEF 0%, #27AAE2 50%, #235EAE 100%);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  display: inline;
+  font-weight: 900;
+}
+.pm-hero-preview-desc {
+  font-size: 0.92rem;
+  color: var(--text-muted);
+  line-height: 1.6;
+  margin: 0;
+  max-width: 680px;
+}
+
+/* ── Icon Picker Helpers ─────────────────────────────────────── */
+.pm-icon-select {
+  font-family: inherit;
+  font-size: 0.88rem;
+  font-weight: 600;
+}
+
