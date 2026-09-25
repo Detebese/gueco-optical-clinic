@@ -152,49 +152,94 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                  'card1_icon','card1_title','card1_desc',
                  'card2_icon','card2_title','card2_desc',
                  'card3_icon','card3_title','card3_desc'];
-        $upsert = $db->prepare("INSERT INTO site_settings (setting_key, setting_value) VALUES (?,?)
-                                ON DUPLICATE KEY UPDATE setting_value=VALUES(setting_value)");
+
+        // Retrieve existing settings to detect if anything changed
+        $currSettings = [];
+        foreach ($db->query("SELECT setting_key, setting_value FROM site_settings")->fetchAll() as $row) {
+            $currSettings[$row['setting_key']] = $row['setting_value'];
+        }
+
+        $hasChanges = false;
         foreach ($keys as $k) {
             $val = trim($_POST[$k] ?? '');
-            $upsert->execute([$k, $val]);
+            if (!isset($currSettings[$k]) || trim($currSettings[$k]) !== $val) {
+                $hasChanges = true;
+                break;
+            }
         }
-        $msg = 'Homepage content updated successfully! Changes are now live on the patient website.';
-        $msgType = 'success';
-        logActivity('Updated homepage content via Page Management', 'Page Management', $_SESSION['user_id'], 'staff');
+
+        if (!$hasChanges) {
+            $msg = 'No changes were made. Homepage content is already up to date!';
+            $msgType = 'info';
+        } else {
+            $upsert = $db->prepare("INSERT INTO site_settings (setting_key, setting_value) VALUES (?,?)
+                                    ON DUPLICATE KEY UPDATE setting_value=VALUES(setting_value)");
+            foreach ($keys as $k) {
+                $val = trim($_POST[$k] ?? '');
+                $upsert->execute([$k, $val]);
+            }
+            $msg = 'Homepage content updated successfully! Changes are now live on the patient website.';
+            $msgType = 'success';
+            logActivity('Updated homepage content via Page Management', 'Page Management', $_SESSION['user_id'], 'staff');
+        }
     }
 
     // ── SERVICES: ADD ──
     elseif ($action === 'add_service') {
-        $name    = sanitize(trim($_POST['svc_name'] ?? ''));
-        $cat     = sanitize(trim($_POST['svc_category'] ?? ''));
-        $badge   = sanitize(trim($_POST['svc_badge'] ?? ''));
-        $desc    = sanitize(trim($_POST['svc_desc'] ?? ''));
-        $dur     = sanitize(trim($_POST['svc_duration'] ?? ''));
+        $name    = trim(strip_tags($_POST['svc_name'] ?? ''));
+        $cat     = trim(strip_tags($_POST['svc_category'] ?? ''));
+        $badge   = trim(strip_tags($_POST['svc_badge'] ?? ''));
+        $desc    = trim(strip_tags($_POST['svc_desc'] ?? ''));
+        $dur     = trim(strip_tags($_POST['svc_duration'] ?? ''));
         if ($name && $cat) {
+            $cleanName = html_entity_decode($name, ENT_QUOTES, 'UTF-8');
+            $cleanBadge = html_entity_decode($badge, ENT_QUOTES, 'UTF-8');
+            $cleanDesc = html_entity_decode($desc, ENT_QUOTES, 'UTF-8');
             $maxOrder = (int)$db->query("SELECT COALESCE(MAX(sort_order),0) FROM clinic_services")->fetchColumn();
             $db->prepare("INSERT INTO clinic_services (name,purpose_category,badge,description,duration,sort_order) VALUES (?,?,?,?,?,?)")
-               ->execute([$name,$cat,$badge,$desc,$dur,$maxOrder+1]);
-            $msg = "Service \"$name\" added successfully.";
+               ->execute([$cleanName,$cat,$cleanBadge,$cleanDesc,$dur,$maxOrder+1]);
+            $msg = "Service \"$cleanName\" added successfully.";
             $msgType = 'success';
-            logActivity("Added service \"$name\"", 'Page Management', $_SESSION['user_id'], 'staff');
+            logActivity("Added service \"$cleanName\"", 'Page Management', $_SESSION['user_id'], 'staff');
         } else { $msg = 'Service name and category are required.'; $msgType = 'danger'; }
     }
 
     // ── SERVICES: EDIT ──
     elseif ($action === 'edit_service') {
-        $id   = (int)($_POST['svc_id'] ?? 0);
-        $name = sanitize(trim($_POST['svc_name'] ?? ''));
-        $cat  = sanitize(trim($_POST['svc_category'] ?? ''));
-        $badge= sanitize(trim($_POST['svc_badge'] ?? ''));
-        $desc = sanitize(trim($_POST['svc_desc'] ?? ''));
-        $dur  = sanitize(trim($_POST['svc_duration'] ?? ''));
-        $stat = (int)($_POST['svc_active'] ?? 1);
+        $id    = (int)($_POST['svc_id'] ?? 0);
+        $name  = trim(strip_tags($_POST['svc_name'] ?? ''));
+        $cat   = trim(strip_tags($_POST['svc_category'] ?? ''));
+        $badge = trim(strip_tags($_POST['svc_badge'] ?? ''));
+        $desc  = trim(strip_tags($_POST['svc_desc'] ?? ''));
+        $dur   = trim(strip_tags($_POST['svc_duration'] ?? ''));
+        $stat  = (int)($_POST['svc_active'] ?? 1);
+
         if ($name && $cat && $id) {
-            $db->prepare("UPDATE clinic_services SET name=?,purpose_category=?,badge=?,description=?,duration=?,is_active=? WHERE id=?")
-               ->execute([$name,$cat,$badge,$desc,$dur,$stat,$id]);
-            $msg = "Service \"$name\" updated successfully.";
-            $msgType = 'success';
-            logActivity("Updated service #$id \"$name\"", 'Page Management', $_SESSION['user_id'], 'staff');
+            $stmt = $db->prepare("SELECT name, purpose_category, badge, description, duration, is_active FROM clinic_services WHERE id=?");
+            $stmt->execute([$id]);
+            $old = $stmt->fetch();
+
+            $cleanName  = html_entity_decode($name, ENT_QUOTES, 'UTF-8');
+            $cleanBadge = html_entity_decode($badge, ENT_QUOTES, 'UTF-8');
+            $cleanDesc  = html_entity_decode($desc, ENT_QUOTES, 'UTF-8');
+
+            if ($old &&
+                trim(html_entity_decode($old['name'], ENT_QUOTES, 'UTF-8')) === $cleanName &&
+                trim($old['purpose_category']) === $cat &&
+                trim(html_entity_decode($old['badge'] ?? '', ENT_QUOTES, 'UTF-8')) === $cleanBadge &&
+                trim(html_entity_decode($old['description'] ?? '', ENT_QUOTES, 'UTF-8')) === $cleanDesc &&
+                trim($old['duration'] ?? '') === $dur &&
+                (int)$old['is_active'] === $stat
+            ) {
+                $msg = "No changes were made. Service \"$cleanName\" is already up to date!";
+                $msgType = 'info';
+            } else {
+                $db->prepare("UPDATE clinic_services SET name=?,purpose_category=?,badge=?,description=?,duration=?,is_active=? WHERE id=?")
+                   ->execute([$cleanName, $cat, $cleanBadge, $cleanDesc, $dur, $stat, $id]);
+                $msg = "Service \"$cleanName\" updated successfully.";
+                $msgType = 'success';
+                logActivity("Updated service #$id \"$cleanName\"", 'Page Management', $_SESSION['user_id'], 'staff');
+            }
         } else { $msg = 'Service name and category are required.'; $msgType = 'danger'; }
     }
 
@@ -211,13 +256,15 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
     // ── FAQS: ADD ──
     elseif ($action === 'add_faq') {
-        $q    = sanitize(trim($_POST['faq_question'] ?? ''));
-        $a    = sanitize(trim($_POST['faq_answer'] ?? ''));
-        $icon = sanitize(trim($_POST['faq_icon'] ?? 'fa-circle-question'));
+        $q    = trim(strip_tags($_POST['faq_question'] ?? ''));
+        $a    = trim(strip_tags($_POST['faq_answer'] ?? ''));
+        $icon = trim(strip_tags($_POST['faq_icon'] ?? 'fa-circle-question'));
         if ($q && $a) {
+            $cleanQ = html_entity_decode($q, ENT_QUOTES, 'UTF-8');
+            $cleanA = html_entity_decode($a, ENT_QUOTES, 'UTF-8');
             $maxOrder = (int)$db->query("SELECT COALESCE(MAX(sort_order),0) FROM clinic_faqs")->fetchColumn();
             $db->prepare("INSERT INTO clinic_faqs (question,answer,icon,sort_order) VALUES (?,?,?,?)")
-               ->execute([$q,$a,$icon,$maxOrder+1]);
+               ->execute([$cleanQ,$cleanA,$icon,$maxOrder+1]);
             $msg = 'FAQ added successfully.';
             $msgType = 'success';
             logActivity('Added new FAQ', 'Page Management', $_SESSION['user_id'], 'staff');
@@ -227,16 +274,34 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     // ── FAQS: EDIT ──
     elseif ($action === 'edit_faq') {
         $id   = (int)($_POST['faq_id'] ?? 0);
-        $q    = sanitize(trim($_POST['faq_question'] ?? ''));
-        $a    = sanitize(trim($_POST['faq_answer'] ?? ''));
-        $icon = sanitize(trim($_POST['faq_icon'] ?? 'fa-circle-question'));
+        $q    = trim(strip_tags($_POST['faq_question'] ?? ''));
+        $a    = trim(strip_tags($_POST['faq_answer'] ?? ''));
+        $icon = trim(strip_tags($_POST['faq_icon'] ?? 'fa-circle-question'));
         $stat = (int)($_POST['faq_active'] ?? 1);
+
         if ($q && $a && $id) {
-            $db->prepare("UPDATE clinic_faqs SET question=?,answer=?,icon=?,is_active=? WHERE id=?")
-               ->execute([$q,$a,$icon,$stat,$id]);
-            $msg = 'FAQ updated successfully.';
-            $msgType = 'success';
-            logActivity("Updated FAQ #$id", 'Page Management', $_SESSION['user_id'], 'staff');
+            $stmt = $db->prepare("SELECT question, answer, icon, is_active FROM clinic_faqs WHERE id=?");
+            $stmt->execute([$id]);
+            $old = $stmt->fetch();
+
+            $cleanQ = html_entity_decode($q, ENT_QUOTES, 'UTF-8');
+            $cleanA = html_entity_decode($a, ENT_QUOTES, 'UTF-8');
+
+            if ($old &&
+                trim(html_entity_decode($old['question'], ENT_QUOTES, 'UTF-8')) === $cleanQ &&
+                trim(html_entity_decode($old['answer'], ENT_QUOTES, 'UTF-8')) === $cleanA &&
+                trim($old['icon']) === $icon &&
+                (int)$old['is_active'] === $stat
+            ) {
+                $msg = 'No changes were made. This FAQ is already up to date!';
+                $msgType = 'info';
+            } else {
+                $db->prepare("UPDATE clinic_faqs SET question=?,answer=?,icon=?,is_active=? WHERE id=?")
+                   ->execute([$cleanQ, $cleanA, $icon, $stat, $id]);
+                $msg = 'FAQ updated successfully.';
+                $msgType = 'success';
+                logActivity("Updated FAQ #$id", 'Page Management', $_SESSION['user_id'], 'staff');
+            }
         } else { $msg = 'Question and answer are required.'; $msgType = 'danger'; }
     }
 
@@ -251,6 +316,12 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         logActivity(($new ? 'Published' : 'Hidden') . " FAQ #$id", 'Page Management', $_SESSION['user_id'], 'staff');
     }
 }
+
+// ── Clean any legacy double-encoded &amp; ───────────────────────────────────
+try {
+    $db->exec("UPDATE clinic_services SET name = REPLACE(name, '&amp;', '&'), description = REPLACE(description, '&amp;', '&'), badge = REPLACE(badge, '&amp;', '&') WHERE name LIKE '%&amp;%' OR description LIKE '%&amp;%' OR badge LIKE '%&amp;%'");
+    $db->exec("UPDATE clinic_faqs SET question = REPLACE(question, '&amp;', '&'), answer = REPLACE(answer, '&amp;', '&') WHERE question LIKE '%&amp;%' OR answer LIKE '%&amp;%'");
+} catch (Throwable $e) {}
 
 // ── Load Data ────────────────────────────────────────────────────────────────
 $settings = [];
@@ -279,7 +350,7 @@ include __DIR__ . '/../includes/header.php';
 document.addEventListener("DOMContentLoaded", function() {
     Swal.fire({
         title: '<?= $msgType === "success" ? "Success!" : ($msgType === "info" ? "Notice" : "Error") ?>',
-        text: '<?= addslashes($msg) ?>',
+        text: '<?= addslashes(html_entity_decode($msg, ENT_QUOTES, "UTF-8")) ?>',
         icon: '<?= $msgType ?>',
         confirmButtonColor: 'var(--clr-primary)',
         background: 'var(--bg-card)',
@@ -347,7 +418,7 @@ document.addEventListener("DOMContentLoaded", function() {
      TAB 1: HOMEPAGE CONTENT (VISUAL STUDIO)
      ═══════════════════════════════════════════════════════════════ -->
 <div class="pm-tab-panel <?= $activeTab === 'homepage' ? 'active' : '' ?>" id="tab-homepage">
-  <form method="POST" id="homepageForm">
+  <form method="POST" id="homepageForm" onsubmit="return validateHomepageChange(event, this)">
     <input type="hidden" name="action" value="save_homepage">
     <input type="hidden" name="csrf_token" value="<?= generateCsrfToken() ?>">
     <input type="hidden" name="active_tab" value="homepage">
@@ -824,7 +895,7 @@ document.addEventListener("DOMContentLoaded", function() {
       </div>
       <button class="modal-close" onclick="closeModal('editSvcModal')" type="button"><i class="fas fa-times"></i></button>
     </div>
-    <form method="POST">
+    <form method="POST" id="editSvcForm" onsubmit="return validateSvcChange(event, this)">
       <div class="modal-body">
         <input type="hidden" name="action" value="edit_service">
         <input type="hidden" name="csrf_token" value="<?= generateCsrfToken() ?>">
@@ -945,7 +1016,7 @@ document.addEventListener("DOMContentLoaded", function() {
       </div>
       <button class="modal-close" onclick="closeModal('editFaqModal')" type="button"><i class="fas fa-times"></i></button>
     </div>
-    <form method="POST">
+    <form method="POST" id="editFaqForm" onsubmit="return validateFaqChange(event, this)">
       <div class="modal-body">
         <input type="hidden" name="action" value="edit_faq">
         <input type="hidden" name="csrf_token" value="<?= generateCsrfToken() ?>">
@@ -1043,8 +1114,21 @@ function selectIcon(iconClass) {
     closeModal('iconPickerModal');
 }
 
-// ── Service edit modal ───────────────────────────────────────────────────────
+let currentEditSvc = null;
+let currentEditFaq = null;
+let initialHomepageData = null;
+
+// ── Service edit modal & change detection ───────────────────────────────────
 function openEditSvc(id, name, cat, badge, desc, dur, active) {
+    currentEditSvc = {
+        id: id,
+        name: name.trim(),
+        cat: cat.trim(),
+        badge: (badge || '').trim(),
+        desc: (desc || '').trim(),
+        dur: (dur || '').trim(),
+        active: active ? '1' : '0'
+    };
     document.getElementById('editSvcId').value     = id;
     document.getElementById('editSvcName').value   = name;
     document.getElementById('editSvcCat').value    = cat;
@@ -1055,8 +1139,44 @@ function openEditSvc(id, name, cat, badge, desc, dur, active) {
     openModal('editSvcModal');
 }
 
-// ── FAQ edit modal ───────────────────────────────────────────────────────────
+function validateSvcChange(e, form) {
+    if (!currentEditSvc) return true;
+    const name   = document.getElementById('editSvcName').value.trim();
+    const cat    = document.getElementById('editSvcCat').value.trim();
+    const badge  = document.getElementById('editSvcBadge').value.trim();
+    const desc   = document.getElementById('editSvcDesc').value.trim();
+    const dur    = document.getElementById('editSvcDur').value.trim();
+    const active = document.getElementById('editSvcActive').value;
+
+    if (name === currentEditSvc.name &&
+        cat === currentEditSvc.cat &&
+        badge === currentEditSvc.badge &&
+        desc === currentEditSvc.desc &&
+        dur === currentEditSvc.dur &&
+        active === currentEditSvc.active) {
+        e.preventDefault();
+        Swal.fire({
+            title: 'Notice',
+            text: 'No changes were made. The service is already up to date!',
+            icon: 'info',
+            confirmButtonColor: 'var(--clr-primary)',
+            background: 'var(--bg-card)',
+            color: 'var(--text-primary)'
+        });
+        return false;
+    }
+    return true;
+}
+
+// ── FAQ edit modal & change detection ───────────────────────────────────────
 function openEditFaq(id, q, a, icon, active) {
+    currentEditFaq = {
+        id: id,
+        q: q.trim(),
+        a: a.trim(),
+        icon: icon.trim(),
+        active: active ? '1' : '0'
+    };
     document.getElementById('editFaqId').value     = id;
     document.getElementById('editFaqQ').value      = q;
     document.getElementById('editFaqA').value      = a;
@@ -1064,6 +1184,50 @@ function openEditFaq(id, q, a, icon, active) {
     if (sel) sel.value = icon;
     document.getElementById('editFaqActive').value = active ? '1' : '0';
     openModal('editFaqModal');
+}
+
+function validateFaqChange(e, form) {
+    if (!currentEditFaq) return true;
+    const q      = document.getElementById('editFaqQ').value.trim();
+    const a      = document.getElementById('editFaqA').value.trim();
+    const icon   = document.getElementById('editFaqIcon').value.trim();
+    const active = document.getElementById('editFaqActive').value;
+
+    if (q === currentEditFaq.q &&
+        a === currentEditFaq.a &&
+        icon === currentEditFaq.icon &&
+        active === currentEditFaq.active) {
+        e.preventDefault();
+        Swal.fire({
+            title: 'Notice',
+            text: 'No changes were made. This FAQ is already up to date!',
+            icon: 'info',
+            confirmButtonColor: 'var(--clr-primary)',
+            background: 'var(--bg-card)',
+            color: 'var(--text-primary)'
+        });
+        return false;
+    }
+    return true;
+}
+
+// ── Homepage change validation ───────────────────────────────────────────────
+function validateHomepageChange(e, form) {
+    if (!initialHomepageData) return true;
+    const currentData = new URLSearchParams(new FormData(form)).toString();
+    if (currentData === initialHomepageData) {
+        e.preventDefault();
+        Swal.fire({
+            title: 'Notice',
+            text: 'No changes were made. Homepage content is already up to date!',
+            icon: 'info',
+            confirmButtonColor: 'var(--clr-primary)',
+            background: 'var(--bg-card)',
+            color: 'var(--text-primary)'
+        });
+        return false;
+    }
+    return true;
 }
 
 // ── FAQ Accordion Toggle ─────────────────────────────────────────────────────
@@ -1076,6 +1240,11 @@ function toggleFaqAccordion(headerEl) {
 
 // ── Search & Filter Logic ───────────────────────────────────────────────────
 document.addEventListener('DOMContentLoaded', function() {
+    // Snapshot homepage form data for change detection
+    const hpForm = document.getElementById('homepageForm');
+    if (hpForm) {
+        initialHomepageData = new URLSearchParams(new FormData(hpForm)).toString();
+    }
     // Confirmation buttons
     document.querySelectorAll('button[data-confirm]').forEach(btn => {
         btn.addEventListener('click', function(e) {
