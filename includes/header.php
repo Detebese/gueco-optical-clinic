@@ -102,7 +102,7 @@ $currentTheme = ($userTheme === 'light') ? 'light' : 'dark';
     <!-- Logo -->
     <div class="sidebar-logo">
       <div class="logo-icon">
-        <img src="<?= BASE_URL ?>assets/images/logo.png?v=2" alt="Logo" style="width:100%; height:100%; object-fit:contain;">
+        <img src="<?= htmlspecialchars(getClinicLogoUrl(BASE_URL)) ?>" alt="Logo" style="width:100%; height:100%; object-fit:contain;">
       </div>
       <div class="logo-text">
         <h6>Gueco Optical</h6>

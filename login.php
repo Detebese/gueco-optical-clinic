@@ -689,7 +689,7 @@ $currentTheme = ($userTheme === 'light') ? 'light' : 'dark';
 
       <div class="clinic-badge">
         <div class="clinic-badge-dot">
-          <img src="assets/images/logo.png?v=2" alt="Logo">
+          <img src="<?= htmlspecialchars(getClinicLogoUrl()) ?>" alt="Logo">
         </div>
         <span>Gueco Optical Clinic — Capas, Tarlac</span>
       </div>
@@ -745,7 +745,7 @@ $currentTheme = ($userTheme === 'light') ? 'light' : 'dark';
 
         <div class="card-header-area">
           <div class="card-logo-wrap">
-            <img src="assets/images/logo.png?v=2" alt="Gueco Optical Logo">
+            <img src="<?= htmlspecialchars(getClinicLogoUrl()) ?>" alt="Gueco Optical Logo">
           </div>
           <div class="card-title">Welcome back 👋</div>
           <div class="card-subtitle">Enter your credentials to continue</div>

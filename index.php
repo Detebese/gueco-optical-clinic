@@ -1992,7 +1992,7 @@ if (!function_exists('getSiteSetting')) {
 <!-- TOPBAR -->
 <nav class="topbar">
   <a href="index.php" class="topbar-brand">
-    <img src="assets/images/logo.png?v=2" alt="Logo" class="topbar-logo">
+    <img src="<?= htmlspecialchars(getClinicLogoUrl()) ?>" alt="Logo" class="topbar-logo">
     <div>
       <div class="topbar-name">Gueco Optical</div>
       <div class="topbar-sub">Capas, Tarlac</div>
@@ -2049,7 +2049,7 @@ if (!function_exists('getSiteSetting')) {
       <div class="hero-logo-aura"></div>
       <div class="hero-logo-ring"></div>
       <div class="hero-3d-logo-card" onclick="openAuthModal()" title="Gueco Optical Clinic">
-        <img src="assets/images/logo.png?v=3" alt="Gueco Optical Logo" class="hero-pure-logo">
+        <img src="<?= htmlspecialchars(getClinicLogoUrl()) ?>" alt="Gueco Optical Logo" class="hero-pure-logo">
       </div>
     </div>
   </div>
@@ -2169,7 +2169,7 @@ if (!function_exists('getSiteSetting')) {
   <div style="max-width:1200px; margin:0 auto; display:grid; grid-template-columns:repeat(auto-fit, minmax(260px, 1fr)); gap:40px; margin-bottom:40px;">
     <div>
       <div style="display:flex; align-items:center; gap:12px; margin-bottom:16px;">
-        <img src="assets/images/logo.png?v=2" alt="Logo" style="width:44px; height:44px; border-radius:50%; background:#fff; padding:2px; box-shadow:0 2px 10px rgba(0,173,239,0.35);">
+        <img src="<?= htmlspecialchars(getClinicLogoUrl()) ?>" alt="Logo" style="width:44px; height:44px; border-radius:50%; background:#fff; padding:2px; box-shadow:0 2px 10px rgba(0,173,239,0.35);">
         <div>
           <h5 style="margin:0; font-weight:800; font-size:1.15rem; color:var(--text-primary);">Gueco Optical Clinic</h5>
           <small style="color:var(--text-muted); font-size:0.8rem;">Professional Eye Care &amp; Optical Services</small>
@@ -2231,7 +2231,7 @@ if (!function_exists('getSiteSetting')) {
     <div class="auth-header">
       <div class="auth-title-wrap">
         <div class="auth-brand-emblem">
-          <img src="assets/images/logo.png" alt="Gueco Optical Logo">
+          <img src="<?= htmlspecialchars(getClinicLogoUrl()) ?>" alt="Gueco Optical Logo">
         </div>
         <div>
           <h2 class="auth-title">Patient Portal</h2>

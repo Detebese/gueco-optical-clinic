@@ -3548,7 +3548,7 @@ $currentTheme = ($userTheme === 'light') ? 'light' : 'dark';
 <!-- TOPBAR -->
 <nav class="topbar">
   <a href="dashboard.php" class="topbar-brand">
-    <img src="../assets/images/logo.png?v=2" alt="Logo" class="topbar-logo">
+    <img src="<?= htmlspecialchars(getClinicLogoUrl('../')) ?>" alt="Logo" class="topbar-logo">
     <div>
       <div class="topbar-name">Gueco Optical Clinic</div>
       <div class="topbar-sub">Patient Portal · Capas, Tarlac</div>
@@ -4703,7 +4703,7 @@ $currentTheme = ($userTheme === 'light') ? 'light' : 'dark';
       <!-- Header -->
       <div class="rx-slip-header">
         <div class="rx-slip-brand">
-          <img src="../assets/images/logo.png?v=2" alt="Logo" class="rx-slip-logo">
+          <img src="<?= htmlspecialchars(getClinicLogoUrl('../')) ?>" alt="Logo" class="rx-slip-logo">
           <div>
             <div class="rx-slip-clinic-name">GUECO OPTICAL CLINIC</div>
             <div class="rx-slip-clinic-sub">Professional Eye Care &amp; Optical Services</div>

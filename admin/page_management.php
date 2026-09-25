@@ -184,6 +184,92 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         }
     }
 
+    // ── CLINIC LOGO: UPLOAD ──
+    elseif ($action === 'upload_logo') {
+        if (isset($_FILES['clinic_logo']) && $_FILES['clinic_logo']['error'] === UPLOAD_ERR_OK) {
+            $allowedExts  = ['png', 'jpg', 'jpeg', 'webp', 'svg'];
+            $allowedMimes = ['image/png', 'image/jpeg', 'image/webp', 'image/svg+xml'];
+            $fileTmp      = $_FILES['clinic_logo']['tmp_name'];
+            $fileName     = $_FILES['clinic_logo']['name'];
+            $fileExt      = strtolower(pathinfo($fileName, PATHINFO_EXTENSION));
+            $fileSize     = $_FILES['clinic_logo']['size'];
+
+            $finfo = finfo_open(FILEINFO_MIME_TYPE);
+            $fileMime = finfo_file($finfo, $fileTmp);
+            finfo_close($finfo);
+
+            if (!in_array($fileExt, $allowedExts) || !in_array($fileMime, $allowedMimes)) {
+                $msg = 'Invalid image format. Please upload a PNG, JPG, WEBP, or SVG file.';
+                $msgType = 'danger';
+            } elseif ($fileSize > 5 * 1024 * 1024) {
+                $msg = 'File size is too large. Maximum allowed size is 5MB.';
+                $msgType = 'danger';
+            } else {
+                $destDir = __DIR__ . '/../assets/images/';
+                if (!is_dir($destDir)) {
+                    @mkdir($destDir, 0755, true);
+                }
+
+                // Ensure backup of default logo exists
+                if (!file_exists($destDir . 'logo_default_backup.png') && file_exists($destDir . 'logo.png')) {
+                    @copy($destDir . 'logo.png', $destDir . 'logo_default_backup.png');
+                }
+
+                $newLogoName = 'clinic_logo_' . time() . '.' . $fileExt;
+                $destPath = $destDir . $newLogoName;
+
+                if (move_uploaded_file($fileTmp, $destPath)) {
+                    // Remove previous custom logo if it exists
+                    $prevLogo = $db->query("SELECT setting_value FROM site_settings WHERE setting_key = 'clinic_logo'")->fetchColumn();
+                    if ($prevLogo && !empty($prevLogo)) {
+                        $prevFile = __DIR__ . '/../' . ltrim($prevLogo, '/');
+                        if (file_exists($prevFile) && $prevFile !== $destPath && !str_contains($prevFile, 'logo_default_backup') && basename($prevFile) !== 'logo.png') {
+                            @unlink($prevFile);
+                        }
+                    }
+
+                    // Mirror to assets/images/logo.png for universal compatibility
+                    @copy($destPath, $destDir . 'logo.png');
+
+                    $relPath = 'assets/images/' . $newLogoName;
+                    $db->prepare("INSERT INTO site_settings (setting_key, setting_value) VALUES ('clinic_logo', ?)
+                                  ON DUPLICATE KEY UPDATE setting_value = VALUES(setting_value)")->execute([$relPath]);
+
+                    $msg = 'Clinic logo updated successfully! The new logo is now active across your patient website, portal, and clinic branding.';
+                    $msgType = 'success';
+                    logActivity('Updated official clinic logo', 'Page Management', $_SESSION['user_id'], 'staff');
+                } else {
+                    $msg = 'Failed to upload logo image. Please check directory permissions.';
+                    $msgType = 'danger';
+                }
+            }
+        } else {
+            $msg = 'Please select a logo image file to upload.';
+            $msgType = 'danger';
+        }
+    }
+
+    // ── CLINIC LOGO: RESET TO DEFAULT ──
+    elseif ($action === 'reset_logo') {
+        $destDir = __DIR__ . '/../assets/images/';
+        if (file_exists($destDir . 'logo_default_backup.png')) {
+            @copy($destDir . 'logo_default_backup.png', $destDir . 'logo.png');
+        }
+
+        $prevLogo = $db->query("SELECT setting_value FROM site_settings WHERE setting_key = 'clinic_logo'")->fetchColumn();
+        if ($prevLogo && !empty($prevLogo)) {
+            $prevFile = __DIR__ . '/../' . ltrim($prevLogo, '/');
+            if (file_exists($prevFile) && !str_contains($prevFile, 'logo_default_backup') && basename($prevFile) !== 'logo.png') {
+                @unlink($prevFile);
+            }
+        }
+
+        $db->prepare("DELETE FROM site_settings WHERE setting_key = 'clinic_logo'")->execute();
+        $msg = 'Clinic logo has been reset to the default official logo.';
+        $msgType = 'success';
+        logActivity('Reset clinic logo to default', 'Page Management', $_SESSION['user_id'], 'staff');
+    }
+
     // ── SERVICES: ADD ──
     elseif ($action === 'add_service') {
         $name    = trim(strip_tags($_POST['svc_name'] ?? ''));
@@ -332,6 +418,12 @@ function gs(array $s, string $k, string $d = ''): string {
     return htmlspecialchars($s[$k] ?? $d, ENT_QUOTES);
 }
 
+// Active Logo status
+$customLogo = $settings['clinic_logo'] ?? '';
+$customLogoActive = (!empty($customLogo) && file_exists(__DIR__ . '/../' . ltrim($customLogo, '/')));
+$currentLogoUrl = getClinicLogoUrl(BASE_URL);
+
+
 $services = $db->query("SELECT * FROM clinic_services ORDER BY sort_order ASC, id ASC")->fetchAll();
 $faqs     = $db->query("SELECT * FROM clinic_faqs ORDER BY sort_order ASC, id ASC")->fetchAll();
 
@@ -418,6 +510,104 @@ document.addEventListener("DOMContentLoaded", function() {
      TAB 1: HOMEPAGE CONTENT (VISUAL STUDIO)
      ═══════════════════════════════════════════════════════════════ -->
 <div class="pm-tab-panel <?= $activeTab === 'homepage' ? 'active' : '' ?>" id="tab-homepage">
+
+  <!-- ═══════════════════════════════════════════════════════════════
+       BRAND IDENTITY & CLINIC LOGO STUDIO
+       ═══════════════════════════════════════════════════════════════ -->
+  <div class="pm-card-box mb-4">
+    <div class="pm-card-box-header">
+      <div class="pm-header-badge-tag"><i class="fas fa-shield-halved"></i> BRAND IDENTITY</div>
+      <div class="d-flex align-items-center justify-content-between flex-wrap gap-2">
+        <div>
+          <h4 class="pm-card-box-title">Clinic Brand &amp; Business Logo</h4>
+          <p class="pm-card-box-desc">Manage the official business logo displayed on your patient website, navigation topbar, 3D hero emblem, prescription slips, and booking portal.</p>
+        </div>
+        <?php if (!empty($customLogoActive)): ?>
+        <form method="POST" id="resetLogoForm" onsubmit="return confirmResetLogo(event)">
+          <input type="hidden" name="action" value="reset_logo">
+          <input type="hidden" name="csrf_token" value="<?= generateCsrfToken() ?>">
+          <input type="hidden" name="active_tab" value="homepage">
+          <button type="submit" class="pm-btn-reset-logo" title="Revert to original clinic logo">
+            <i class="fas fa-rotate-left"></i> Reset to Default Logo
+          </button>
+        </form>
+        <?php endif; ?>
+      </div>
+    </div>
+
+    <div class="pm-logo-studio-grid">
+      <!-- Left: Active Logo Display with Theme Stage Switcher -->
+      <div class="pm-logo-preview-card">
+        <div class="pm-logo-preview-header">
+          <div class="pm-logo-preview-title"><i class="fas fa-eye text-primary"></i> Active Logo Display</div>
+          <div class="pm-canvas-toggle-group">
+            <button type="button" class="pm-canvas-btn active" id="canvasDarkBtn" onclick="setLogoCanvas('dark')" title="Preview on Dark Canvas"><i class="fas fa-moon"></i> Dark</button>
+            <button type="button" class="pm-canvas-btn" id="canvasLightBtn" onclick="setLogoCanvas('light')" title="Preview on Light Canvas"><i class="fas fa-sun"></i> Light</button>
+            <button type="button" class="pm-canvas-btn" id="canvasCheckBtn" onclick="setLogoCanvas('checker')" title="Preview on Transparent Grid"><i class="fas fa-border-all"></i> Grid</button>
+          </div>
+        </div>
+
+        <div class="pm-logo-stage dark" id="logoPreviewStage">
+          <img src="<?= htmlspecialchars($currentLogoUrl) ?>" alt="Clinic Logo" id="activeLogoImg" class="pm-stage-logo">
+        </div>
+
+        <div class="pm-logo-meta-info">
+          <span class="pm-logo-status-tag <?= !empty($customLogoActive) ? 'custom' : 'default' ?>">
+            <i class="fas <?= !empty($customLogoActive) ? 'fa-check-circle' : 'fa-info-circle' ?>"></i>
+            <?= !empty($customLogoActive) ? 'Custom Logo Active' : 'Default Official Logo' ?>
+          </span>
+          <span class="pm-logo-file-note"><i class="fas fa-file-image me-1"></i><?= htmlspecialchars(basename(strtok($currentLogoUrl, '?'))) ?></span>
+        </div>
+      </div>
+
+      <!-- Right: Upload New Logo -->
+      <div class="pm-logo-upload-card">
+        <form method="POST" enctype="multipart/form-data" id="logoUploadForm">
+          <input type="hidden" name="action" value="upload_logo">
+          <input type="hidden" name="csrf_token" value="<?= generateCsrfToken() ?>">
+          <input type="hidden" name="active_tab" value="homepage">
+
+          <div class="pm-upload-zone" id="logoDropZone" onclick="document.getElementById('logoFileInput').click()">
+            <input type="file" name="clinic_logo" id="logoFileInput" accept="image/png,image/jpeg,image/webp,image/svg+xml" style="display:none" onchange="handleLogoSelect(this)">
+            
+            <div id="uploadZonePrompt">
+              <div class="pm-upload-icon-circle">
+                <i class="fas fa-cloud-arrow-up"></i>
+              </div>
+              <h5 class="pm-upload-prompt-title">Click to Browse or Drag &amp; Drop New Logo</h5>
+              <p class="pm-upload-prompt-sub">Upload an image file to refresh your clinic's logo everywhere across the system</p>
+              <div class="pm-upload-specs">
+                <span><i class="fas fa-check-circle text-success"></i> Transparent PNG or SVG recommended</span>
+                <span><i class="fas fa-check-circle text-success"></i> Recommended: 512 &times; 512 px</span>
+                <span><i class="fas fa-check-circle text-success"></i> Max file size: 5 MB</span>
+              </div>
+            </div>
+
+            <!-- Instant Live Preview of Selected File -->
+            <div id="uploadZonePreview" style="display:none;">
+              <div class="pm-new-logo-preview-box">
+                <img id="newLogoPreviewImg" src="" alt="New Logo Preview">
+              </div>
+              <div class="pm-new-logo-info">
+                <span id="newLogoFileName" class="fw-bold"></span>
+                <span id="newLogoFileSize" class="pm-file-size-tag"></span>
+              </div>
+              <button type="button" class="btn btn-sm btn-outline-danger mt-2" onclick="cancelLogoSelect(event)">
+                <i class="fas fa-times me-1"></i> Choose Different Image
+              </button>
+            </div>
+          </div>
+
+          <div class="mt-3 d-flex justify-content-end">
+            <button type="submit" id="saveLogoBtn" class="pm-save-logo-btn" disabled>
+              <i class="fas fa-cloud-arrow-up"></i> Upload &amp; Apply New Logo
+            </button>
+          </div>
+        </form>
+      </div>
+    </div>
+  </div>
+
   <form method="POST" id="homepageForm" onsubmit="return validateHomepageChange(event, this)">
     <input type="hidden" name="action" value="save_homepage">
     <input type="hidden" name="csrf_token" value="<?= generateCsrfToken() ?>">
@@ -1236,6 +1426,78 @@ function toggleFaqAccordion(headerEl) {
     if (card) {
         card.classList.toggle('open');
     }
+}
+
+// ── Logo Canvas Mode Switcher ────────────────────────────────────────────────
+function setLogoCanvas(mode) {
+    const stage = document.getElementById('logoPreviewStage');
+    if (!stage) return;
+    stage.classList.remove('dark', 'light', 'checker');
+    stage.classList.add(mode);
+    
+    document.getElementById('canvasDarkBtn')?.classList.toggle('active', mode === 'dark');
+    document.getElementById('canvasLightBtn')?.classList.toggle('active', mode === 'light');
+    document.getElementById('canvasCheckBtn')?.classList.toggle('active', mode === 'checker');
+}
+
+// ── Logo File Selection & Live Preview ──────────────────────────────────────
+function handleLogoSelect(input) {
+    const file = input.files && input.files[0];
+    if (!file) return;
+
+    if (file.size > 5 * 1024 * 1024) {
+        Swal.fire({
+            title: 'File Too Large',
+            text: 'Logo image must be smaller than 5 MB.',
+            icon: 'error',
+            confirmButtonColor: 'var(--clr-primary)',
+            background: 'var(--bg-card)',
+            color: 'var(--text-primary)'
+        });
+        input.value = '';
+        return;
+    }
+
+    const reader = new FileReader();
+    reader.onload = function(e) {
+        document.getElementById('newLogoPreviewImg').src = e.target.result;
+        document.getElementById('newLogoFileName').textContent = file.name;
+        document.getElementById('newLogoFileSize').textContent = '(' + (file.size / 1024).toFixed(1) + ' KB)';
+        document.getElementById('uploadZonePrompt').style.display = 'none';
+        document.getElementById('uploadZonePreview').style.display = 'block';
+        document.getElementById('saveLogoBtn').disabled = false;
+    };
+    reader.readAsDataURL(file);
+}
+
+function cancelLogoSelect(e) {
+    if (e) e.stopPropagation();
+    const input = document.getElementById('logoFileInput');
+    if (input) input.value = '';
+    document.getElementById('uploadZonePreview').style.display = 'none';
+    document.getElementById('uploadZonePrompt').style.display = 'block';
+    document.getElementById('saveLogoBtn').disabled = true;
+}
+
+function confirmResetLogo(e) {
+    e.preventDefault();
+    Swal.fire({
+        title: 'Reset to Default Logo?',
+        text: 'This will restore the original Gueco Optical Clinic logo across your website and portals.',
+        icon: 'warning',
+        showCancelButton: true,
+        confirmButtonColor: 'var(--clr-primary)',
+        cancelButtonColor: '#6B7280',
+        confirmButtonText: 'Yes, Restore Default',
+        cancelButtonText: 'Cancel',
+        background: 'var(--bg-card)',
+        color: 'var(--text-primary)'
+    }).then((result) => {
+        if (result.isConfirmed) {
+            document.getElementById('resetLogoForm').submit();
+        }
+    });
+    return false;
 }
 
 // ── Search & Filter Logic ───────────────────────────────────────────────────

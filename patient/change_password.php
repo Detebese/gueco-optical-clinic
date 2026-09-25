@@ -566,7 +566,7 @@ $currentTheme = ($userTheme === 'light') ? 'light' : 'dark';
 <!-- TOPBAR -->
 <nav class="topbar">
   <a href="dashboard.php" class="topbar-brand">
-    <img src="../assets/images/logo.png?v=2" alt="Logo" class="topbar-logo">
+    <img src="<?= htmlspecialchars(getClinicLogoUrl('../')) ?>" alt="Logo" class="topbar-logo">
     <div>
       <div class="topbar-name">Gueco Optical Clinic</div>
       <div class="topbar-sub">Patient Portal · Capas, Tarlac</div>

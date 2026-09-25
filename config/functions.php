@@ -632,3 +632,34 @@ function validatePasswordStrength(string $password): ?string {
     }
     return null;
 }
+
+/**
+ * Get the active clinic logo URL with cache busting
+ *
+ * @param string $basePrefix Path prefix (e.g. '', '../', BASE_URL)
+ * @return string Full relative URL to active clinic logo
+ */
+function getClinicLogoUrl(string $basePrefix = ''): string {
+    static $cachedLogo = null;
+    if ($cachedLogo !== null) {
+        return $basePrefix . $cachedLogo;
+    }
+    try {
+        $db = getDB();
+        $stmt = $db->prepare("SELECT setting_value FROM site_settings WHERE setting_key = 'clinic_logo' LIMIT 1");
+        $stmt->execute();
+        $custom = $stmt->fetchColumn();
+        if (!empty($custom) && file_exists(__DIR__ . '/../' . ltrim($custom, '/'))) {
+            $cachedLogo = ltrim($custom, '/');
+        } else {
+            $cachedLogo = 'assets/images/logo.png';
+        }
+    } catch (Throwable $e) {
+        $cachedLogo = 'assets/images/logo.png';
+    }
+    $realFile = __DIR__ . '/../' . $cachedLogo;
+    $ver = file_exists($realFile) ? filemtime($realFile) : '2';
+    $cachedLogo .= '?v=' . $ver;
+    return $basePrefix . $cachedLogo;
+}
+
