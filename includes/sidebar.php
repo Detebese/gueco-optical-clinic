@@ -68,6 +68,12 @@ $base = BASE_URL;
       <span>Activity Logs</span>
     </a>
   </li>
+  <li class="nav-item">
+    <a href="<?= $base ?>admin/page_management.php" class="nav-link">
+      <div class="nav-icon"><i class="fas fa-globe"></i></div>
+      <span>Page Management</span>
+    </a>
+  </li>
 
 <?php elseif ($role === 'doctor'): ?>
   <p class="nav-section-title">Main</p>

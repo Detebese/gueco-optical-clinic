@@ -400,6 +400,24 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action']) && $_POST['
 }
 $userTheme = $_COOKIE['gueco_theme'] ?? ($_COOKIE['theme'] ?? 'dark');
 $currentTheme = ($userTheme === 'light') ? 'light' : 'dark';
+
+// Dynamic site settings & FAQs
+$siteSettings = [];
+$clinicFaqs = [];
+try {
+    $idxDb = getDB();
+    $sRows = $idxDb->query("SELECT setting_key, setting_value FROM site_settings")->fetchAll(PDO::FETCH_KEY_PAIR);
+    if (!empty($sRows)) $siteSettings = $sRows;
+
+    $fRows = $idxDb->query("SELECT question, answer, icon FROM clinic_faqs WHERE is_active = 1 ORDER BY sort_order ASC, id ASC")->fetchAll(PDO::FETCH_ASSOC);
+    if (!empty($fRows)) $clinicFaqs = $fRows;
+} catch (Throwable $e) {}
+
+if (!function_exists('getSiteSetting')) {
+    function getSiteSetting(array $settings, string $key, string $default = ''): string {
+        return $settings[$key] ?? $default;
+    }
+}
 ?>
 <!DOCTYPE html>
 <html lang="en" data-theme="<?= $currentTheme ?>">
@@ -2003,22 +2021,22 @@ $currentTheme = ($userTheme === 'light') ? 'light' : 'dark';
 <!-- HERO SECTION -->
 <section class="hero" id="about">
   <div class="hero-text">
-    <div class="badge-est"><i class="fas fa-certificate text-warning me-1"></i>Established in 1986</div>
-    <h1>See the World <span>Clearly</span> &amp; <span>Beautifully</span></h1>
-    <p>Providing exceptional, comprehensive eye care services to the Capas community. We combine state-of-the-art technology with compassionate care to help you achieve your best vision.</p>
+    <div class="badge-est"><i class="fas fa-certificate text-warning me-1"></i><?= htmlspecialchars(getSiteSetting($siteSettings, 'hero_badge', 'Established in 1986')) ?></div>
+    <h1><?= getSiteSetting($siteSettings, 'hero_headline', 'See the World <span>Clearly</span> &amp; <span>Beautifully</span>') ?></h1>
+    <p><?= htmlspecialchars(getSiteSetting($siteSettings, 'hero_description', 'Providing exceptional, comprehensive eye care services to the Capas community. We combine state-of-the-art technology with compassionate care to help you achieve your best vision.')) ?></p>
     
     <div class="stats">
       <div class="stat-item">
-        <h3>40+</h3>
-        <p>Years of Service</p>
+        <h3><?= htmlspecialchars(getSiteSetting($siteSettings, 'stat1_value', '40+')) ?></h3>
+        <p><?= htmlspecialchars(getSiteSetting($siteSettings, 'stat1_label', 'Years of Service')) ?></p>
       </div>
       <div class="stat-item">
-        <h3>10k+</h3>
-        <p>Happy Patients</p>
+        <h3><?= htmlspecialchars(getSiteSetting($siteSettings, 'stat2_value', '10k+')) ?></h3>
+        <p><?= htmlspecialchars(getSiteSetting($siteSettings, 'stat2_label', 'Happy Patients')) ?></p>
       </div>
       <div class="stat-item">
-        <h3>100%</h3>
-        <p>Commitment</p>
+        <h3><?= htmlspecialchars(getSiteSetting($siteSettings, 'stat3_value', '100%')) ?></h3>
+        <p><?= htmlspecialchars(getSiteSetting($siteSettings, 'stat3_label', 'Commitment')) ?></p>
       </div>
     </div>
   </div>
@@ -2036,21 +2054,21 @@ $currentTheme = ($userTheme === 'light') ? 'light' : 'dark';
 <!-- DETAILS -->
 <section class="details" id="services">
   <div class="detail-card">
-    <div class="detail-icon icon-bronze"><i class="fas fa-user-md"></i></div>
-    <h3>Expert Optometrists</h3>
-    <p>Our highly trained professionals provide thorough eye exams, accurate prescriptions, and personalized care tailored to your unique visual needs.</p>
+    <div class="detail-icon icon-bronze"><i class="fas <?= htmlspecialchars(getSiteSetting($siteSettings, 'card1_icon', 'fa-user-md')) ?>"></i></div>
+    <h3><?= htmlspecialchars(getSiteSetting($siteSettings, 'card1_title', 'Expert Optometrists')) ?></h3>
+    <p><?= htmlspecialchars(getSiteSetting($siteSettings, 'card1_desc', 'Our highly trained professionals provide thorough eye exams, accurate prescriptions, and personalized care tailored to your unique visual needs.')) ?></p>
   </div>
   
   <div class="detail-card">
-    <div class="detail-icon icon-gold"><i class="fas fa-glasses"></i></div>
-    <h3>Premium Eyewear</h3>
-    <p>Choose from a wide selection of stylish frames, premium lenses, and comfortable contact lenses sourced from top international brands.</p>
+    <div class="detail-icon icon-gold"><i class="fas <?= htmlspecialchars(getSiteSetting($siteSettings, 'card2_icon', 'fa-glasses')) ?>"></i></div>
+    <h3><?= htmlspecialchars(getSiteSetting($siteSettings, 'card2_title', 'Premium Eyewear')) ?></h3>
+    <p><?= htmlspecialchars(getSiteSetting($siteSettings, 'card2_desc', 'Choose from a wide selection of stylish frames, premium lenses, and comfortable contact lenses sourced from top international brands.')) ?></p>
   </div>
   
   <div class="detail-card">
-    <div class="detail-icon icon-emerald"><i class="fas fa-map-marker-alt"></i></div>
-    <h3>Convenient Location</h3>
-    <p>Located in the heart of Capas, Tarlac. We provide a comfortable, welcoming environment with modern facilities for all our patients.</p>
+    <div class="detail-icon icon-emerald"><i class="fas <?= htmlspecialchars(getSiteSetting($siteSettings, 'card3_icon', 'fa-map-marker-alt')) ?>"></i></div>
+    <h3><?= htmlspecialchars(getSiteSetting($siteSettings, 'card3_title', 'Convenient Location')) ?></h3>
+    <p><?= htmlspecialchars(getSiteSetting($siteSettings, 'card3_desc', 'Located in the heart of Capas, Tarlac. We provide a comfortable, welcoming environment with modern facilities for all our patients.')) ?></p>
   </div>
 </section>
 
@@ -2067,134 +2085,37 @@ $currentTheme = ($userTheme === 'light') ? 'light' : 'dark';
   </div>
 
   <div class="faq-grid">
-    <!-- FAQ 1 (Open by default) -->
-    <div class="faq-card active" onclick="toggleFaqCard(this)">
-      <button type="button" class="faq-trigger" aria-expanded="true">
+    <?php
+    if (empty($clinicFaqs)) {
+        $clinicFaqs = [
+            ['question' => 'How often should I have a comprehensive eye examination?', 'answer' => 'Both adults and children are recommended to undergo a professional eye examination at least once every 12 months. Routine checkups ensure your optical prescription remains accurate and help detect subtle vision changes early. Patients who wear contact lenses, spend long hours on digital screens, or have pre-existing health conditions such as diabetes or hypertension may benefit from semi-annual checkups.', 'icon' => 'fa-eye'],
+            ['question' => 'How do I schedule an appointment through the patient portal?', 'answer' => 'Booking an appointment is seamless! Simply click the "Book an Appointment" button anywhere on this page. You can log in or register in seconds using your email address or Google Account. Once inside, select your preferred clinic date, convenient time slot, and reason for visit. You will receive immediate booking confirmation and appointment reminders.', 'icon' => 'fa-calendar-check'],
+            ['question' => 'What should I bring to my optical appointment?', 'answer' => 'To help our optometrists provide the most accurate assessment, please bring: your current eyeglasses or contact lens prescription details (if any), a valid photo ID for patient identification, a list of any current medications, eye drops, or chronic conditions (e.g., allergies, diabetes), and your sunglasses in case your eyes feel sensitive to bright light following ophthalmic screening.', 'icon' => 'fa-clipboard-list'],
+            ['question' => 'How long does it take to prepare my new prescription eyewear?', 'answer' => 'Standard single-vision prescription lenses and in-stock frames are typically crafted, precision-edged, and ready for dispensing within 1 to 2 business days. Custom specialty orders—including progressive multifocal lenses, ultra-thin high-index materials, blue-light blocking filters, and photochromic transition lenses—typically require 3 to 5 business days for optical surfacing and quality inspection.', 'icon' => 'fa-glasses'],
+            ['question' => 'Do you offer warranties and aftercare on eyeglasses?', 'answer' => 'Yes! All authentic designer frames and premium prescription lens coatings purchased at Gueco Optical Clinic include manufacturer warranty coverage against verified factory defects. In addition, every patient receives Free Lifetime Maintenance—including complimentary ultrasonic cleaning, screw tightening, nose pad replacements, and custom frame adjustments whenever you visit our clinic in Capas, Tarlac.', 'icon' => 'fa-shield-halved'],
+            ['question' => 'Is my personal and medical health information kept private?', 'answer' => 'Your health privacy is our utmost priority. All patient records, clinical charts, refraction results, and contact information are strictly protected under the Philippine Data Privacy Act of 2012 (RA 10173). We adhere to strict medical confidentiality. We never sell, rent, or distribute your personal details to outside advertisers or third parties.', 'icon' => 'fa-user-shield'],
+        ];
+    }
+    foreach ($clinicFaqs as $idx => $faqItem):
+      $isActiveCard = ($idx === 0) ? ' active' : '';
+      $isExpanded = ($idx === 0) ? 'true' : 'false';
+      $iconClass = !empty($faqItem['icon']) ? htmlspecialchars($faqItem['icon']) : 'fa-circle-question';
+    ?>
+    <div class="faq-card<?= $isActiveCard ?>" onclick="toggleFaqCard(this)">
+      <button type="button" class="faq-trigger" aria-expanded="<?= $isExpanded ?>">
         <div class="faq-q-wrap">
-          <div class="faq-q-icon"><i class="fas fa-eye"></i></div>
-          <h3 class="faq-q-text">How often should I have a comprehensive eye examination?</h3>
+          <div class="faq-q-icon"><i class="fas <?= $iconClass ?>"></i></div>
+          <h3 class="faq-q-text"><?= htmlspecialchars($faqItem['question']) ?></h3>
         </div>
         <div class="faq-arrow"><i class="fas fa-chevron-down"></i></div>
       </button>
       <div class="faq-content">
         <div class="faq-inner">
-          <p>
-            Both adults and children are recommended to undergo a professional eye examination <strong>at least once every 12 months</strong>. Routine checkups ensure your optical prescription remains accurate and help detect subtle vision changes early.
-          </p>
-          <p>
-            Patients who wear contact lenses, spend long hours on digital screens, or have pre-existing health conditions such as diabetes or hypertension may benefit from semi-annual checkups to prevent eye strain and preserve ocular health.
-          </p>
+          <p><?= nl2br(htmlspecialchars($faqItem['answer'])) ?></p>
         </div>
       </div>
     </div>
-
-    <!-- FAQ 2 -->
-    <div class="faq-card" onclick="toggleFaqCard(this)">
-      <button type="button" class="faq-trigger" aria-expanded="false">
-        <div class="faq-q-wrap">
-          <div class="faq-q-icon"><i class="fas fa-calendar-check"></i></div>
-          <h3 class="faq-q-text">How do I schedule an appointment through the patient portal?</h3>
-        </div>
-        <div class="faq-arrow"><i class="fas fa-chevron-down"></i></div>
-      </button>
-      <div class="faq-content">
-        <div class="faq-inner">
-          <p>
-            Booking an appointment is seamless! Simply click the <strong>"Book an Appointment"</strong> button anywhere on this page. You can log in or register in seconds using your email address or Google Account.
-          </p>
-          <p>
-            Once inside, select your preferred clinic date, convenient time slot, and reason for visit (such as <em>Comprehensive Eye Exam</em>, <em>Frame &amp; Lens Fitting</em>, or <em>Follow-up Consultation</em>). You will receive immediate booking confirmation and appointment reminders.
-          </p>
-        </div>
-      </div>
-    </div>
-
-    <!-- FAQ 3 -->
-    <div class="faq-card" onclick="toggleFaqCard(this)">
-      <button type="button" class="faq-trigger" aria-expanded="false">
-        <div class="faq-q-wrap">
-          <div class="faq-q-icon"><i class="fas fa-clipboard-list"></i></div>
-          <h3 class="faq-q-text">What should I bring to my optical appointment?</h3>
-        </div>
-        <div class="faq-arrow"><i class="fas fa-chevron-down"></i></div>
-      </button>
-      <div class="faq-content">
-        <div class="faq-inner">
-          <p>
-            To help our optometrists provide the most accurate assessment, please bring:
-          </p>
-          <ul style="padding-left:20px; margin:0 0 10px 0;">
-            <li>Your <strong>current eyeglasses</strong> or contact lens prescription details (if any).</li>
-            <li>A valid photo ID for patient identification.</li>
-            <li>A list of any current medications, eye drops, or chronic conditions (e.g., allergies, diabetes).</li>
-            <li>Your sunglasses, in case your eyes feel slightly sensitive to bright light following ophthalmic screening.</li>
-          </ul>
-        </div>
-      </div>
-    </div>
-
-    <!-- FAQ 4 -->
-    <div class="faq-card" onclick="toggleFaqCard(this)">
-      <button type="button" class="faq-trigger" aria-expanded="false">
-        <div class="faq-q-wrap">
-          <div class="faq-q-icon"><i class="fas fa-glasses"></i></div>
-          <h3 class="faq-q-text">How long does it take to prepare my new prescription eyewear?</h3>
-        </div>
-        <div class="faq-arrow"><i class="fas fa-chevron-down"></i></div>
-      </button>
-      <div class="faq-content">
-        <div class="faq-inner">
-          <p>
-            Standard single-vision prescription lenses and in-stock frames are typically crafted, precision-edged, and ready for dispensing within <strong>1 to 2 business days</strong>.
-          </p>
-          <p>
-            Custom specialty orders—including progressive multifocal lenses, ultra-thin high-index materials, blue-light blocking filters, and photochromic transition lenses—typically require <strong>3 to 5 business days</strong> for optical surfacing and quality inspection.
-          </p>
-        </div>
-      </div>
-    </div>
-
-    <!-- FAQ 5 -->
-    <div class="faq-card" onclick="toggleFaqCard(this)">
-      <button type="button" class="faq-trigger" aria-expanded="false">
-        <div class="faq-q-wrap">
-          <div class="faq-q-icon"><i class="fas fa-shield-halved"></i></div>
-          <h3 class="faq-q-text">Do you offer warranties and aftercare on eyeglasses?</h3>
-        </div>
-        <div class="faq-arrow"><i class="fas fa-chevron-down"></i></div>
-      </button>
-      <div class="faq-content">
-        <div class="faq-inner">
-          <p>
-            Yes! All authentic designer frames and premium prescription lens coatings purchased at Gueco Optical Clinic include <strong>manufacturer warranty coverage</strong> against verified factory defects.
-          </p>
-          <p>
-            In addition, every patient receives <strong>Free Lifetime Maintenance</strong>—including complimentary ultrasonic cleaning, screw tightening, nose pad replacements, and custom frame adjustments whenever you visit our clinic in Capas, Tarlac.
-          </p>
-        </div>
-      </div>
-    </div>
-
-    <!-- FAQ 6 -->
-    <div class="faq-card" onclick="toggleFaqCard(this)">
-      <button type="button" class="faq-trigger" aria-expanded="false">
-        <div class="faq-q-wrap">
-          <div class="faq-q-icon"><i class="fas fa-user-shield"></i></div>
-          <h3 class="faq-q-text">Is my personal and medical health information kept private?</h3>
-        </div>
-        <div class="faq-arrow"><i class="fas fa-chevron-down"></i></div>
-      </button>
-      <div class="faq-content">
-        <div class="faq-inner">
-          <p>
-            Your health privacy is our utmost priority. All patient records, clinical charts, refraction results, and contact information are strictly protected under the <strong>Philippine Data Privacy Act of 2012 (RA 10173)</strong>.
-          </p>
-          <p>
-            We adhere to strict medical confidentiality. We never sell, rent, or distribute your personal details to outside advertisers or third parties.
-          </p>
-        </div>
-      </div>
-    </div>
+    <?php endforeach; ?>
   </div>
 
   <!-- FAQ Bottom Assistance Box -->

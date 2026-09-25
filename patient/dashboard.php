@@ -3988,32 +3988,42 @@ $currentTheme = ($userTheme === 'light') ? 'light' : 'dark';
 
               <div class="service-grid" id="serviceGrid">
                 <?php
-                $services = [
-                    ['Comprehensive Eye Examination','consultation','Examination','Full eye health check, visual acuity test, and digital refraction test.','30–45 mins'],
-                    ['Prescription & Visual Acuity Test','consultation','Examination','Precise sphere, cylinder & axis measurement for reading or distance glasses.','20–30 mins'],
-                    ['Pediatric & Student Vision Screening','consultation','Specialized','Gentle eye exam designed for children, students, and early myopia detection.','25–35 mins'],
-                    ['Senior Vision & Cataract Screening','consultation','Specialized','Assessment for presbyopia, cataracts, and age-related visual changes.','30–45 mins'],
-                    ['Eyeglass Frame Selection & Styling','eyeglass_claim','Eyewear','Bridge sizing, facial ergonomics, and personalized frame styling assistance.','20–30 mins'],
-                    ['Lens Upgrade (Blue Light / Transitions)','eyeglass_claim','Lenses','Anti-radiation computer lenses, photochromic transitions, or progressive lenses.','15–20 mins'],
-                    ['Eyeglass Pick-up & Final Alignment','eyeglass_claim','Eyewear','Claim completed prescription glasses with custom temple & nosepad fitting.','15 mins'],
-                    ['Frame Repair & Ultrasonic Cleaning','other','Care','Nosepad replacement, frame realignment, screw tightening, and deep ultrasonic bath.','15–20 mins'],
-                    ['Contact Lens Fitting & Insertion Training','contact_lens_fitting','Contacts','Corneal measurement, comfort trial fitting, and contact lens handling training.','30–40 mins'],
-                    ['Contact Lens Replenishment / Pick-up','contact_lens_fitting','Contacts','Claim monthly, bi-weekly, or daily disposable contact lens supplies.','10–15 mins'],
-                    ['Post-Consultation Prescription Check','follow_up','Follow-up','Re-evaluating vision adaptation and visual comfort with newly acquired glasses.','15–20 mins'],
-                    ['General Optical Inquiries & Consultation','other','General','Discuss specific vision concerns, eye symptoms, referrals, or clinic services.','15–20 mins'],
-                ];
+                $services = [];
+                try {
+                    $svcRows = $db->query("SELECT name, purpose_category, badge, description, duration FROM clinic_services WHERE is_active = 1 ORDER BY sort_order ASC, id ASC")->fetchAll(PDO::FETCH_NUM);
+                    if (!empty($svcRows)) {
+                        $services = $svcRows;
+                    }
+                } catch (Throwable $e) {}
+
+                if (empty($services)) {
+                    $services = [
+                        ['Comprehensive Eye Examination','consultation','Examination','Full eye health check, visual acuity test, and digital refraction test.','30–45 mins'],
+                        ['Prescription & Visual Acuity Test','consultation','Examination','Precise sphere, cylinder & axis measurement for reading or distance glasses.','20–30 mins'],
+                        ['Pediatric & Student Vision Screening','consultation','Specialized','Gentle eye exam designed for children, students, and early myopia detection.','25–35 mins'],
+                        ['Senior Vision & Cataract Screening','consultation','Specialized','Assessment for presbyopia, cataracts, and age-related visual changes.','30–45 mins'],
+                        ['Eyeglass Frame Selection & Styling','eyeglass_claim','Eyewear','Bridge sizing, facial ergonomics, and personalized frame styling assistance.','20–30 mins'],
+                        ['Lens Upgrade (Blue Light / Transitions)','eyeglass_claim','Lenses','Anti-radiation computer lenses, photochromic transitions, or progressive lenses.','15–20 mins'],
+                        ['Eyeglass Pick-up & Final Alignment','eyeglass_claim','Eyewear','Claim completed prescription glasses with custom temple & nosepad fitting.','15 mins'],
+                        ['Frame Repair & Ultrasonic Cleaning','other','Care','Nosepad replacement, frame realignment, screw tightening, and deep ultrasonic bath.','15–20 mins'],
+                        ['Contact Lens Fitting & Insertion Training','contact_lens_fitting','Contacts','Corneal measurement, comfort trial fitting, and contact lens handling training.','30–40 mins'],
+                        ['Contact Lens Replenishment / Pick-up','contact_lens_fitting','Contacts','Claim monthly, bi-weekly, or daily disposable contact lens supplies.','10–15 mins'],
+                        ['Post-Consultation Prescription Check','follow_up','Follow-up','Re-evaluating vision adaptation and visual comfort with newly acquired glasses.','15–20 mins'],
+                        ['General Optical Inquiries & Consultation','other','General','Discuss specific vision concerns, eye symptoms, referrals, or clinic services.','15–20 mins'],
+                    ];
+                }
                 foreach ($services as [$name,$pCat,$badge,$desc,$meta]):
                 ?>
-                <div class="service-card" data-purpose="<?= $pCat ?>" data-name="<?= $name ?>" onclick="selectService(this)">
+                <div class="service-card" data-purpose="<?= htmlspecialchars($pCat) ?>" data-name="<?= htmlspecialchars($name) ?>" onclick="selectService(this)">
                   <div class="service-top">
-                    <span class="service-badge"><?= $badge ?></span>
+                    <span class="service-badge"><?= htmlspecialchars($badge) ?></span>
                     <div class="service-check"><i class="fas fa-check"></i></div>
                   </div>
                   <div>
-                    <div class="service-title"><?= $name ?></div>
-                    <div class="service-desc"><?= $desc ?></div>
+                    <div class="service-title"><?= htmlspecialchars($name) ?></div>
+                    <div class="service-desc"><?= htmlspecialchars($desc) ?></div>
                   </div>
-                  <div class="service-meta"><i class="fas fa-clock"></i> <?= $meta ?></div>
+                  <div class="service-meta"><i class="fas fa-clock"></i> <?= htmlspecialchars($meta) ?></div>
                 </div>
                 <?php endforeach; ?>
               </div>
