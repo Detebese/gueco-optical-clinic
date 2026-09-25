@@ -17,6 +17,31 @@ $db->exec("CREATE TABLE IF NOT EXISTS site_settings (
     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4");
 
+$db->exec("CREATE TABLE IF NOT EXISTS clinic_booking_categories (
+    id INT AUTO_INCREMENT PRIMARY KEY,
+    category_key VARCHAR(50) UNIQUE NOT NULL,
+    name VARCHAR(150) NOT NULL,
+    icon VARCHAR(60) DEFAULT 'fa-calendar-check',
+    description TEXT,
+    sort_order INT DEFAULT 0,
+    is_active TINYINT(1) DEFAULT 1,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4");
+
+// ── Seed default booking categories if empty ────────────────────────────────
+$catCount = (int)$db->query("SELECT COUNT(*) FROM clinic_booking_categories")->fetchColumn();
+if ($catCount === 0) {
+    $defaultCats = [
+        ['consultation', 'Eye Consultation & Check-up', 'fa-user-doctor', 'Comprehensive examination, visual acuity test, and licensed doctor consultation.', 1],
+        ['eyeglass_claim', 'Eyeglasses & Frames', 'fa-glasses', 'Prescription frame selection, lens upgrades, claiming ready spectacles.', 2],
+        ['contact_lens_fitting', 'Contact Lens Care', 'fa-circle-dot', 'Cornea curvature measurement, trial lens fitting, and supply orders.', 3],
+        ['follow_up', 'Follow-up Visit', 'fa-rotate-right', 'Post-examination check, lens adaptation review, and progress evaluation.', 4],
+        ['other', 'General Optical Services', 'fa-screwdriver-wrench', 'Frame repairs, ultrasonic bath cleaning, screw adjustments, or inquiries.', 5],
+    ];
+    $cIns = $db->prepare("INSERT INTO clinic_booking_categories (category_key, name, icon, description, sort_order) VALUES (?,?,?,?,?)");
+    foreach ($defaultCats as $c) $cIns->execute($c);
+}
+
 $db->exec("CREATE TABLE IF NOT EXISTS clinic_services (
     id INT AUTO_INCREMENT PRIMARY KEY,
     name VARCHAR(150) NOT NULL,
@@ -139,11 +164,13 @@ $availableIcons = [
 // ── POST Handler ─────────────────────────────────────────────────────────────
 $reopenData = null;
 $activeTab  = $_POST['active_tab'] ?? $_GET['tab'] ?? 'homepage';
+$activeSvcSubTab = $_POST['svc_sub_tab'] ?? $_GET['sub_tab'] ?? 'cats';
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     requireCsrfToken();
     $action = $_POST['action'] ?? '';
     $activeTab = $_POST['active_tab'] ?? 'homepage';
+    $activeSvcSubTab = $_POST['svc_sub_tab'] ?? 'cats';
 
     // ── HOMEPAGE SETTINGS ──
     if ($action === 'save_homepage') {
@@ -270,8 +297,149 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         logActivity('Reset clinic logo to default', 'Page Management', $_SESSION['user_id'], 'staff');
     }
 
+    // ── BOOKING CATEGORIES: ADD ──
+    elseif ($action === 'add_booking_category') {
+        $activeTab = 'services';
+        $activeSvcSubTab = 'cats';
+        $name = trim(strip_tags($_POST['cat_name'] ?? ''));
+        $key  = trim(strip_tags($_POST['cat_key'] ?? ''));
+        $icon = trim(strip_tags($_POST['cat_icon'] ?? 'fa-calendar-check'));
+        $desc = trim(strip_tags($_POST['cat_desc'] ?? ''));
+
+        if (!$key && $name) {
+            $key = strtolower(preg_replace('/[^a-zA-Z0-9_]+/', '_', trim($name)));
+        }
+        $key = trim($key, '_');
+
+        if ($name && $key) {
+            $cleanName = html_entity_decode($name, ENT_QUOTES, 'UTF-8');
+            $cleanDesc = html_entity_decode($desc, ENT_QUOTES, 'UTF-8');
+
+            $chk = $db->prepare("SELECT COUNT(*) FROM clinic_booking_categories WHERE category_key = ?");
+            $chk->execute([$key]);
+            if ($chk->fetchColumn() > 0) {
+                $msg = "A booking category with key \"$key\" already exists. Please choose a different category key or name.";
+                $msgType = 'danger';
+            } else {
+                $maxOrder = (int)$db->query("SELECT COALESCE(MAX(sort_order),0) FROM clinic_booking_categories")->fetchColumn();
+                $db->prepare("INSERT INTO clinic_booking_categories (category_key, name, icon, description, sort_order) VALUES (?,?,?,?,?)")
+                   ->execute([$key, $cleanName, $icon, $cleanDesc, $maxOrder + 1]);
+                $msg = "Booking Category \"$cleanName\" created successfully.";
+                $msgType = 'success';
+                logActivity("Added booking category \"$cleanName\"", 'Page Management', $_SESSION['user_id'], 'staff');
+            }
+        } else {
+            $msg = 'Category name and identifier key are required.';
+            $msgType = 'danger';
+        }
+    }
+
+    // ── BOOKING CATEGORIES: EDIT ──
+    elseif ($action === 'edit_booking_category') {
+        $activeTab = 'services';
+        $activeSvcSubTab = 'cats';
+        $id   = (int)($_POST['cat_id'] ?? 0);
+        $name = trim(strip_tags($_POST['cat_name'] ?? ''));
+        $key  = trim(strip_tags($_POST['cat_key'] ?? ''));
+        $icon = trim(strip_tags($_POST['cat_icon'] ?? 'fa-calendar-check'));
+        $desc = trim(strip_tags($_POST['cat_desc'] ?? ''));
+        $stat = (int)($_POST['cat_active'] ?? 1);
+
+        if (!$key && $name) {
+            $key = strtolower(preg_replace('/[^a-zA-Z0-9_]+/', '_', trim($name)));
+        }
+        $key = trim($key, '_');
+
+        if ($name && $key && $id) {
+            $stmt = $db->prepare("SELECT category_key, name, icon, description, is_active FROM clinic_booking_categories WHERE id = ?");
+            $stmt->execute([$id]);
+            $old = $stmt->fetch();
+
+            $cleanName = html_entity_decode($name, ENT_QUOTES, 'UTF-8');
+            $cleanDesc = html_entity_decode($desc, ENT_QUOTES, 'UTF-8');
+
+            if ($old &&
+                trim($old['category_key']) === $key &&
+                trim(html_entity_decode($old['name'], ENT_QUOTES, 'UTF-8')) === $cleanName &&
+                trim($old['icon']) === $icon &&
+                trim(html_entity_decode($old['description'] ?? '', ENT_QUOTES, 'UTF-8')) === $cleanDesc &&
+                (int)$old['is_active'] === $stat
+            ) {
+                $msg = "No changes were made. Category \"$cleanName\" is already up to date!";
+                $msgType = 'info';
+            } else {
+                $oldKey = $old['category_key'] ?? '';
+                // Check if key is used by another record
+                $chk = $db->prepare("SELECT COUNT(*) FROM clinic_booking_categories WHERE category_key = ? AND id != ?");
+                $chk->execute([$key, $id]);
+                if ($chk->fetchColumn() > 0) {
+                    $msg = "Category key \"$key\" is already used by another category. Please choose a unique key.";
+                    $msgType = 'danger';
+                } else {
+                    $db->prepare("UPDATE clinic_booking_categories SET category_key=?, name=?, icon=?, description=?, is_active=? WHERE id=?")
+                       ->execute([$key, $cleanName, $icon, $cleanDesc, $stat, $id]);
+
+                    // If key changed, update linked clinic_services
+                    if ($oldKey && $oldKey !== $key) {
+                        $db->prepare("UPDATE clinic_services SET purpose_category = ? WHERE purpose_category = ?")
+                           ->execute([$key, $oldKey]);
+                    }
+
+                    $msg = "Booking Category \"$cleanName\" updated successfully.";
+                    $msgType = 'success';
+                    logActivity("Updated booking category #$id \"$cleanName\"", 'Page Management', $_SESSION['user_id'], 'staff');
+                }
+            }
+        } else {
+            $msg = 'Category name and identifier key are required.';
+            $msgType = 'danger';
+        }
+    }
+
+    // ── BOOKING CATEGORIES: TOGGLE ──
+    elseif ($action === 'toggle_booking_category') {
+        $activeTab = 'services';
+        $activeSvcSubTab = 'cats';
+        $id  = (int)($_POST['cat_id'] ?? 0);
+        $cur = (int)($_POST['cat_current'] ?? 1);
+        $new = $cur ? 0 : 1;
+        $db->prepare("UPDATE clinic_booking_categories SET is_active=? WHERE id=?")->execute([$new, $id]);
+        $msg = 'Category ' . ($new ? 'activated and visible in patient booking' : 'hidden from patient booking') . ' successfully.';
+        $msgType = 'success';
+        logActivity(($new ? 'Activated' : 'Deactivated') . " booking category #$id", 'Page Management', $_SESSION['user_id'], 'staff');
+    }
+
+    // ── BOOKING CATEGORIES: DELETE ──
+    elseif ($action === 'delete_booking_category') {
+        $activeTab = 'services';
+        $activeSvcSubTab = 'cats';
+        $id = (int)($_POST['cat_id'] ?? 0);
+        if ($id) {
+            $catKey = $db->prepare("SELECT category_key, name FROM clinic_booking_categories WHERE id = ?");
+            $catKey->execute([$id]);
+            $catRow = $catKey->fetch();
+            if ($catRow) {
+                $chk = $db->prepare("SELECT COUNT(*) FROM clinic_services WHERE purpose_category = ?");
+                $chk->execute([$catRow['category_key']]);
+                $linkedCount = (int)$chk->fetchColumn();
+
+                if ($linkedCount > 0) {
+                    $msg = "Cannot delete category \"{$catRow['name']}\" because it currently has $linkedCount service(s) linked to it. Please reassign or delete those services first.";
+                    $msgType = 'danger';
+                } else {
+                    $db->prepare("DELETE FROM clinic_booking_categories WHERE id = ?")->execute([$id]);
+                    $msg = "Category \"{$catRow['name']}\" deleted successfully.";
+                    $msgType = 'success';
+                    logActivity("Deleted booking category #$id \"{$catRow['name']}\"", 'Page Management', $_SESSION['user_id'], 'staff');
+                }
+            }
+        }
+    }
+
     // ── SERVICES: ADD ──
     elseif ($action === 'add_service') {
+        $activeTab = 'services';
+        $activeSvcSubTab = 'services';
         $name    = trim(strip_tags($_POST['svc_name'] ?? ''));
         $cat     = trim(strip_tags($_POST['svc_category'] ?? ''));
         $badge   = trim(strip_tags($_POST['svc_badge'] ?? ''));
@@ -424,6 +592,16 @@ $customLogoActive = (!empty($customLogo) && file_exists(__DIR__ . '/../' . ltrim
 $currentLogoUrl = getClinicLogoUrl(BASE_URL);
 
 
+$bookingCats = $db->query("SELECT * FROM clinic_booking_categories ORDER BY sort_order ASC, id ASC")->fetchAll();
+$totalBookingCats  = count($bookingCats);
+$activeBookingCats = count(array_filter($bookingCats, fn($c) => $c['is_active']));
+
+// Count linked services per category
+$servicesPerCat = [];
+foreach ($db->query("SELECT purpose_category, COUNT(*) as cnt FROM clinic_services GROUP BY purpose_category")->fetchAll() as $row) {
+    $servicesPerCat[$row['purpose_category']] = (int)$row['cnt'];
+}
+
 $services = $db->query("SELECT * FROM clinic_services ORDER BY sort_order ASC, id ASC")->fetchAll();
 $faqs     = $db->query("SELECT * FROM clinic_faqs ORDER BY sort_order ASC, id ASC")->fetchAll();
 
@@ -467,11 +645,6 @@ document.addEventListener("DOMContentLoaded", function() {
       <h3 class="pm-studio-title">Website Content Studio</h3>
       <p class="pm-studio-subtitle">Easily manage what your patients see on the landing page and booking system — no coding required!</p>
     </div>
-  </div>
-  <div class="pm-studio-right">
-    <a href="<?= BASE_URL ?>index.php" target="_blank" class="pm-live-btn" title="Open patient website in a new tab">
-      <i class="fas fa-external-link-alt"></i> Preview Live Website
-    </a>
   </div>
 </div>
 
@@ -804,98 +977,223 @@ document.addEventListener("DOMContentLoaded", function() {
 </div>
 
 <!-- ═══════════════════════════════════════════════════════════
-     TAB 2: APPOINTMENT SERVICES (BOOKING WIZARD)
+     TAB 2: APPOINTMENT SERVICES & BOOKING CATEGORIES
      ═══════════════════════════════════════════════════════════ -->
 <div class="pm-tab-panel <?= $activeTab === 'services' ? 'active' : '' ?>" id="tab-services">
-  <!-- Info Banner -->
-  <div class="pm-info-callout">
-    <div class="pm-callout-icon"><i class="fas fa-info-circle"></i></div>
-    <div class="pm-callout-content">
-      <h6>Patient Booking Services Hub</h6>
-      <p>These services appear in <strong>Step 2</strong> of the patient appointment booking wizard. You can add new clinic procedures, edit descriptions, adjust estimated durations, or toggle services active/hidden with a single click.</p>
+  <!-- Sub-Navigation: 2 Pages (Booking Categories vs Offered Sub-Services) -->
+  <div class="pm-subnav-bar">
+    <div class="pm-subnav-pills">
+      <button type="button" class="pm-subnav-pill <?= $activeSvcSubTab === 'cats' ? 'active' : '' ?>" id="subBtnCats" onclick="switchSvcSub('cats')">
+        <i class="fas fa-layer-group"></i>
+        <span>1. Booking Categories</span>
+        <span class="pm-subnav-counter" id="bookingCatCounter"><?= $activeBookingCats ?>/<?= $totalBookingCats ?></span>
+      </button>
+      <button type="button" class="pm-subnav-pill <?= $activeSvcSubTab === 'services' ? 'active' : '' ?>" id="subBtnServices" onclick="switchSvcSub('services')">
+        <i class="fas fa-stethoscope"></i>
+        <span>2. Offered Services (Sub-Categories)</span>
+        <span class="pm-subnav-counter" id="subSvcCounter"><?= $activeSvc ?>/<?= $totalSvc ?></span>
+      </button>
     </div>
   </div>
 
-  <!-- Filter & Action Toolbar -->
-  <div class="pm-hub-toolbar">
-    <div class="pm-hub-search">
-      <i class="fas fa-search"></i>
-      <input type="text" id="svcSearch" placeholder="Search services by name, badge, or category..." autocomplete="off">
+  <!-- ── SUB-PAGE 1: BOOKING CATEGORIES (STEP 1 OF WIZARD) ── -->
+  <div class="pm-svc-subpanel <?= $activeSvcSubTab === 'cats' ? 'active' : '' ?>" id="svcSubCats">
+    <div class="pm-info-callout">
+      <div class="pm-callout-icon"><i class="fas fa-layer-group"></i></div>
+      <div class="pm-callout-content">
+        <h6>Step 1: Appointment Booking Categories</h6>
+        <p>These are the primary reason categories patients choose when booking an appointment. Add new booking categories or edit existing ones. You can link specific services (sub-categories) to any category.</p>
+      </div>
     </div>
 
-    <div class="pm-category-pills">
-      <button type="button" class="pm-cat-filter active" data-filter="all">All (<?= $totalSvc ?>)</button>
-      <button type="button" class="pm-cat-filter" data-filter="consultation">Consultations</button>
-      <button type="button" class="pm-cat-filter" data-filter="eyeglass_claim">Eyewear &amp; Lenses</button>
-      <button type="button" class="pm-cat-filter" data-filter="contact_lens_fitting">Contacts</button>
-      <button type="button" class="pm-cat-filter" data-filter="follow_up">Follow-ups</button>
-      <button type="button" class="pm-cat-filter" data-filter="other">General</button>
-    </div>
-
-    <button type="button" class="pm-add-btn" onclick="openModal('addSvcModal')">
-      <i class="fas fa-plus"></i> Add New Service
-    </button>
-  </div>
-
-  <!-- Services Grid -->
-  <div class="pm-services-hub-grid" id="svcGrid">
-    <?php if (empty($services)): ?>
-    <div class="pm-empty-card">
-      <i class="fas fa-stethoscope"></i>
-      <h5>No Services Configured</h5>
-      <p>Click the "Add New Service" button above to create your first appointment service.</p>
-    </div>
-    <?php else: foreach ($services as $svc): 
-      $catKey = $svc['purpose_category'];
-    ?>
-    <div class="pm-hub-svc-card <?= $svc['is_active'] ? '' : 'pm-is-hidden' ?>"
-         data-name="<?= strtolower(htmlspecialchars($svc['name'])) ?>"
-         data-badge="<?= strtolower(htmlspecialchars($svc['badge'] ?? '')) ?>"
-         data-cat="<?= $catKey ?>">
-      
-      <div class="pm-svc-topline">
-        <span class="pm-badge-category pm-cat-<?= $catKey ?>">
-          <?= htmlspecialchars($svc['badge'] ?: ucfirst(str_replace('_',' ',$catKey))) ?>
-        </span>
-
-        <!-- Clear Status Indicator -->
-        <span class="pm-status-pill <?= $svc['is_active'] ? 'active' : 'hidden' ?>">
-          <i class="fas fa-<?= $svc['is_active'] ? 'check-circle' : 'eye-slash' ?>"></i>
-          <?= $svc['is_active'] ? 'Visible to Patients' : 'Hidden from Booking' ?>
-        </span>
+    <!-- Toolbar -->
+    <div class="pm-hub-toolbar">
+      <div class="pm-hub-search">
+        <i class="fas fa-search"></i>
+        <input type="text" id="catSearch" placeholder="Search categories by name or key identifier..." autocomplete="off">
       </div>
 
-      <h5 class="pm-svc-card-title"><?= htmlspecialchars($svc['name']) ?></h5>
-      <p class="pm-svc-card-desc"><?= htmlspecialchars($svc['description'] ?? 'No description provided.') ?></p>
+      <button type="button" class="pm-add-btn" onclick="openModal('addCatModal')">
+        <i class="fas fa-plus"></i> Add Booking Category
+      </button>
+    </div>
 
-      <div class="pm-svc-card-meta">
-        <span class="pm-duration-chip"><i class="fas fa-clock"></i> <?= htmlspecialchars($svc['duration'] ?: '15–30 mins') ?></span>
-        <span class="pm-category-label"><?= ucfirst(str_replace('_',' ',$catKey)) ?></span>
+    <!-- Booking Categories Grid -->
+    <div class="pm-categories-grid" id="catGrid">
+      <?php if (empty($bookingCats)): ?>
+      <div class="pm-empty-card">
+        <i class="fas fa-layer-group"></i>
+        <h5>No Booking Categories Configured</h5>
+        <p>Click "Add Booking Category" above to create your first booking category.</p>
       </div>
+      <?php else: foreach ($bookingCats as $c): 
+        $cKey = $c['category_key'];
+        $linkedCount = $servicesPerCat[$cKey] ?? 0;
+      ?>
+      <div class="pm-cat-card <?= $c['is_active'] ? '' : 'pm-is-hidden' ?>"
+           data-name="<?= strtolower(htmlspecialchars($c['name'])) ?>"
+           data-key="<?= strtolower(htmlspecialchars($cKey)) ?>">
+        
+        <div class="pm-cat-card-top">
+          <div class="pm-cat-icon-emblem">
+            <i class="fas <?= htmlspecialchars($c['icon'] ?: 'fa-calendar-check') ?>" id="catCardIcon_<?= $c['id'] ?>"></i>
+          </div>
+          <div class="pm-cat-card-badges">
+            <span class="pm-cat-key-badge">key: <?= htmlspecialchars($cKey) ?></span>
+            <span class="pm-status-pill <?= $c['is_active'] ? 'active' : 'hidden' ?>">
+              <i class="fas fa-<?= $c['is_active'] ? 'check-circle' : 'eye-slash' ?>"></i>
+              <?= $c['is_active'] ? 'Active in Wizard' : 'Hidden' ?>
+            </span>
+          </div>
+        </div>
 
-      <div class="pm-svc-card-actions">
-        <!-- Edit Button -->
-        <button type="button" class="pm-action-btn edit" title="Edit Service Details"
-          onclick="openEditSvc(<?= $svc['id'] ?>, '<?= addslashes($svc['name']) ?>', '<?= $svc['purpose_category'] ?>', '<?= addslashes($svc['badge'] ?? '') ?>', '<?= addslashes($svc['description'] ?? '') ?>', '<?= addslashes($svc['duration'] ?? '') ?>', <?= $svc['is_active'] ?>)">
-          <i class="fas fa-edit"></i> Edit Details
-        </button>
+        <h5 class="pm-cat-title"><?= htmlspecialchars($c['name']) ?></h5>
+        <p class="pm-cat-desc"><?= htmlspecialchars($c['description'] ?? 'No description provided.') ?></p>
 
-        <!-- Toggle Visibility Button -->
-        <form method="POST" style="margin:0;">
-          <input type="hidden" name="csrf_token" value="<?= generateCsrfToken() ?>">
-          <input type="hidden" name="action" value="toggle_service">
-          <input type="hidden" name="active_tab" value="services">
-          <input type="hidden" name="svc_id" value="<?= $svc['id'] ?>">
-          <input type="hidden" name="svc_current" value="<?= $svc['is_active'] ?>">
-          <button type="submit" class="pm-action-btn <?= $svc['is_active'] ? 'toggle-hide' : 'toggle-show' ?>"
-            data-confirm="<?= $svc['is_active'] ? 'Hide this service from patients during appointment booking?' : 'Make this service visible to patients during appointment booking?' ?>">
-            <i class="fas fa-<?= $svc['is_active'] ? 'eye-slash' : 'eye' ?>"></i>
-            <?= $svc['is_active'] ? 'Hide Service' : 'Show Service' ?>
+        <div class="pm-cat-meta-row">
+          <span class="pm-cat-linked-badge">
+            <i class="fas fa-stethoscope"></i> <?= $linkedCount ?> <?= $linkedCount === 1 ? 'Service Linked' : 'Services Linked' ?>
+          </span>
+          <button type="button" class="pm-cat-view-services-btn" onclick="filterAndJumpToServices('<?= htmlspecialchars($cKey) ?>')">
+            View Services <i class="fas fa-arrow-right ms-1"></i>
           </button>
-        </form>
+        </div>
+
+        <div class="pm-cat-card-actions">
+          <button type="button" class="pm-action-btn edit" title="Edit Category Details"
+            onclick="openEditCat(<?= $c['id'] ?>, '<?= addslashes($c['name']) ?>', '<?= addslashes($cKey) ?>', '<?= addslashes($c['icon']) ?>', '<?= addslashes($c['description'] ?? '') ?>', <?= $c['is_active'] ?>)">
+            <i class="fas fa-edit"></i> Edit Details
+          </button>
+
+          <form method="POST" style="margin:0;">
+            <input type="hidden" name="csrf_token" value="<?= generateCsrfToken() ?>">
+            <input type="hidden" name="action" value="toggle_booking_category">
+            <input type="hidden" name="active_tab" value="services">
+            <input type="hidden" name="svc_sub_tab" value="cats">
+            <input type="hidden" name="cat_id" value="<?= $c['id'] ?>">
+            <input type="hidden" name="cat_current" value="<?= $c['is_active'] ?>">
+            <button type="submit" class="pm-action-btn <?= $c['is_active'] ? 'toggle-hide' : 'toggle-show' ?>"
+              data-confirm="<?= $c['is_active'] ? 'Hide this booking category from patients during appointment booking?' : 'Make this booking category visible to patients during appointment booking?' ?>">
+              <i class="fas fa-<?= $c['is_active'] ? 'eye-slash' : 'eye' ?>"></i>
+              <?= $c['is_active'] ? 'Hide Category' : 'Show Category' ?>
+            </button>
+          </form>
+
+          <?php if ($linkedCount === 0): ?>
+          <form method="POST" style="margin:0;">
+            <input type="hidden" name="csrf_token" value="<?= generateCsrfToken() ?>">
+            <input type="hidden" name="action" value="delete_booking_category">
+            <input type="hidden" name="active_tab" value="services">
+            <input type="hidden" name="svc_sub_tab" value="cats">
+            <input type="hidden" name="cat_id" value="<?= $c['id'] ?>">
+            <button type="submit" class="pm-action-btn delete" data-confirm="Are you sure you want to permanently delete category &quot;<?= htmlspecialchars($c['name']) ?>&quot;?">
+              <i class="fas fa-trash-alt"></i>
+            </button>
+          </form>
+          <?php endif; ?>
+        </div>
+      </div>
+      <?php endforeach; endif; ?>
+    </div>
+  </div>
+
+  <!-- ── SUB-PAGE 2: OFFERED SERVICES / SUB-CATEGORIES (STEP 2 OF WIZARD) ── -->
+  <div class="pm-svc-subpanel <?= $activeSvcSubTab === 'services' ? 'active' : '' ?>" id="svcSubServices">
+    <div class="pm-info-callout">
+      <div class="pm-callout-icon"><i class="fas fa-stethoscope"></i></div>
+      <div class="pm-callout-content">
+        <h6>Step 2: Offered Services &amp; Sub-Categories</h6>
+        <p>These are the specific optical care procedures and choices offered under each booking category in Step 2 of the booking wizard. Add procedures, configure estimated durations, or link them to any category.</p>
       </div>
     </div>
-    <?php endforeach; endif; ?>
+
+    <!-- Filter & Action Toolbar -->
+    <div class="pm-hub-toolbar">
+      <div class="pm-hub-search">
+        <i class="fas fa-search"></i>
+        <input type="text" id="svcSearch" placeholder="Search services by name, badge, or category..." autocomplete="off">
+      </div>
+
+      <div class="pm-category-pills" id="svcCategoryFilterPills">
+        <button type="button" class="pm-cat-filter active" data-filter="all">All (<?= $totalSvc ?>)</button>
+        <?php foreach ($bookingCats as $bc): 
+          $cnt = $servicesPerCat[$bc['category_key']] ?? 0;
+        ?>
+        <button type="button" class="pm-cat-filter" data-filter="<?= htmlspecialchars($bc['category_key']) ?>">
+          <?= htmlspecialchars($bc['name']) ?> (<?= $cnt ?>)
+        </button>
+        <?php endforeach; ?>
+      </div>
+
+      <button type="button" class="pm-add-btn" onclick="openModal('addSvcModal')">
+        <i class="fas fa-plus"></i> Add New Service
+      </button>
+    </div>
+
+    <!-- Services Grid -->
+    <div class="pm-services-hub-grid" id="svcGrid">
+      <?php if (empty($services)): ?>
+      <div class="pm-empty-card">
+        <i class="fas fa-stethoscope"></i>
+        <h5>No Services Configured</h5>
+        <p>Click the "Add New Service" button above to create your first appointment service.</p>
+      </div>
+      <?php else: foreach ($services as $svc): 
+        $catKey = $svc['purpose_category'];
+        // Find category name
+        $catObj = null;
+        foreach ($bookingCats as $bc) {
+          if ($bc['category_key'] === $catKey) { $catObj = $bc; break; }
+        }
+        $catDisplayName = $catObj ? $catObj['name'] : ucfirst(str_replace('_',' ',$catKey));
+      ?>
+      <div class="pm-hub-svc-card <?= $svc['is_active'] ? '' : 'pm-is-hidden' ?>"
+           data-name="<?= strtolower(htmlspecialchars($svc['name'])) ?>"
+           data-badge="<?= strtolower(htmlspecialchars($svc['badge'] ?? '')) ?>"
+           data-cat="<?= $catKey ?>">
+        
+        <div class="pm-svc-topline">
+          <span class="pm-badge-category pm-cat-<?= $catKey ?>">
+            <?= htmlspecialchars($svc['badge'] ?: $catDisplayName) ?>
+          </span>
+
+          <span class="pm-status-pill <?= $svc['is_active'] ? 'active' : 'hidden' ?>">
+            <i class="fas fa-<?= $svc['is_active'] ? 'check-circle' : 'eye-slash' ?>"></i>
+            <?= $svc['is_active'] ? 'Visible to Patients' : 'Hidden from Booking' ?>
+          </span>
+        </div>
+
+        <h5 class="pm-svc-card-title"><?= htmlspecialchars($svc['name']) ?></h5>
+        <p class="pm-svc-card-desc"><?= htmlspecialchars($svc['description'] ?? 'No description provided.') ?></p>
+
+        <div class="pm-svc-card-meta">
+          <span class="pm-duration-chip"><i class="fas fa-clock"></i> <?= htmlspecialchars($svc['duration'] ?: '15–30 mins') ?></span>
+          <span class="pm-category-label"><i class="fas fa-folder me-1"></i><?= htmlspecialchars($catDisplayName) ?></span>
+        </div>
+
+        <div class="pm-svc-card-actions">
+          <button type="button" class="pm-action-btn edit" title="Edit Service Details"
+            onclick="openEditSvc(<?= $svc['id'] ?>, '<?= addslashes($svc['name']) ?>', '<?= $svc['purpose_category'] ?>', '<?= addslashes($svc['badge'] ?? '') ?>', '<?= addslashes($svc['description'] ?? '') ?>', '<?= addslashes($svc['duration'] ?? '') ?>', <?= $svc['is_active'] ?>)">
+            <i class="fas fa-edit"></i> Edit Details
+          </button>
+
+          <form method="POST" style="margin:0;">
+            <input type="hidden" name="csrf_token" value="<?= generateCsrfToken() ?>">
+            <input type="hidden" name="action" value="toggle_service">
+            <input type="hidden" name="active_tab" value="services">
+            <input type="hidden" name="svc_sub_tab" value="services">
+            <input type="hidden" name="svc_id" value="<?= $svc['id'] ?>">
+            <input type="hidden" name="svc_current" value="<?= $svc['is_active'] ?>">
+            <button type="submit" class="pm-action-btn <?= $svc['is_active'] ? 'toggle-hide' : 'toggle-show' ?>"
+              data-confirm="<?= $svc['is_active'] ? 'Hide this service from patients during appointment booking?' : 'Make this service visible to patients during appointment booking?' ?>">
+              <i class="fas fa-<?= $svc['is_active'] ? 'eye-slash' : 'eye' ?>"></i>
+              <?= $svc['is_active'] ? 'Hide Service' : 'Show Service' ?>
+            </button>
+          </form>
+        </div>
+      </div>
+      <?php endforeach; endif; ?>
+    </div>
   </div>
 </div>
 
@@ -1009,6 +1307,127 @@ document.addEventListener("DOMContentLoaded", function() {
 </div>
 
 <!-- ═══════════════════════════════════════════════════════════════
+     MODAL: ADD BOOKING CATEGORY
+     ═══════════════════════════════════════════════════════════════ -->
+<div class="modal-overlay" id="addCatModal">
+  <div class="modal-box" style="max-width:580px;">
+    <div class="modal-header">
+      <div style="display:flex;align-items:center;gap:12px;">
+        <div class="modal-icon-badge"><i class="fas fa-layer-group"></i></div>
+        <div class="modal-header-titles">
+          <h5>Add Booking Category</h5>
+          <small>Create a primary appointment reason category (Step 1)</small>
+        </div>
+      </div>
+      <button class="modal-close" onclick="closeModal('addCatModal')" type="button"><i class="fas fa-times"></i></button>
+    </div>
+    <form method="POST">
+      <div class="modal-body">
+        <input type="hidden" name="action" value="add_booking_category">
+        <input type="hidden" name="csrf_token" value="<?= generateCsrfToken() ?>">
+        <input type="hidden" name="active_tab" value="services">
+        <input type="hidden" name="svc_sub_tab" value="cats">
+
+        <div class="form-group mb-3">
+          <label class="form-label fw-bold">Category Name <span class="text-danger">*</span></label>
+          <input type="text" name="cat_name" id="addCatName" class="form-control" placeholder="e.g. Eye Consultation &amp; Check-up" required autofocus oninput="autoGenerateKey(this.value, 'addCatKey')">
+        </div>
+
+        <div class="row g-3 mb-3">
+          <div class="col-md-6">
+            <label class="form-label fw-bold">Identifier Key <span class="text-danger">*</span></label>
+            <input type="text" name="cat_key" id="addCatKey" class="form-control" placeholder="e.g. consultation" required>
+            <small class="text-muted" style="font-size:0.75rem;">Unique code (e.g. eye_exam, lenses)</small>
+          </div>
+          <div class="col-md-6">
+            <label class="form-label fw-bold">Category Icon</label>
+            <div class="input-group">
+              <span class="input-group-text" id="addCatIconPreview"><i class="fas fa-calendar-check"></i></span>
+              <input type="text" name="cat_icon" id="addCatIcon" class="form-control" value="fa-calendar-check" placeholder="fa-calendar-check" oninput="updateCatIconPreview('addCatIcon', 'addCatIconPreview')">
+              <button type="button" class="btn btn-outline-secondary" onclick="openIconPickerForTarget('addCatIcon', 'addCatIconPreview')"><i class="fas fa-icons"></i></button>
+            </div>
+          </div>
+        </div>
+
+        <div class="form-group mb-3">
+          <label class="form-label fw-bold">Category Description</label>
+          <textarea name="cat_desc" class="form-control" rows="3" placeholder="Briefly describe what this booking category covers..."></textarea>
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button type="button" class="btn btn-secondary" onclick="closeModal('addCatModal')">Cancel</button>
+        <button type="submit" class="btn btn-primary"><i class="fas fa-save"></i> Save Category</button>
+      </div>
+    </form>
+  </div>
+</div>
+
+<!-- ═══════════════════════════════════════════════════════════════
+     MODAL: EDIT BOOKING CATEGORY
+     ═══════════════════════════════════════════════════════════════ -->
+<div class="modal-overlay" id="editCatModal">
+  <div class="modal-box" style="max-width:580px;">
+    <div class="modal-header">
+      <div style="display:flex;align-items:center;gap:12px;">
+        <div class="modal-icon-badge"><i class="fas fa-pen-to-square"></i></div>
+        <div class="modal-header-titles">
+          <h5>Edit Booking Category</h5>
+          <small>Modify booking category details and visibility</small>
+        </div>
+      </div>
+      <button class="modal-close" onclick="closeModal('editCatModal')" type="button"><i class="fas fa-times"></i></button>
+    </div>
+    <form method="POST" id="editCatForm" onsubmit="return validateCatChange(event, this)">
+      <div class="modal-body">
+        <input type="hidden" name="action" value="edit_booking_category">
+        <input type="hidden" name="csrf_token" value="<?= generateCsrfToken() ?>">
+        <input type="hidden" name="active_tab" value="services">
+        <input type="hidden" name="svc_sub_tab" value="cats">
+        <input type="hidden" name="cat_id" id="editCatId">
+
+        <div class="form-group mb-3">
+          <label class="form-label fw-bold">Category Name <span class="text-danger">*</span></label>
+          <input type="text" name="cat_name" id="editCatName" class="form-control" required>
+        </div>
+
+        <div class="row g-3 mb-3">
+          <div class="col-md-6">
+            <label class="form-label fw-bold">Identifier Key <span class="text-danger">*</span></label>
+            <input type="text" name="cat_key" id="editCatKey" class="form-control" required>
+            <small class="text-muted" style="font-size:0.75rem;">Changing key updates linked services</small>
+          </div>
+          <div class="col-md-6">
+            <label class="form-label fw-bold">Category Icon</label>
+            <div class="input-group">
+              <span class="input-group-text" id="editCatIconPreview"><i class="fas fa-calendar-check"></i></span>
+              <input type="text" name="cat_icon" id="editCatIcon" class="form-control" oninput="updateCatIconPreview('editCatIcon', 'editCatIconPreview')">
+              <button type="button" class="btn btn-outline-secondary" onclick="openIconPickerForTarget('editCatIcon', 'editCatIconPreview')"><i class="fas fa-icons"></i></button>
+            </div>
+          </div>
+        </div>
+
+        <div class="form-group mb-3">
+          <label class="form-label fw-bold">Category Description</label>
+          <textarea name="cat_desc" id="editCatDesc" class="form-control" rows="3"></textarea>
+        </div>
+
+        <div class="form-group">
+          <label class="form-label fw-bold">Visibility in Patient Wizard</label>
+          <select name="cat_active" id="editCatActive" class="form-select">
+            <option value="1">Active (Visible in Step 1 to Patients)</option>
+            <option value="0">Hidden (Disabled from Patient Booking)</option>
+          </select>
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button type="button" class="btn btn-secondary" onclick="closeModal('editCatModal')">Cancel</button>
+        <button type="submit" class="btn btn-primary"><i class="fas fa-save"></i> Update Category</button>
+      </div>
+    </form>
+  </div>
+</div>
+
+<!-- ═══════════════════════════════════════════════════════════════
      MODAL: ADD SERVICE
      ═══════════════════════════════════════════════════════════════ -->
 <div class="modal-overlay" id="addSvcModal">
@@ -1028,6 +1447,7 @@ document.addEventListener("DOMContentLoaded", function() {
         <input type="hidden" name="action" value="add_service">
         <input type="hidden" name="csrf_token" value="<?= generateCsrfToken() ?>">
         <input type="hidden" name="active_tab" value="services">
+        <input type="hidden" name="svc_sub_tab" value="services">
 
         <div class="form-group mb-3">
           <label class="form-label fw-bold">Service Name <span class="text-danger">*</span></label>
@@ -1039,11 +1459,11 @@ document.addEventListener("DOMContentLoaded", function() {
             <label class="form-label fw-bold">Booking Category <span class="text-danger">*</span></label>
             <select name="svc_category" class="form-select" required>
               <option value="">Select category...</option>
-              <option value="consultation">Consultation / Check-up</option>
-              <option value="eyeglass_claim">Eyewear &amp; Lenses</option>
-              <option value="contact_lens_fitting">Contact Lenses</option>
-              <option value="follow_up">Follow-up Consultation</option>
-              <option value="other">Care &amp; Repairs</option>
+              <?php foreach ($bookingCats as $bc): ?>
+              <option value="<?= htmlspecialchars($bc['category_key']) ?>">
+                <?= htmlspecialchars($bc['name']) ?>
+              </option>
+              <?php endforeach; ?>
             </select>
           </div>
           <div class="col-md-6">
@@ -1090,6 +1510,7 @@ document.addEventListener("DOMContentLoaded", function() {
         <input type="hidden" name="action" value="edit_service">
         <input type="hidden" name="csrf_token" value="<?= generateCsrfToken() ?>">
         <input type="hidden" name="active_tab" value="services">
+        <input type="hidden" name="svc_sub_tab" value="services">
         <input type="hidden" name="svc_id" id="editSvcId">
 
         <div class="form-group mb-3">
@@ -1101,11 +1522,11 @@ document.addEventListener("DOMContentLoaded", function() {
           <div class="col-md-6">
             <label class="form-label fw-bold">Booking Category <span class="text-danger">*</span></label>
             <select name="svc_category" id="editSvcCat" class="form-select" required>
-              <option value="consultation">Consultation / Check-up</option>
-              <option value="eyeglass_claim">Eyewear &amp; Lenses</option>
-              <option value="contact_lens_fitting">Contact Lenses</option>
-              <option value="follow_up">Follow-up Consultation</option>
-              <option value="other">Care &amp; Repairs</option>
+              <?php foreach ($bookingCats as $bc): ?>
+              <option value="<?= htmlspecialchars($bc['category_key']) ?>">
+                <?= htmlspecialchars($bc['name']) ?>
+              </option>
+              <?php endforeach; ?>
             </select>
           </div>
           <div class="col-md-6">
@@ -1287,10 +1708,44 @@ function updateHeroLivePreview() {
     if (prevDesc) prevDesc.textContent = desc;
 }
 
+// ── Services Sub-Page Switching (Categories vs Offered Services) ──────────────
+function switchSvcSub(sub) {
+    document.querySelectorAll('.pm-subnav-pill').forEach(p => p.classList.remove('active'));
+    document.querySelectorAll('.pm-sub-page').forEach(p => p.classList.remove('active'));
+    const btn = document.querySelector(`.pm-subnav-pill[onclick="switchSvcSub('${sub}')"]`);
+    if (btn) btn.classList.add('active');
+    const page = document.getElementById(sub === 'cats' ? 'svcSubCats' : 'svcSubServices');
+    if (page) page.classList.add('active');
+}
+
+function filterAndJumpToServices(catKey) {
+    switchSvcSub('services');
+    const filterBtn = document.querySelector(`.pm-cat-filter[data-filter="${catKey}"]`);
+    if (filterBtn) {
+        filterBtn.click();
+    }
+    const filterBar = document.querySelector('.pm-svc-filter-bar');
+    if (filterBar) {
+        filterBar.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+    }
+}
+
 // ── Visual Icon Picker System ────────────────────────────────────────────────
 let activeIconTargetKey = null;
+let activeIconTargetInputId = null;
+let activeIconTargetPreviewId = null;
+
 function openIconPicker(cardKey) {
     activeIconTargetKey = cardKey;
+    activeIconTargetInputId = null;
+    activeIconTargetPreviewId = null;
+    openModal('iconPickerModal');
+}
+
+function openIconPickerForTarget(inputId, previewId) {
+    activeIconTargetKey = null;
+    activeIconTargetInputId = inputId;
+    activeIconTargetPreviewId = previewId;
     openModal('iconPickerModal');
 }
 
@@ -1300,13 +1755,85 @@ function selectIcon(iconClass) {
         if (input) input.value = iconClass;
         const box = document.getElementById(activeIconTargetKey + '_icon_box');
         if (box) box.innerHTML = '<i class="fas ' + iconClass + '"></i>';
+    } else if (activeIconTargetInputId) {
+        const input = document.getElementById(activeIconTargetInputId);
+        if (input) {
+            input.value = iconClass;
+            if (activeIconTargetPreviewId) {
+                const prev = document.getElementById(activeIconTargetPreviewId);
+                if (prev) prev.innerHTML = '<i class="fas ' + iconClass + '"></i>';
+            }
+        }
     }
     closeModal('iconPickerModal');
 }
 
+function updateCatIconPreview(inputId, previewId) {
+    const input = document.getElementById(inputId);
+    const preview = document.getElementById(previewId);
+    if (!input || !preview) return;
+    const iconClass = (input.value || 'fa-calendar-check').trim();
+    preview.innerHTML = '<i class="fas ' + iconClass + '"></i>';
+}
+
+function autoGenerateKey(name, targetId) {
+    const target = document.getElementById(targetId);
+    if (!target) return;
+    const slug = name.toLowerCase().replace(/[^a-z0-9]+/g, '_').replace(/^_+|_+$/g, '');
+    target.value = slug;
+}
+
+let currentEditCat = null;
 let currentEditSvc = null;
 let currentEditFaq = null;
 let initialHomepageData = null;
+
+// ── Booking Category edit modal & change detection ───────────────────────────
+function openEditCat(id, name, key, icon, desc, active) {
+    currentEditCat = {
+        id: id,
+        name: (name || '').trim(),
+        key: (key || '').trim(),
+        icon: (icon || '').trim(),
+        desc: (desc || '').trim(),
+        active: active ? '1' : '0'
+    };
+    document.getElementById('editCatId').value = id;
+    document.getElementById('editCatName').value = name;
+    document.getElementById('editCatKey').value = key;
+    document.getElementById('editCatIcon').value = icon;
+    document.getElementById('editCatDesc').value = desc;
+    document.getElementById('editCatActive').value = active ? '1' : '0';
+    updateCatIconPreview('editCatIcon', 'editCatIconPreview');
+    openModal('editCatModal');
+}
+
+function validateCatChange(e, form) {
+    if (!currentEditCat) return true;
+    const name   = document.getElementById('editCatName').value.trim();
+    const key    = document.getElementById('editCatKey').value.trim();
+    const icon   = document.getElementById('editCatIcon').value.trim();
+    const desc   = document.getElementById('editCatDesc').value.trim();
+    const active = document.getElementById('editCatActive').value;
+
+    if (name === currentEditCat.name &&
+        key === currentEditCat.key &&
+        icon === currentEditCat.icon &&
+        desc === currentEditCat.desc &&
+        active === currentEditCat.active) {
+        e.preventDefault();
+        Swal.fire({
+            title: 'Notice',
+            text: 'No changes were made. The booking category is already up to date!',
+            icon: 'info',
+            confirmButtonColor: 'var(--clr-primary)',
+            background: 'var(--bg-card)',
+            color: 'var(--text-primary)'
+        });
+        return false;
+    }
+    return true;
+}
 
 // ── Service edit modal & change detection ───────────────────────────────────
 function openEditSvc(id, name, cat, badge, desc, dur, active) {
@@ -1559,6 +2086,20 @@ document.addEventListener('DOMContentLoaded', function() {
 
     if (svcSearch) {
         svcSearch.addEventListener('input', applySvcFilter);
+    }
+
+    // Category live search
+    const catSearch = document.getElementById('catSearch');
+    if (catSearch) {
+        catSearch.addEventListener('input', function() {
+            const q = this.value.toLowerCase().trim();
+            document.querySelectorAll('.pm-cat-card').forEach(card => {
+                const name = card.dataset.name || '';
+                const key  = card.dataset.key  || '';
+                const desc = card.dataset.desc || '';
+                card.style.display = (!q || name.includes(q) || key.includes(q) || desc.includes(q)) ? 'flex' : 'none';
+            });
+        });
     }
 
     // FAQ live search

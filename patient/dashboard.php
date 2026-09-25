@@ -200,6 +200,25 @@ if ($nextAppt) {
     }
 }
 
+// Fetch active booking categories for appointment wizard & filters
+$bookingCategories = [];
+try {
+    $catQuery = $db->query("SELECT category_key, icon, name, description FROM clinic_booking_categories WHERE is_active = 1 ORDER BY sort_order ASC, id ASC");
+    if ($catQuery) {
+        $bookingCategories = $catQuery->fetchAll(PDO::FETCH_ASSOC);
+    }
+} catch (Throwable $e) {}
+
+if (empty($bookingCategories)) {
+    $bookingCategories = [
+        ['category_key' => 'consultation', 'icon' => 'fa-user-doctor', 'name' => 'Eye Consultation & Check-up', 'description' => 'Comprehensive examination, visual acuity test, and licensed doctor consultation.'],
+        ['category_key' => 'eyeglass_claim', 'icon' => 'fa-glasses', 'name' => 'Eyeglasses & Frames', 'description' => 'Prescription frame selection, lens upgrades, claiming ready spectacles.'],
+        ['category_key' => 'contact_lens_fitting', 'icon' => 'fa-circle-dot', 'name' => 'Contact Lens Care', 'description' => 'Cornea curvature measurement, trial lens fitting, and supply orders.'],
+        ['category_key' => 'follow_up', 'icon' => 'fa-rotate-right', 'name' => 'Follow-up Visit', 'description' => 'Post-examination check, lens adaptation review, and progress evaluation.'],
+        ['category_key' => 'other', 'icon' => 'fa-screwdriver-wrench', 'name' => 'General Optical Services', 'description' => 'Frame repairs, ultrasonic bath cleaning, screw adjustments, or inquiries.'],
+    ];
+}
+
 // Compute Clinic Open / Closed status (PST: Mon-Fri 9:00 AM - 5:00 PM)
 $currentDayOfWeek = (int)date('N'); // 1=Mon ... 7=Sun
 $currentHour = (int)date('G');
@@ -3943,20 +3962,11 @@ $currentTheme = ($userTheme === 'light') ? 'light' : 'dark';
               </div>
 
               <div class="purpose-grid" id="purposeGrid">
-                <?php
-                $purposes = [
-                    ['consultation','fa-user-doctor','Eye Consultation & Check-up','Comprehensive examination, visual acuity test, and licensed doctor consultation.'],
-                    ['eyeglass_claim','fa-glasses','Eyeglasses & Frames','Prescription frame selection, lens upgrades, claiming ready spectacles.'],
-                    ['contact_lens_fitting','fa-circle-dot','Contact Lens Care','Cornea curvature measurement, trial lens fitting, and supply orders.'],
-                    ['follow_up','fa-rotate-right','Follow-up Visit','Post-examination check, lens adaptation review, and progress evaluation.'],
-                    ['other','fa-screwdriver-wrench','General Optical Services','Frame repairs, ultrasonic bath cleaning, screw adjustments, or inquiries.'],
-                ];
-                foreach ($purposes as [$val,$icon,$title,$desc]):
-                ?>
-                <div class="purpose-card" data-val="<?= $val ?>" onclick="selectPurpose(this)">
-                  <div class="purpose-card-icon"><i class="fas <?= $icon ?>"></i></div>
-                  <div class="purpose-card-title"><?= $title ?></div>
-                  <div class="purpose-card-desc"><?= $desc ?></div>
+                <?php foreach ($bookingCategories as $bCat): ?>
+                <div class="purpose-card" data-val="<?= htmlspecialchars($bCat['category_key']) ?>" onclick="selectPurpose(this)">
+                  <div class="purpose-card-icon"><i class="fas <?= htmlspecialchars($bCat['icon']) ?>"></i></div>
+                  <div class="purpose-card-title"><?= htmlspecialchars($bCat['name']) ?></div>
+                  <div class="purpose-card-desc"><?= htmlspecialchars($bCat['description']) ?></div>
                 </div>
                 <?php endforeach; ?>
               </div>
@@ -3979,11 +3989,10 @@ $currentTheme = ($userTheme === 'light') ? 'light' : 'dark';
 
               <!-- Filter tabs for services -->
               <div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:16px;">
-                <button type="button" class="qdate-btn active" id="filterAllServices" onclick="filterServices('all', this)">All Services</button>
-                <button type="button" class="qdate-btn" id="filterConsultServices" onclick="filterServices('consultation', this)">Consultation</button>
-                <button type="button" class="qdate-btn" id="filterEyewearServices" onclick="filterServices('eyeglass_claim', this)">Eyewear &amp; Lenses</button>
-                <button type="button" class="qdate-btn" id="filterContactServices" onclick="filterServices('contact_lens_fitting', this)">Contact Lenses</button>
-                <button type="button" class="qdate-btn" id="filterOtherServices" onclick="filterServices('other', this)">Care &amp; Repairs</button>
+                <button type="button" class="qdate-btn active" id="filterAllServices" data-filter="all" onclick="filterServices('all', this)">All Services</button>
+                <?php foreach ($bookingCategories as $bCat): ?>
+                <button type="button" class="qdate-btn" data-filter="<?= htmlspecialchars($bCat['category_key']) ?>" onclick="filterServices('<?= htmlspecialchars($bCat['category_key']) ?>', this)"><?= htmlspecialchars($bCat['name']) ?></button>
+                <?php endforeach; ?>
               </div>
 
               <div class="service-grid" id="serviceGrid">
@@ -4642,11 +4651,9 @@ $currentTheme = ($userTheme === 'light') ? 'light' : 'dark';
             <label class="field-label" for="editPurpose"><i class="fas fa-clipboard-list me-1"></i> Purpose of Visit</label>
             <select name="purpose" id="editPurpose" class="field-control" required>
               <option value="">Choose purpose...</option>
-              <option value="consultation">Eye Consultation / Check-up</option>
-              <option value="eyeglass_claim">Eyeglass Claim / Pickup</option>
-              <option value="contact_lens_fitting">Contact Lens Care</option>
-              <option value="follow_up">Follow-up Visit</option>
-              <option value="other">General Optical Services</option>
+              <?php foreach ($bookingCategories as $bCat): ?>
+              <option value="<?= htmlspecialchars($bCat['category_key']) ?>"><?= htmlspecialchars($bCat['name']) ?></option>
+              <?php endforeach; ?>
             </select>
           </div>
         </div>
@@ -4949,12 +4956,7 @@ function filterServices(category, btnEl) {
     btnEl.classList.add('active');
   } else {
     document.querySelectorAll('#wizard-step-2 .qdate-btn').forEach(b => {
-      const match = (category === 'all' && b.id === 'filterAllServices') ||
-                    (category === 'consultation' && b.id === 'filterConsultServices') ||
-                    (category === 'eyeglass_claim' && b.id === 'filterEyewearServices') ||
-                    (category === 'contact_lens_fitting' && b.id === 'filterContactServices') ||
-                    (category === 'other' && b.id === 'filterOtherServices');
-      b.classList.toggle('active', match);
+      b.classList.toggle('active', (b.dataset.filter === category));
     });
   }
 
@@ -5306,14 +5308,14 @@ document.getElementById('bookingForm').addEventListener('submit', function(e) {
 });
 
 // ── CONFIRMATION MODAL ──────────────────────────────────────
-const purposeLabels = {
-  consultation:         'Eye Consultation / Check-up',
-  eyeglass_claim:       'Eyeglass Claim / Pickup',
-  contact_lens_fitting: 'Contact Lens Fitting',
-  follow_up:            'Follow-up Visit',
-  prescription_check:   'Prescription Check',
-  other:                'Other / General',
-};
+const purposeLabels = <?= json_encode(array_merge([
+  'consultation'         => 'Eye Consultation / Check-up',
+  'eyeglass_claim'       => 'Eyeglass Claim / Pickup',
+  'contact_lens_fitting' => 'Contact Lens Fitting',
+  'follow_up'            => 'Follow-up Visit',
+  'prescription_check'   => 'Prescription Check',
+  'other'                => 'Other / General',
+], array_column($bookingCategories, 'name', 'category_key'))) ?>;
 
 function fmtTime(slot) {
   const [h,m] = slot.split(':').map(Number);
