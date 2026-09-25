@@ -16,21 +16,38 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
     $action = $_POST['action'] ?? '';
     
     if ($apptId > 0) {
-        $ptStmt = $db->prepare("SELECT p.full_name, a.appointment_date, a.appointment_time FROM appointments a JOIN patients p ON p.id=a.patient_id WHERE a.id=?");
+        $ptStmt = $db->prepare("SELECT p.full_name, a.appointment_date, a.appointment_time, a.status FROM appointments a JOIN patients p ON p.id=a.patient_id WHERE a.id=?");
         $ptStmt->execute([$apptId]);
         $ptData = $ptStmt->fetch();
         $ptName = $ptData['full_name'] ?? ('Appointment #' . $apptId);
 
         if ($action === 'complete') {
-            $db->prepare("UPDATE appointments SET status='completed' WHERE id=?")->execute([$apptId]);
-            $_SESSION['flash_msg'] = 'Appointment marked as completed.';
-            $_SESSION['flash_type'] = 'success';
-            logActivity("Marked appointment #$apptId as completed for patient: $ptName", "Appointments", $_SESSION['user_id'], 'staff');
+            if ($ptData && ($ptData['status'] ?? '') === 'pending') {
+                $_SESSION['flash_msg'] = 'A consultation cannot be finished before it has actually taken place. Please confirm the appointment first.';
+                $_SESSION['flash_type'] = 'warning';
+            } else {
+                $db->prepare("UPDATE appointments SET status='completed' WHERE id=?")->execute([$apptId]);
+                $_SESSION['flash_msg'] = 'Appointment marked as completed.';
+                $_SESSION['flash_type'] = 'success';
+                logActivity("Marked appointment #$apptId as completed for patient: $ptName", "Appointments", $_SESSION['user_id'], 'staff');
+            }
         } elseif ($action === 'no_show') {
-            $db->prepare("UPDATE appointments SET status='no_show' WHERE id=?")->execute([$apptId]);
-            $_SESSION['flash_msg'] = 'Appointment marked as No-Show.';
-            $_SESSION['flash_type'] = 'warning';
-            logActivity("Marked appointment #$apptId as No-Show for patient: $ptName", "Appointments", $_SESSION['user_id'], 'staff');
+            $apptDateTimeStr = ($ptData['appointment_date'] ?? '') . ' ' . ($ptData['appointment_time'] ?? '');
+            $apptTimestamp = strtotime($apptDateTimeStr);
+            $graceTimestamp = $apptTimestamp ? ($apptTimestamp + (15 * 60)) : 0;
+
+            if ($ptData && ($ptData['status'] ?? '') === 'pending') {
+                $_SESSION['flash_msg'] = 'Cannot mark a Pending appointment as No-Show. Please confirm the booking first.';
+                $_SESSION['flash_type'] = 'warning';
+            } elseif ($apptTimestamp && time() < $graceTimestamp) {
+                $_SESSION['flash_msg'] = 'Marking a patient as No-Show is premature until the scheduled appointment time and 15-minute grace period have elapsed.';
+                $_SESSION['flash_type'] = 'warning';
+            } else {
+                $db->prepare("UPDATE appointments SET status='no_show' WHERE id=?")->execute([$apptId]);
+                $_SESSION['flash_msg'] = 'Appointment marked as No-Show.';
+                $_SESSION['flash_type'] = 'warning';
+                logActivity("Marked appointment #$apptId as No-Show for patient: $ptName", "Appointments", $_SESSION['user_id'], 'staff');
+            }
         } elseif ($action === 'confirm') {
             $db->prepare("UPDATE appointments SET status='confirmed', verified_by=? WHERE id=?")->execute([$_SESSION['user_id'], $apptId]);
             $_SESSION['flash_msg'] = 'Appointment confirmed.';
@@ -258,6 +275,26 @@ include __DIR__ . '/../includes/header.php';
 
 </div>
 
+<style>
+/* Clinical Workflow - Disabled state styling with visible tooltips */
+.cal-modal .btn:disabled,
+.cal-modal .btn.disabled,
+.cal-modal a.btn.is-disabled {
+  opacity: 0.45 !important;
+  cursor: not-allowed !important;
+  pointer-events: auto !important; /* allows browser title tooltip */
+  box-shadow: none !important;
+  transform: none !important;
+}
+.cal-modal a.btn.is-disabled {
+  filter: grayscale(40%) !important;
+}
+.cal-modal .btn:disabled:hover,
+.cal-modal a.btn.is-disabled:hover {
+  filter: grayscale(50%) !important;
+}
+</style>
+
 <!-- ============================================================ -->
 <!-- APPOINTMENT DETAILS & DOCTOR ACTION MODAL                    -->
 <!-- ============================================================ -->
@@ -333,14 +370,20 @@ include __DIR__ . '/../includes/header.php';
           </div>
         </div>
 
+        <!-- Clinical Workflow Context Notice -->
+        <div id="modalWorkflowNotice" class="alert py-2 px-3 mb-3 d-flex align-items-center gap-2 small" style="display:none; border-radius:10px; font-size:0.82rem;">
+          <i class="fas fa-info-circle flex-shrink-0"></i>
+          <span id="modalWorkflowNoticeText"></span>
+        </div>
+
         <!-- Doctor Clinical Actions -->
         <div class="cal-modal-shortcuts p-3">
           <h6 class="cal-modal-shortcuts-heading"><i class="fas fa-user-md text-primary me-2"></i>Clinical Shortcuts for Doctor</h6>
           <div class="d-flex flex-wrap gap-2">
-            <a href="#" id="modalBtnRecord" class="btn btn-outline-primary btn-sm flex-fill py-2">
+            <a href="#" id="modalBtnRecord" class="btn btn-outline-primary btn-sm flex-fill py-2" title="Review patient medical record">
               <i class="fas fa-folder-open me-1"></i> Open Patient Medical Record
             </a>
-            <a href="#" id="modalBtnRx" class="btn btn-secondary btn-sm flex-fill py-2">
+            <a href="#" id="modalBtnRx" class="btn btn-secondary btn-sm flex-fill py-2" title="Write New Prescription">
               <i class="fas fa-glasses me-1"></i> Write New Prescription
             </a>
             <a href="#" id="modalBtnReceipt" class="btn btn-outline-success btn-sm flex-fill py-2" style="display:none;" target="_blank">
@@ -358,7 +401,7 @@ include __DIR__ . '/../includes/header.php';
             <input type="hidden" name="appt_id" id="postApptIdComplete">
             <input type="hidden" name="action" value="complete">
             <input type="hidden" name="current_view_date" id="postDateComplete">
-            <button type="submit" class="btn btn-success btn-sm px-3"><i class="fas fa-check me-1"></i> Mark as Completed</button>
+            <button type="submit" id="btnSubmitComplete" class="btn btn-success btn-sm px-3"><i class="fas fa-check me-1"></i> Mark as Completed</button>
           </form>
 
           <form method="POST" id="formConfirmAppt" style="display:inline;">
@@ -366,7 +409,7 @@ include __DIR__ . '/../includes/header.php';
             <input type="hidden" name="appt_id" id="postApptIdConfirm">
             <input type="hidden" name="action" value="confirm">
             <input type="hidden" name="current_view_date" id="postDateConfirm">
-            <button type="submit" class="btn btn-info btn-sm px-3 text-white"><i class="fas fa-check-circle me-1"></i> Confirm</button>
+            <button type="submit" id="btnSubmitConfirm" class="btn btn-info btn-sm px-3 text-white"><i class="fas fa-check-circle me-1"></i> Confirm</button>
           </form>
 
           <form method="POST" id="formNoShowAppt" style="display:inline;">
@@ -374,7 +417,7 @@ include __DIR__ . '/../includes/header.php';
             <input type="hidden" name="appt_id" id="postApptIdNoShow">
             <input type="hidden" name="action" value="no_show">
             <input type="hidden" name="current_view_date" id="postDateNoShow">
-            <button type="submit" class="btn btn-outline-warning btn-sm px-3"><i class="fas fa-user-times me-1"></i> Mark No-Show</button>
+            <button type="submit" id="btnSubmitNoShow" class="btn btn-outline-warning btn-sm px-3"><i class="fas fa-user-times me-1"></i> Mark No-Show</button>
           </form>
 
           <form method="POST" id="formCancelAppt" style="display:inline;" onsubmit="return confirm('Are you sure you want to cancel this appointment?');">
@@ -382,7 +425,7 @@ include __DIR__ . '/../includes/header.php';
             <input type="hidden" name="appt_id" id="postApptIdCancel">
             <input type="hidden" name="action" value="cancel">
             <input type="hidden" name="current_view_date" id="postDateCancel">
-            <button type="submit" class="btn btn-outline-danger btn-sm px-3"><i class="fas fa-times me-1"></i> Cancel</button>
+            <button type="submit" id="btnSubmitCancel" class="btn btn-outline-danger btn-sm px-3"><i class="fas fa-times me-1"></i> Cancel</button>
           </form>
         </div>
 
@@ -449,6 +492,18 @@ document.addEventListener('DOMContentLoaded', function() {
   const appointmentModalEl = document.getElementById('appointmentModal');
   const appointmentModal = new bootstrap.Modal(appointmentModalEl);
   const dayQueueModal = new bootstrap.Modal(document.getElementById('dayQueueModal'));
+
+  // Guard against clicks when Clinical Shortcut buttons are disabled
+  const modalBtnRxEl = document.getElementById('modalBtnRx');
+  if (modalBtnRxEl) {
+    modalBtnRxEl.addEventListener('click', function(e) {
+      if (this.dataset.disabled === 'true' || this.classList.contains('is-disabled') || this.classList.contains('disabled')) {
+        e.preventDefault();
+        e.stopPropagation();
+        return false;
+      }
+    });
+  }
 
   // Utility helpers
   function formatDateIso(d) {
@@ -941,10 +996,53 @@ document.addEventListener('DOMContentLoaded', function() {
 
     document.getElementById('modalNotes').textContent = appt.notes && appt.notes.trim() !== '' ? appt.notes : 'No special notes entered for this appointment.';
 
-    // Clinical Action Links
-    document.getElementById('modalBtnRecord').href = `patients.php?view=${appt.patient_id}`;
-    document.getElementById('modalBtnRx').href = `prescriptions.php?patient_id=${appt.patient_id}&appt_id=${appt.id}`;
-    
+    // ── Clinical Workflow & Timing Logic ─────────────────────────
+    // Calculate appointment scheduled datetime & 15-minute clinic grace period
+    const apptTimeStr = appt.appointment_time ? (appt.appointment_time.length === 5 ? appt.appointment_time + ':00' : appt.appointment_time) : '00:00:00';
+    const scheduledDateTime = new Date(`${appt.appointment_date}T${apptTimeStr}`);
+    const graceMinutes = 15;
+    const gracePeriodEnd = !isNaN(scheduledDateTime.getTime()) ? new Date(scheduledDateTime.getTime() + graceMinutes * 60 * 1000) : null;
+    const now = new Date();
+    const isPastGrace = gracePeriodEnd ? (now >= gracePeriodEnd) : false;
+    const unlockTimeStr = gracePeriodEnd ? formatTime12(gracePeriodEnd.toTimeString().substring(0, 5)) : '15 mins after scheduled time';
+
+    // Clinical Shortcuts: Patient Medical Record & Prescription
+    const modalBtnRecord = document.getElementById('modalBtnRecord');
+    const modalBtnRx = document.getElementById('modalBtnRx');
+
+    // 1. Open Patient Medical Record is ALWAYS ACTIVE
+    modalBtnRecord.href = `patients.php?view=${appt.patient_id}`;
+    modalBtnRecord.classList.remove('is-disabled', 'disabled');
+    modalBtnRecord.removeAttribute('aria-disabled');
+    modalBtnRecord.title = 'Review patient history, past diagnoses, and medical charts';
+
+    // 2. Write New Prescription
+    if (appt.status === 'pending') {
+      // Disabled while Pending
+      modalBtnRx.classList.add('is-disabled', 'disabled');
+      modalBtnRx.dataset.disabled = 'true';
+      modalBtnRx.href = 'javascript:void(0)';
+      modalBtnRx.setAttribute('aria-disabled', 'true');
+      modalBtnRx.title = 'Writing and issuing prescriptions is locked until the patient is actively being seen (appointment confirmed).';
+      modalBtnRx.innerHTML = '<i class="fas fa-lock me-1"></i> Write New Prescription';
+    } else if (appt.status === 'confirmed' || appt.status === 'completed') {
+      // Active once confirmed or completed
+      modalBtnRx.classList.remove('is-disabled', 'disabled');
+      modalBtnRx.dataset.disabled = 'false';
+      modalBtnRx.href = `prescriptions.php?patient_id=${appt.patient_id}&appt_id=${appt.id}`;
+      modalBtnRx.removeAttribute('aria-disabled');
+      modalBtnRx.title = 'Write optical prescription for this consultation';
+      modalBtnRx.innerHTML = '<i class="fas fa-glasses me-1"></i> Write New Prescription';
+    } else {
+      // Cancelled / No-show
+      modalBtnRx.classList.add('is-disabled', 'disabled');
+      modalBtnRx.dataset.disabled = 'true';
+      modalBtnRx.href = 'javascript:void(0)';
+      modalBtnRx.setAttribute('aria-disabled', 'true');
+      modalBtnRx.title = `Prescription locked: Cannot prescribe for ${appt.status.replace(/_/g, ' ')} appointments.`;
+      modalBtnRx.innerHTML = '<i class="fas fa-ban me-1"></i> Write New Prescription';
+    }
+
     const btnReceipt = document.getElementById('modalBtnReceipt');
     if (btnReceipt) {
       if (appt.sale_id) {
@@ -965,32 +1063,111 @@ document.addEventListener('DOMContentLoaded', function() {
       if (dateEl) dateEl.value = currDateIso;
     });
 
-    // Control visibility of action buttons based on current status
-    const btnComplete = document.getElementById('formCompleteAppt');
-    const btnConfirm = document.getElementById('formConfirmAppt');
-    const btnNoShow = document.getElementById('formNoShowAppt');
-    const btnCancel = document.getElementById('formCancelAppt');
+    // Control Status Buttons
+    const formComplete = document.getElementById('formCompleteAppt');
+    const formConfirm = document.getElementById('formConfirmAppt');
+    const formNoShow = document.getElementById('formNoShowAppt');
+    const formCancel = document.getElementById('formCancelAppt');
 
-    if (appt.status === 'completed') {
-      btnComplete.style.display = 'none';
-      btnConfirm.style.display = 'none';
-      btnNoShow.style.display = 'none';
-      btnCancel.style.display = 'none';
+    const btnSubmitComplete = document.getElementById('btnSubmitComplete');
+    const btnSubmitConfirm = document.getElementById('btnSubmitConfirm');
+    const btnSubmitNoShow = document.getElementById('btnSubmitNoShow');
+    const btnSubmitCancel = document.getElementById('btnSubmitCancel');
+
+    const noticeBox = document.getElementById('modalWorkflowNotice');
+    const noticeText = document.getElementById('modalWorkflowNoticeText');
+
+    if (appt.status === 'pending') {
+      // ── PENDING STATUS ──────────────────────────────────────────
+      // 1. Mark as Completed: DISABLED
+      formComplete.style.display = 'inline';
+      btnSubmitComplete.disabled = true;
+      btnSubmitComplete.classList.add('disabled');
+      btnSubmitComplete.title = 'A consultation cannot be finished before it has actually taken place. Confirm the appointment first.';
+
+      // 2. Confirm: ACTIVE
+      formConfirm.style.display = 'inline';
+      btnSubmitConfirm.disabled = false;
+      btnSubmitConfirm.classList.remove('disabled');
+      btnSubmitConfirm.title = 'Confirm this booking';
+
+      // 3. Mark No-Show: DISABLED (due to pending + grace period)
+      formNoShow.style.display = 'inline';
+      btnSubmitNoShow.disabled = true;
+      btnSubmitNoShow.classList.add('disabled');
+      if (!isPastGrace) {
+        btnSubmitNoShow.title = `Marking a patient as a no-show prior to appointment time is premature. Disabled until ${formatTime12(appt.appointment_time)} plus 15-minute grace period has elapsed.`;
+      } else {
+        btnSubmitNoShow.title = 'Appointment is currently Pending. Booking must be confirmed first before marking as No-Show.';
+      }
+
+      // 4. Cancel: ACTIVE
+      formCancel.style.display = 'inline';
+      btnSubmitCancel.disabled = false;
+      btnSubmitCancel.classList.remove('disabled');
+      btnSubmitCancel.title = 'Cancel or reschedule this appointment';
+
+      // Workflow notice banner
+      if (noticeBox && noticeText) {
+        noticeBox.style.display = 'flex';
+        noticeBox.className = 'alert alert-warning py-2 px-3 mb-3 d-flex align-items-center gap-2 small';
+        noticeBox.style.border = '1px solid rgba(245, 158, 11, 0.35)';
+        noticeBox.style.background = 'rgba(245, 158, 11, 0.08)';
+        noticeBox.style.color = '#d97706';
+        noticeText.innerHTML = '<strong>Pending Appointment:</strong> Confirming the booking is the primary valid action. <em>Mark as Completed</em>, <em>Write Prescription</em>, and <em>No-Show</em> are locked until consultation workflow progresses.';
+      }
+
     } else if (appt.status === 'confirmed') {
-      btnComplete.style.display = 'inline';
-      btnConfirm.style.display = 'none';
-      btnNoShow.style.display = 'inline';
-      btnCancel.style.display = 'inline';
-    } else if (appt.status === 'pending') {
-      btnComplete.style.display = 'inline';
-      btnConfirm.style.display = 'inline';
-      btnNoShow.style.display = 'inline';
-      btnCancel.style.display = 'inline';
+      // ── CONFIRMED STATUS ────────────────────────────────────────
+      // 1. Mark as Completed: ACTIVE
+      formComplete.style.display = 'inline';
+      btnSubmitComplete.disabled = false;
+      btnSubmitComplete.classList.remove('disabled');
+      btnSubmitComplete.title = 'Mark consultation as completed';
+
+      // 2. Confirm: HIDDEN (already confirmed)
+      formConfirm.style.display = 'none';
+
+      // 3. Mark No-Show: ACTIVE ONLY AFTER SCHEDULED TIME + 15 MIN GRACE PERIOD
+      formNoShow.style.display = 'inline';
+      if (isPastGrace) {
+        btnSubmitNoShow.disabled = false;
+        btnSubmitNoShow.classList.remove('disabled');
+        btnSubmitNoShow.title = 'Mark patient as No-Show';
+      } else {
+        btnSubmitNoShow.disabled = true;
+        btnSubmitNoShow.classList.add('disabled');
+        btnSubmitNoShow.title = `Marking a patient as a no-show prior to appointment time is premature. Available after ${unlockTimeStr} (15-min clinic grace period).`;
+      }
+
+      // 4. Cancel: ACTIVE
+      formCancel.style.display = 'inline';
+      btnSubmitCancel.disabled = false;
+      btnSubmitCancel.classList.remove('disabled');
+      btnSubmitCancel.title = 'Cancel this appointment';
+
+      // Workflow notice banner
+      if (noticeBox && noticeText) {
+        if (!isPastGrace) {
+          noticeBox.style.display = 'flex';
+          noticeBox.className = 'alert alert-info py-2 px-3 mb-3 d-flex align-items-center gap-2 small';
+          noticeBox.style.border = '1px solid rgba(14, 165, 233, 0.3)';
+          noticeBox.style.background = 'rgba(14, 165, 233, 0.08)';
+          noticeBox.style.color = '#0284c7';
+          noticeText.innerHTML = `<strong>Appointment Confirmed:</strong> Ready for consultation. <em>Mark No-Show</em> unlocks at <strong>${unlockTimeStr}</strong> (15-min grace period).`;
+        } else {
+          noticeBox.style.display = 'none';
+        }
+      }
+
     } else {
-      btnComplete.style.display = 'none';
-      btnConfirm.style.display = 'none';
-      btnNoShow.style.display = 'none';
-      btnCancel.style.display = 'none';
+      // ── COMPLETED, CANCELLED, NO-SHOW ───────────────────────────
+      formComplete.style.display = 'none';
+      formConfirm.style.display = 'none';
+      formNoShow.style.display = 'none';
+      formCancel.style.display = 'none';
+
+      if (noticeBox) noticeBox.style.display = 'none';
     }
 
     appointmentModal.show();

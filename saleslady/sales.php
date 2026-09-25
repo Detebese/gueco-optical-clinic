@@ -27,13 +27,67 @@ $sales = $db->prepare("
 ");
 $sales->execute([$filterFrom,$filterTo]); $sales = $sales->fetchAll() ?: [];
 
+$extraHead = '<link rel="stylesheet" href="'.BASE_URL.'assets/css/pages/dashboard.css?v='.time().'">';
 include __DIR__ . '/../includes/header.php';
 ?>
 <!-- Summary -->
-<div class="row" style="margin-bottom:20px;">
-  <div class="col-4"><div class="stat-card" style="--stat-color:var(--clr-success)"><div class="stat-icon green"><i class="fas fa-peso-sign"></i></div><div class="stat-info"><div class="stat-value"><?= formatCurrency($todaySales['t']) ?></div><div class="stat-label">Today's Revenue</div></div></div></div>
-  <div class="col-4"><div class="stat-card" style="--stat-color:var(--clr-primary)"><div class="stat-icon blue"><i class="fas fa-receipt"></i></div><div class="stat-info"><div class="stat-value"><?= $todaySales['c'] ?></div><div class="stat-label">Transactions Today</div></div></div></div>
-  <div class="col-4"><div class="stat-card" style="--stat-color:var(--clr-info)"><div class="stat-icon teal"><i class="fas fa-cash-register"></i></div><div class="stat-info"><div class="stat-value"><?= $total ?></div><div class="stat-label">In Selected Range</div></div></div></div>
+<div class="row g-3 mb-4">
+  <!-- Today's Revenue -->
+  <div class="col-lg-4 col-md-6">
+    <div class="bento-stat" style="--stat-color:#10B981; --stat-rgb:16, 185, 129;">
+      <div class="bento-stat-glow"></div>
+      <div class="bento-stat-left">
+        <div class="bento-label">Today's Revenue</div>
+        <div class="bento-value"><?= formatCurrency($todaySales['t']) ?></div>
+        <div class="bento-badge green">
+          <i class="fas fa-coins"></i> Today's earnings
+        </div>
+      </div>
+      <div class="bento-stat-right">
+        <div class="bento-stat-icon">
+          <i class="fas fa-peso-sign"></i>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Transactions Today -->
+  <div class="col-lg-4 col-md-6">
+    <div class="bento-stat" style="--stat-color:#0EA5E9; --stat-rgb:14, 165, 233;">
+      <div class="bento-stat-glow"></div>
+      <div class="bento-stat-left">
+        <div class="bento-label">Transactions Today</div>
+        <div class="bento-value"><?= $todaySales['c'] ?></div>
+        <div class="bento-badge blue">
+          <i class="fas fa-receipt"></i> Processed today
+        </div>
+      </div>
+      <div class="bento-stat-right">
+        <div class="bento-stat-icon">
+          <i class="fas fa-cash-register"></i>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- In Selected Range -->
+  <div class="col-lg-4 col-md-6">
+    <div class="bento-stat" style="--stat-color:#8B5CF6; --stat-rgb:139, 92, 246;">
+      <div class="bento-stat-glow"></div>
+      <div class="bento-stat-left">
+        <div class="bento-label">In Selected Range</div>
+        <div class="bento-value"><?= $total ?></div>
+        <div class="bento-badge purple">
+          <i class="fas fa-calendar-check"></i> Filtered results
+        </div>
+      </div>
+      <div class="bento-stat-right">
+        <div class="bento-stat-icon">
+          <i class="fas fa-chart-bar"></i>
+        </div>
+      </div>
+    </div>
+  </div>
 </div>
 
 <div class="card" style="margin-bottom:20px;">
