@@ -1514,6 +1514,49 @@ html:not([data-theme="dark"]) .btn-success {
   box-shadow: 0 30px 70px rgba(0, 0, 0, 0.8), 0 0 30px rgba(0, 173, 239, 0.12);
 }
 
+/* ─── Bootstrap Modal Dark Mode Fix ─────────────────────── */
+[data-theme="dark"] .modal-content {
+  background-color: var(--bg-card) !important;
+  border-color: rgba(255, 255, 255, 0.12) !important;
+  color: var(--text-primary) !important;
+}
+[data-theme="dark"] .modal-header {
+  background-color: var(--bg-table-head) !important;
+  border-bottom-color: rgba(255, 255, 255, 0.1) !important;
+  color: var(--text-primary) !important;
+}
+[data-theme="dark"] .modal-title {
+  color: var(--text-primary) !important;
+}
+[data-theme="dark"] .modal-body {
+  background-color: var(--bg-card) !important;
+  color: var(--text-primary) !important;
+}
+[data-theme="dark"] .modal-footer {
+  background-color: var(--bg-table-head) !important;
+  border-top-color: rgba(255, 255, 255, 0.1) !important;
+}
+[data-theme="dark"] .modal-content .btn-close {
+  filter: invert(1) grayscale(100%) brightness(200%);
+}
+[data-theme="dark"] .modal-content .form-label,
+[data-theme="dark"] .modal-content label {
+  color: var(--text-primary) !important;
+}
+[data-theme="dark"] .modal-content .form-control,
+[data-theme="dark"] .modal-content .form-select {
+  background-color: var(--bg-input) !important;
+  color: var(--text-primary) !important;
+  border-color: var(--border-color) !important;
+}
+[data-theme="dark"] .modal-content .text-muted {
+  color: var(--text-muted) !important;
+}
+[data-theme="dark"] .modal-content hr {
+  border-color: rgba(255, 255, 255, 0.1) !important;
+}
+/* ─────────────────────────────────────────────────────────── */
+
 .modal-box > form {
   display: flex;
   flex-direction: column;

@@ -180,6 +180,13 @@
 
 .appt-d4357b { min-height: 40px; }
 
+.appt-modal-notes {
+  background-color: var(--bg-input);
+  color: var(--text-muted);
+  border: 1px solid var(--border-light);
+  font-size: 0.875rem;
+}
+
 .appt-d2254c { display:flex;gap:6px;justify-content:flex-end;flex-wrap:wrap; }
 
 .appt-745460 { color: var(--clr-primary); font-size: 0.7rem; font-weight: 600; }

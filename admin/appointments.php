@@ -392,7 +392,7 @@ include __DIR__ . '/../includes/header.php';
         </div>
         <div class="mb-3">
           <label class="text-muted small">Notes</label>
-          <div id="modalNotes"  class="bg-light p-2 rounded text-muted appt-d4357b"></div>
+          <div id="modalNotes"  class="p-2 rounded appt-d4357b appt-modal-notes"></div>
         </div>
 
         <hr>
