@@ -997,7 +997,7 @@ document.addEventListener("DOMContentLoaded", function() {
   </div>
 
   <!-- ── SUB-PAGE 1: BOOKING CATEGORIES (STEP 1 OF WIZARD) ── -->
-  <div class="pm-svc-subpanel <?= $activeSvcSubTab === 'cats' ? 'active' : '' ?>" id="svcSubCats">
+  <div class="pm-svc-subpanel <?= $activeSvcSubTab === 'cats' ? 'active' : '' ?>" id="svcSubCats" style="display: <?= $activeSvcSubTab === 'cats' ? 'block' : 'none' ?>;">
     <div class="pm-info-callout">
       <div class="pm-callout-icon"><i class="fas fa-layer-group"></i></div>
       <div class="pm-callout-content">
@@ -1055,7 +1055,7 @@ document.addEventListener("DOMContentLoaded", function() {
             <i class="fas fa-stethoscope"></i> <?= $linkedCount ?> <?= $linkedCount === 1 ? 'Service Linked' : 'Services Linked' ?>
           </span>
           <button type="button" class="pm-cat-view-services-btn" onclick="filterAndJumpToServices('<?= htmlspecialchars($cKey) ?>')">
-            View Services <i class="fas fa-arrow-right ms-1"></i>
+            <span>View Services</span> <i class="fas fa-arrow-right"></i>
           </button>
         </div>
 
@@ -1098,7 +1098,7 @@ document.addEventListener("DOMContentLoaded", function() {
   </div>
 
   <!-- ── SUB-PAGE 2: OFFERED SERVICES / SUB-CATEGORIES (STEP 2 OF WIZARD) ── -->
-  <div class="pm-svc-subpanel <?= $activeSvcSubTab === 'services' ? 'active' : '' ?>" id="svcSubServices">
+  <div class="pm-svc-subpanel <?= $activeSvcSubTab === 'services' ? 'active' : '' ?>" id="svcSubServices" style="display: <?= $activeSvcSubTab === 'services' ? 'block' : 'none' ?>;">
     <div class="pm-info-callout">
       <div class="pm-callout-icon"><i class="fas fa-stethoscope"></i></div>
       <div class="pm-callout-content">
@@ -1274,37 +1274,6 @@ document.addEventListener("DOMContentLoaded", function() {
   </div>
 </div>
 
-<!-- ═══════════════════════════════════════════════════════════════
-     MODAL: VISUAL ICON PICKER (GRID)
-     ═══════════════════════════════════════════════════════════════ -->
-<div class="modal-overlay" id="iconPickerModal">
-  <div class="modal-box pm-icon-picker-box">
-    <div class="modal-header">
-      <div style="display:flex;align-items:center;gap:12px;">
-        <div class="modal-icon-badge"><i class="fas fa-icons"></i></div>
-        <div class="modal-header-titles">
-          <h5>Choose an Icon</h5>
-          <small>Click any icon below to apply it immediately</small>
-        </div>
-      </div>
-      <button class="modal-close" onclick="closeModal('iconPickerModal')" type="button"><i class="fas fa-times"></i></button>
-    </div>
-    <div class="modal-body pm-icon-picker-body">
-      <div class="pm-icon-grid">
-        <?php foreach ($availableIcons as $iCls => [$iTitle, $iDesc]): ?>
-        <button type="button" class="pm-icon-tile" onclick="selectIcon('<?= $iCls ?>')">
-          <div class="pm-icon-tile-sym"><i class="fas <?= $iCls ?>"></i></div>
-          <div class="pm-icon-tile-name"><?= $iTitle ?></div>
-          <div class="pm-icon-tile-tag"><?= $iCls ?></div>
-        </button>
-        <?php endforeach; ?>
-      </div>
-    </div>
-    <div class="modal-footer">
-      <button type="button" class="btn btn-secondary" onclick="closeModal('iconPickerModal')">Close</button>
-    </div>
-  </div>
-</div>
 
 <!-- ═══════════════════════════════════════════════════════════════
      MODAL: ADD BOOKING CATEGORY
@@ -1672,6 +1641,38 @@ document.addEventListener("DOMContentLoaded", function() {
 </div>
 
 <!-- ═══════════════════════════════════════════════════════════════
+     MODAL: VISUAL ICON PICKER (GRID) — TOP-LEVEL STACKING
+     ═══════════════════════════════════════════════════════════════ -->
+<div class="modal-overlay" id="iconPickerModal" style="z-index: 10500 !important;">
+  <div class="modal-box pm-icon-picker-box" style="z-index: 10501 !important;">
+    <div class="modal-header">
+      <div style="display:flex;align-items:center;gap:12px;">
+        <div class="modal-icon-badge"><i class="fas fa-icons"></i></div>
+        <div class="modal-header-titles">
+          <h5>Choose an Icon</h5>
+          <small>Click any icon below to apply it immediately</small>
+        </div>
+      </div>
+      <button class="modal-close" onclick="closeModal('iconPickerModal', true)" type="button"><i class="fas fa-times"></i></button>
+    </div>
+    <div class="modal-body pm-icon-picker-body">
+      <div class="pm-icon-grid">
+        <?php foreach ($availableIcons as $iCls => [$iTitle, $iDesc]): ?>
+        <button type="button" class="pm-icon-tile" onclick="selectIcon('<?= $iCls ?>')">
+          <div class="pm-icon-tile-sym"><i class="fas <?= $iCls ?>"></i></div>
+          <div class="pm-icon-tile-name"><?= $iTitle ?></div>
+          <div class="pm-icon-tile-tag"><?= $iCls ?></div>
+        </button>
+        <?php endforeach; ?>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button type="button" class="btn btn-secondary" onclick="closeModal('iconPickerModal', true)">Close</button>
+    </div>
+  </div>
+</div>
+
+<!-- ═══════════════════════════════════════════════════════════════
      PAGE JAVASCRIPT
      ═══════════════════════════════════════════════════════════════ -->
 <script>
@@ -1711,11 +1712,21 @@ function updateHeroLivePreview() {
 // ── Services Sub-Page Switching (Categories vs Offered Services) ──────────────
 function switchSvcSub(sub) {
     document.querySelectorAll('.pm-subnav-pill').forEach(p => p.classList.remove('active'));
-    document.querySelectorAll('.pm-sub-page').forEach(p => p.classList.remove('active'));
-    const btn = document.querySelector(`.pm-subnav-pill[onclick="switchSvcSub('${sub}')"]`);
+    const btn = document.getElementById(sub === 'cats' ? 'subBtnCats' : 'subBtnServices') ||
+                document.querySelector(`.pm-subnav-pill[onclick="switchSvcSub('${sub}')"]`);
     if (btn) btn.classList.add('active');
-    const page = document.getElementById(sub === 'cats' ? 'svcSubCats' : 'svcSubServices');
-    if (page) page.classList.add('active');
+
+    const catsPanel = document.getElementById('svcSubCats');
+    const svcPanel  = document.getElementById('svcSubServices');
+
+    if (catsPanel) {
+        catsPanel.classList.toggle('active', sub === 'cats');
+        catsPanel.style.display = (sub === 'cats') ? 'block' : 'none';
+    }
+    if (svcPanel) {
+        svcPanel.classList.toggle('active', sub === 'services');
+        svcPanel.style.display = (sub === 'services') ? 'block' : 'none';
+    }
 }
 
 function filterAndJumpToServices(catKey) {
@@ -1724,9 +1735,9 @@ function filterAndJumpToServices(catKey) {
     if (filterBtn) {
         filterBtn.click();
     }
-    const filterBar = document.querySelector('.pm-svc-filter-bar');
-    if (filterBar) {
-        filterBar.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+    const target = document.getElementById('svcSubServices');
+    if (target) {
+        target.scrollIntoView({ behavior: 'smooth', block: 'start' });
     }
 }
 
@@ -1765,7 +1776,7 @@ function selectIcon(iconClass) {
             }
         }
     }
-    closeModal('iconPickerModal');
+    closeModal('iconPickerModal', true);
 }
 
 function updateCatIconPreview(inputId, previewId) {
