@@ -22,8 +22,14 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
         $ptName = $ptData['full_name'] ?? ('Appointment #' . $apptId);
 
         if ($action === 'complete') {
+            $apptDateTimeStr = ($ptData['appointment_date'] ?? '') . ' ' . ($ptData['appointment_time'] ?? '');
+            $apptTimestamp = strtotime($apptDateTimeStr);
+
             if ($ptData && ($ptData['status'] ?? '') === 'pending') {
                 $_SESSION['flash_msg'] = 'A consultation cannot be finished before it has actually taken place. Please confirm the appointment first.';
+                $_SESSION['flash_type'] = 'warning';
+            } elseif ($apptTimestamp && time() < $apptTimestamp) {
+                $_SESSION['flash_msg'] = 'A consultation cannot be marked as completed before the scheduled appointment time (' . date('h:i A', $apptTimestamp) . ').';
                 $_SESSION['flash_type'] = 'warning';
             } else {
                 $db->prepare("UPDATE appointments SET status='completed' WHERE id=?")->execute([$apptId]);
@@ -1003,6 +1009,7 @@ document.addEventListener('DOMContentLoaded', function() {
     const graceMinutes = 15;
     const gracePeriodEnd = !isNaN(scheduledDateTime.getTime()) ? new Date(scheduledDateTime.getTime() + graceMinutes * 60 * 1000) : null;
     const now = new Date();
+    const isAppointmentTimeReached = !isNaN(scheduledDateTime.getTime()) ? (now >= scheduledDateTime) : false;
     const isPastGrace = gracePeriodEnd ? (now >= gracePeriodEnd) : false;
     const unlockTimeStr = gracePeriodEnd ? formatTime12(gracePeriodEnd.toTimeString().substring(0, 5)) : '15 mins after scheduled time';
 
@@ -1079,11 +1086,15 @@ document.addEventListener('DOMContentLoaded', function() {
 
     if (appt.status === 'pending') {
       // ── PENDING STATUS ──────────────────────────────────────────
-      // 1. Mark as Completed: DISABLED
+      // 1. Mark as Completed: DISABLED (both pending and before start)
       formComplete.style.display = 'inline';
       btnSubmitComplete.disabled = true;
       btnSubmitComplete.classList.add('disabled');
-      btnSubmitComplete.title = 'A consultation cannot be finished before it has actually taken place. Confirm the appointment first.';
+      if (!isAppointmentTimeReached) {
+        btnSubmitComplete.title = `A consultation cannot be finished before it has actually taken place. Disabled until scheduled appointment time (${formatTime12(appt.appointment_time)}) and confirmation.`;
+      } else {
+        btnSubmitComplete.title = 'A consultation cannot be finished before it has actually taken place. Confirm the appointment first.';
+      }
 
       // 2. Confirm: ACTIVE
       formConfirm.style.display = 'inline';
@@ -1119,11 +1130,17 @@ document.addEventListener('DOMContentLoaded', function() {
 
     } else if (appt.status === 'confirmed') {
       // ── CONFIRMED STATUS ────────────────────────────────────────
-      // 1. Mark as Completed: ACTIVE
+      // 1. Mark as Completed: ACTIVE ONLY AFTER APPOINTMENT TIME HAS ARRIVED
       formComplete.style.display = 'inline';
-      btnSubmitComplete.disabled = false;
-      btnSubmitComplete.classList.remove('disabled');
-      btnSubmitComplete.title = 'Mark consultation as completed';
+      if (isAppointmentTimeReached) {
+        btnSubmitComplete.disabled = false;
+        btnSubmitComplete.classList.remove('disabled');
+        btnSubmitComplete.title = 'Mark consultation as completed';
+      } else {
+        btnSubmitComplete.disabled = true;
+        btnSubmitComplete.classList.add('disabled');
+        btnSubmitComplete.title = `A consultation cannot be finished before it has actually taken place. Disabled until scheduled appointment time (${formatTime12(appt.appointment_time)}).`;
+      }
 
       // 2. Confirm: HIDDEN (already confirmed)
       formConfirm.style.display = 'none';
@@ -1148,13 +1165,20 @@ document.addEventListener('DOMContentLoaded', function() {
 
       // Workflow notice banner
       if (noticeBox && noticeText) {
-        if (!isPastGrace) {
+        if (!isAppointmentTimeReached) {
           noticeBox.style.display = 'flex';
           noticeBox.className = 'alert alert-info py-2 px-3 mb-3 d-flex align-items-center gap-2 small';
           noticeBox.style.border = '1px solid rgba(14, 165, 233, 0.3)';
           noticeBox.style.background = 'rgba(14, 165, 233, 0.08)';
           noticeBox.style.color = '#0284c7';
-          noticeText.innerHTML = `<strong>Appointment Confirmed:</strong> Ready for consultation. <em>Mark No-Show</em> unlocks at <strong>${unlockTimeStr}</strong> (15-min grace period).`;
+          noticeText.innerHTML = `<strong>Appointment Confirmed:</strong> Scheduled for <strong>${formatTime12(appt.appointment_time)}</strong>. <em>Mark as Completed</em> unlocks once the scheduled time arrives, and <em>No-Show</em> unlocks after <strong>${unlockTimeStr}</strong> (15-min grace period).`;
+        } else if (!isPastGrace) {
+          noticeBox.style.display = 'flex';
+          noticeBox.className = 'alert alert-success py-2 px-3 mb-3 d-flex align-items-center gap-2 small';
+          noticeBox.style.border = '1px solid rgba(16, 185, 129, 0.3)';
+          noticeBox.style.background = 'rgba(16, 185, 129, 0.08)';
+          noticeBox.style.color = '#059669';
+          noticeText.innerHTML = `<strong>Consultation Ready:</strong> Scheduled appointment time has arrived. You can now conduct the consultation and mark it as completed. <em>No-Show</em> unlocks after <strong>${unlockTimeStr}</strong>.`;
         } else {
           noticeBox.style.display = 'none';
         }
