@@ -28,6 +28,11 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
             if ($ptData && ($ptData['status'] ?? '') === 'pending') {
                 $_SESSION['flash_msg'] = 'A consultation cannot be finished before it has actually taken place. Please confirm the appointment first.';
                 $_SESSION['flash_type'] = 'warning';
+            } elseif ($ptData && ($ptData['status'] ?? '') === 'no_show') {
+                $db->prepare("UPDATE appointments SET status='completed' WHERE id=?")->execute([$apptId]);
+                $_SESSION['flash_msg'] = 'Appointment marked as completed (Delayed charting recorded).';
+                $_SESSION['flash_type'] = 'success';
+                logActivity("Marked appointment #$apptId as completed from No-Show for patient: $ptName", "Appointments", $_SESSION['user_id'], 'staff');
             } elseif ($apptTimestamp && time() < $apptTimestamp) {
                 $_SESSION['flash_msg'] = 'A consultation cannot be marked as completed before the scheduled appointment time (' . date('h:i A', $apptTimestamp) . ').';
                 $_SESSION['flash_type'] = 'warning';
@@ -53,6 +58,16 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
                 $_SESSION['flash_msg'] = 'Appointment marked as No-Show.';
                 $_SESSION['flash_type'] = 'warning';
                 logActivity("Marked appointment #$apptId as No-Show for patient: $ptName", "Appointments", $_SESSION['user_id'], 'staff');
+            }
+        } elseif ($action === 'revert_confirmed') {
+            if ($ptData && ($ptData['status'] ?? '') === 'no_show') {
+                $db->prepare("UPDATE appointments SET status='confirmed', verified_by=? WHERE id=?")->execute([$_SESSION['user_id'], $apptId]);
+                $_SESSION['flash_msg'] = 'Appointment reverted back to Confirmed.';
+                $_SESSION['flash_type'] = 'success';
+                logActivity("Reverted appointment #$apptId from No-Show back to Confirmed for patient: $ptName", "Appointments", $_SESSION['user_id'], 'staff');
+            } else {
+                $_SESSION['flash_msg'] = 'Only No-Show appointments can be reverted to Confirmed.';
+                $_SESSION['flash_type'] = 'warning';
             }
         } elseif ($action === 'confirm') {
             $db->prepare("UPDATE appointments SET status='confirmed', verified_by=? WHERE id=?")->execute([$_SESSION['user_id'], $apptId]);
@@ -424,6 +439,14 @@ include __DIR__ . '/../includes/header.php';
             <input type="hidden" name="action" value="no_show">
             <input type="hidden" name="current_view_date" id="postDateNoShow">
             <button type="submit" id="btnSubmitNoShow" class="btn btn-outline-warning btn-sm px-3"><i class="fas fa-user-times me-1"></i> Mark No-Show</button>
+          </form>
+
+          <form method="POST" id="formRevertConfirmedAppt" style="display:none;">
+            <input type="hidden" name="csrf_token" value="<?= generateCsrfToken() ?>">
+            <input type="hidden" name="appt_id" id="postApptIdRevertConfirmed">
+            <input type="hidden" name="action" value="revert_confirmed">
+            <input type="hidden" name="current_view_date" id="postDateRevertConfirmed">
+            <button type="submit" id="btnSubmitRevertConfirmed" class="btn btn-outline-info btn-sm px-3"><i class="fas fa-undo me-1"></i> Revert to Confirmed</button>
           </form>
 
           <form method="POST" id="formCancelAppt" style="display:inline;" onsubmit="return confirm('Are you sure you want to cancel this appointment?');">
@@ -1063,7 +1086,7 @@ document.addEventListener('DOMContentLoaded', function() {
 
     // Fill IDs into status forms
     const currDateIso = formatDateIso(currentDate);
-    ['Complete', 'Confirm', 'NoShow', 'Cancel'].forEach(action => {
+    ['Complete', 'Confirm', 'NoShow', 'Cancel', 'RevertConfirmed'].forEach(action => {
       const idEl = document.getElementById(`postApptId${action}`);
       const dateEl = document.getElementById(`postDate${action}`);
       if (idEl) idEl.value = appt.id;
@@ -1075,14 +1098,18 @@ document.addEventListener('DOMContentLoaded', function() {
     const formConfirm = document.getElementById('formConfirmAppt');
     const formNoShow = document.getElementById('formNoShowAppt');
     const formCancel = document.getElementById('formCancelAppt');
+    const formRevertConfirmed = document.getElementById('formRevertConfirmedAppt');
 
     const btnSubmitComplete = document.getElementById('btnSubmitComplete');
     const btnSubmitConfirm = document.getElementById('btnSubmitConfirm');
     const btnSubmitNoShow = document.getElementById('btnSubmitNoShow');
     const btnSubmitCancel = document.getElementById('btnSubmitCancel');
+    const btnSubmitRevertConfirmed = document.getElementById('btnSubmitRevertConfirmed');
 
     const noticeBox = document.getElementById('modalWorkflowNotice');
     const noticeText = document.getElementById('modalWorkflowNoticeText');
+
+    if (formRevertConfirmed) formRevertConfirmed.style.display = 'none';
 
     if (appt.status === 'pending') {
       // ── PENDING STATUS ──────────────────────────────────────────
@@ -1184,12 +1211,45 @@ document.addEventListener('DOMContentLoaded', function() {
         }
       }
 
+    } else if (appt.status === 'no_show') {
+      // ── NO-SHOW STATUS (SAFETY / REVERSAL WORKFLOW) ─────────────
+      // 1. Revert to Confirmed: ACTIVE
+      if (formRevertConfirmed) {
+        formRevertConfirmed.style.display = 'inline';
+        btnSubmitRevertConfirmed.disabled = false;
+        btnSubmitRevertConfirmed.classList.remove('disabled');
+        btnSubmitRevertConfirmed.title = 'Revert this No-Show appointment back to Confirmed to resume clinical charting';
+      }
+
+      // 2. Mark as Completed: ACTIVE (for delayed charting)
+      formComplete.style.display = 'inline';
+      btnSubmitComplete.disabled = false;
+      btnSubmitComplete.classList.remove('disabled');
+      btnSubmitComplete.title = 'Mark consultation as completed if clinical encounter took place but charting was delayed';
+
+      // 3. Confirm, NoShow, Cancel: HIDDEN
+      formConfirm.style.display = 'none';
+      formNoShow.style.display = 'none';
+      formCancel.style.display = 'none';
+
+      // Workflow notice banner
+      if (noticeBox && noticeText) {
+        noticeBox.style.display = 'flex';
+        noticeBox.className = 'alert alert-secondary py-2 px-3 mb-3 d-flex align-items-center gap-2 small';
+        noticeBox.style.border = '1px solid rgba(139, 92, 246, 0.4)';
+        noticeBox.style.background = 'rgba(139, 92, 246, 0.1)';
+        noticeBox.style.color = '#c084fc';
+        const isAuto = (appt.notes && appt.notes.includes('[AUTO_NOSHOW]'));
+        noticeText.innerHTML = `<strong>Appointment Marked as No-Show${isAuto ? ' (by System Automation)' : ''}:</strong> If the patient attended or clinical documentation was delayed, you may <em>Revert to Confirmed</em> or directly <em>Mark as Completed</em>.`;
+      }
+
     } else {
-      // ── COMPLETED, CANCELLED, NO-SHOW ───────────────────────────
+      // ── COMPLETED, CANCELLED ────────────────────────────────────
       formComplete.style.display = 'none';
       formConfirm.style.display = 'none';
       formNoShow.style.display = 'none';
       formCancel.style.display = 'none';
+      if (formRevertConfirmed) formRevertConfirmed.style.display = 'none';
 
       if (noticeBox) noticeBox.style.display = 'none';
     }

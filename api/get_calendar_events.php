@@ -60,6 +60,8 @@ try {
                 'status' => $a['status'],
                 'purpose' => $a['purpose'],
                 'notes' => $a['notes'],
+                'appointment_date' => $a['appointment_date'],
+                'appointment_time' => $a['appointment_time'],
                 'time_formatted' => formatTime($a['appointment_time']),
                 'date_formatted' => formatDate($a['appointment_date'])
             ]

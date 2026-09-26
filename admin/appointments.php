@@ -14,26 +14,71 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
     $apptId = (int)($_POST['appt_id'] ?? 0);
     $action = $_POST['action'];
 
-    $ptStmt = $db->prepare("SELECT p.full_name FROM appointments a JOIN patients p ON p.id=a.patient_id WHERE a.id=?");
+    $ptStmt = $db->prepare("SELECT p.full_name, a.appointment_date, a.appointment_time, a.status FROM appointments a JOIN patients p ON p.id=a.patient_id WHERE a.id=?");
     $ptStmt->execute([$apptId]);
-    $ptName = $ptStmt->fetch()['full_name'] ?? ('Appointment #' . $apptId);
+    $ptData = $ptStmt->fetch();
+    $ptName = $ptData['full_name'] ?? ('Appointment #' . $apptId);
+
+    $apptDateTimeStr = ($ptData['appointment_date'] ?? '') . ' ' . ($ptData['appointment_time'] ?? '');
+    $apptTimestamp = strtotime($apptDateTimeStr);
+    $graceTimestamp = $apptTimestamp ? ($apptTimestamp + (15 * 60)) : 0;
 
     if ($action === 'confirm') {
-        $db->prepare("UPDATE appointments SET status='confirmed', verified_by=? WHERE id=?")->execute([$_SESSION['user_id'], $apptId]);
-        $_SESSION['flash_msg'] = 'Appointment confirmed.'; $_SESSION['flash_type'] = 'success';
-        logActivity("Confirmed appointment #$apptId for patient $ptName", "Appointments", $_SESSION['user_id'], 'staff');
+        if ($ptData && ($ptData['status'] ?? '') === 'confirmed') {
+            $_SESSION['flash_msg'] = 'Appointment is already confirmed.';
+            $_SESSION['flash_type'] = 'info';
+        } else {
+            $db->prepare("UPDATE appointments SET status='confirmed', verified_by=? WHERE id=?")->execute([$_SESSION['user_id'], $apptId]);
+            $_SESSION['flash_msg'] = 'Appointment confirmed.';
+            $_SESSION['flash_type'] = 'success';
+            logActivity("Confirmed appointment #$apptId for patient $ptName", "Appointments", $_SESSION['user_id'], 'staff');
+        }
     } elseif ($action === 'complete') {
-        $db->prepare("UPDATE appointments SET status='completed' WHERE id=?")->execute([$apptId]);
-        $_SESSION['flash_msg'] = 'Appointment marked as completed.'; $_SESSION['flash_type'] = 'success';
-        logActivity("Marked appointment #$apptId as completed for patient $ptName", "Appointments", $_SESSION['user_id'], 'staff');
+        if ($ptData && ($ptData['status'] ?? '') === 'pending') {
+            $_SESSION['flash_msg'] = 'A consultation cannot be finished before it has actually taken place. Please confirm the appointment first.';
+            $_SESSION['flash_type'] = 'warning';
+        } elseif ($ptData && ($ptData['status'] ?? '') === 'no_show') {
+            $db->prepare("UPDATE appointments SET status='completed' WHERE id=?")->execute([$apptId]);
+            $_SESSION['flash_msg'] = 'Appointment marked as completed (Delayed charting recorded).';
+            $_SESSION['flash_type'] = 'success';
+            logActivity("Marked appointment #$apptId as completed from No-Show for patient $ptName", "Appointments", $_SESSION['user_id'], 'staff');
+        } elseif ($apptTimestamp && time() < $apptTimestamp) {
+            $_SESSION['flash_msg'] = 'A consultation cannot be marked as completed before the scheduled appointment time (' . date('h:i A', $apptTimestamp) . ').';
+            $_SESSION['flash_type'] = 'warning';
+        } else {
+            $db->prepare("UPDATE appointments SET status='completed' WHERE id=?")->execute([$apptId]);
+            $_SESSION['flash_msg'] = 'Appointment marked as completed.';
+            $_SESSION['flash_type'] = 'success';
+            logActivity("Marked appointment #$apptId as completed for patient $ptName", "Appointments", $_SESSION['user_id'], 'staff');
+        }
+    } elseif ($action === 'no_show') {
+        if ($ptData && ($ptData['status'] ?? '') === 'pending') {
+            $_SESSION['flash_msg'] = 'Cannot mark a Pending appointment as No-Show. Please confirm the booking first.';
+            $_SESSION['flash_type'] = 'warning';
+        } elseif ($apptTimestamp && time() < $graceTimestamp) {
+            $_SESSION['flash_msg'] = 'Marking a patient as No-Show is premature until the scheduled appointment time and 15-minute grace period have elapsed.';
+            $_SESSION['flash_type'] = 'warning';
+        } else {
+            $db->prepare("UPDATE appointments SET status='no_show' WHERE id=?")->execute([$apptId]);
+            $_SESSION['flash_msg'] = 'Marked as no-show.';
+            $_SESSION['flash_type'] = 'success';
+            logActivity("Marked appointment #$apptId as No-Show for patient $ptName", "Appointments", $_SESSION['user_id'], 'staff');
+        }
+    } elseif ($action === 'revert_confirmed') {
+        if ($ptData && ($ptData['status'] ?? '') === 'no_show') {
+            $db->prepare("UPDATE appointments SET status='confirmed', verified_by=? WHERE id=?")->execute([$_SESSION['user_id'], $apptId]);
+            $_SESSION['flash_msg'] = 'Appointment reverted back to Confirmed.';
+            $_SESSION['flash_type'] = 'success';
+            logActivity("Reverted appointment #$apptId from No-Show back to Confirmed for patient $ptName", "Appointments", $_SESSION['user_id'], 'staff');
+        } else {
+            $_SESSION['flash_msg'] = 'Only No-Show appointments can be reverted to Confirmed.';
+            $_SESSION['flash_type'] = 'warning';
+        }
     } elseif ($action === 'cancel') {
         $db->prepare("UPDATE appointments SET status='cancelled' WHERE id=?")->execute([$apptId]);
-        $_SESSION['flash_msg'] = 'Appointment cancelled.'; $_SESSION['flash_type'] = 'success';
+        $_SESSION['flash_msg'] = 'Appointment cancelled.';
+        $_SESSION['flash_type'] = 'success';
         logActivity("Cancelled appointment #$apptId for patient $ptName", "Appointments", $_SESSION['user_id'], 'staff');
-    } elseif ($action === 'no_show') {
-        $db->prepare("UPDATE appointments SET status='no_show' WHERE id=?")->execute([$apptId]);
-        $_SESSION['flash_msg'] = 'Marked as no-show.'; $_SESSION['flash_type'] = 'success';
-        logActivity("Marked appointment #$apptId as No-Show for patient $ptName", "Appointments", $_SESSION['user_id'], 'staff');
     }
     header('Location: appointments.php'); exit;
 }
@@ -289,33 +334,91 @@ include __DIR__ . '/../includes/header.php';
           <td><?= statusBadge($a['status']) ?></td>
           <td>
             <div class="appt-152c49">
+              <?php
+              $rowTimeStr = ($a['appointment_date'] ?? '') . ' ' . ($a['appointment_time'] ?? '');
+              $rowTimestamp = strtotime($rowTimeStr);
+              $rowGraceTimestamp = $rowTimestamp ? ($rowTimestamp + (15 * 60)) : 0;
+              $nowTime = time();
+
+              $isTimeReached = $rowTimestamp ? ($nowTime >= $rowTimestamp) : false;
+              $isPastGrace   = $rowGraceTimestamp ? ($nowTime >= $rowGraceTimestamp) : false;
+              $timeFormatted = $rowTimestamp ? date('h:i A', $rowTimestamp) : '';
+              $graceFormatted = $rowGraceTimestamp ? date('h:i A', $rowGraceTimestamp) : '';
+              ?>
+
               <?php if ($a['status'] === 'pending'): ?>
-              <form method="POST" class="appt-1386d5" onsubmit="return confirmAction(this, 'Confirm this appointment?');">
-                <input type="hidden" name="csrf_token" value="<?= generateCsrfToken() ?>">
-                <input type="hidden" name="appt_id" value="<?= $a['id'] ?>">
-                <input type="hidden" name="action" value="confirm">
-                <button class="btn btn-sm btn-success btn-icon" title="Confirm"><i class="fas fa-check"></i></button>
-              </form>
-              <?php endif; ?>
-              <?php if (in_array($a['status'],['pending','confirmed'])): ?>
-              <form method="POST" class="appt-1386d5" onsubmit="return confirmAction(this, 'Mark this appointment as Complete?');">
-                <input type="hidden" name="csrf_token" value="<?= generateCsrfToken() ?>">
-                <input type="hidden" name="appt_id" value="<?= $a['id'] ?>">
-                <input type="hidden" name="action" value="complete">
-                <button class="btn btn-sm btn-primary btn-icon" title="Mark Complete"><i class="fas fa-check-double"></i></button>
-              </form>
-              <form method="POST" class="appt-1386d5" onsubmit="return confirmAction(this, 'Mark patient as No Show?');">
-                <input type="hidden" name="csrf_token" value="<?= generateCsrfToken() ?>">
-                <input type="hidden" name="appt_id" value="<?= $a['id'] ?>">
-                <input type="hidden" name="action" value="no_show">
-                <button class="btn btn-sm btn-secondary btn-icon" title="No Show"><i class="fas fa-user-times"></i></button>
-              </form>
-              <form method="POST" class="appt-1386d5" onsubmit="return confirmAction(this, 'Cancel this appointment?');">
-                <input type="hidden" name="csrf_token" value="<?= generateCsrfToken() ?>">
-                <input type="hidden" name="appt_id" value="<?= $a['id'] ?>">
-                <input type="hidden" name="action" value="cancel">
-                <button class="btn btn-sm btn-danger btn-icon" title="Cancel"><?php echo '<i class="fas fa-times"></i>'; ?></button>
-              </form>
+                <!-- Confirm: ACTIVE -->
+                <form method="POST" class="appt-1386d5" onsubmit="return confirmAction(this, 'Confirm this appointment?');">
+                  <input type="hidden" name="csrf_token" value="<?= generateCsrfToken() ?>">
+                  <input type="hidden" name="appt_id" value="<?= $a['id'] ?>">
+                  <input type="hidden" name="action" value="confirm">
+                  <button class="btn btn-sm btn-success btn-icon" title="Confirm booking"><i class="fas fa-check"></i></button>
+                </form>
+
+                <!-- Mark Complete: DISABLED for Pending -->
+                <button type="button" class="btn btn-sm btn-primary btn-icon disabled" disabled style="opacity:0.4; cursor:not-allowed;" title="A consultation cannot be finished before it has actually taken place. Please confirm the appointment first."><i class="fas fa-check-double"></i></button>
+
+                <!-- No Show: DISABLED for Pending -->
+                <button type="button" class="btn btn-sm btn-secondary btn-icon disabled" disabled style="opacity:0.4; cursor:not-allowed;" title="Marking a patient as a no-show prior to appointment time is premature. Booking must be confirmed and 15-min grace period elapsed."><i class="fas fa-user-times"></i></button>
+
+                <!-- Cancel: ACTIVE -->
+                <form method="POST" class="appt-1386d5" onsubmit="return confirmAction(this, 'Cancel this appointment?');">
+                  <input type="hidden" name="csrf_token" value="<?= generateCsrfToken() ?>">
+                  <input type="hidden" name="appt_id" value="<?= $a['id'] ?>">
+                  <input type="hidden" name="action" value="cancel">
+                  <button class="btn btn-sm btn-danger btn-icon" title="Cancel appointment"><i class="fas fa-times"></i></button>
+                </form>
+
+              <?php elseif ($a['status'] === 'confirmed'): ?>
+                <!-- Mark Complete: ACTIVE only once appointment time is reached -->
+                <?php if ($isTimeReached): ?>
+                <form method="POST" class="appt-1386d5" onsubmit="return confirmAction(this, 'Mark this appointment as Complete?');">
+                  <input type="hidden" name="csrf_token" value="<?= generateCsrfToken() ?>">
+                  <input type="hidden" name="appt_id" value="<?= $a['id'] ?>">
+                  <input type="hidden" name="action" value="complete">
+                  <button class="btn btn-sm btn-primary btn-icon" title="Mark Complete"><i class="fas fa-check-double"></i></button>
+                </form>
+                <?php else: ?>
+                <button type="button" class="btn btn-sm btn-primary btn-icon disabled" disabled style="opacity:0.4; cursor:not-allowed;" title="A consultation cannot be finished before scheduled appointment time (<?= $timeFormatted ?>)."><i class="fas fa-check-double"></i></button>
+                <?php endif; ?>
+
+                <!-- No Show: ACTIVE only after scheduled time + 15 min grace period -->
+                <?php if ($isPastGrace): ?>
+                <form method="POST" class="appt-1386d5" onsubmit="return confirmAction(this, 'Mark patient as No Show?');">
+                  <input type="hidden" name="csrf_token" value="<?= generateCsrfToken() ?>">
+                  <input type="hidden" name="appt_id" value="<?= $a['id'] ?>">
+                  <input type="hidden" name="action" value="no_show">
+                  <button class="btn btn-sm btn-secondary btn-icon" title="Mark patient as No Show"><i class="fas fa-user-times"></i></button>
+                </form>
+                <?php else: ?>
+                <button type="button" class="btn btn-sm btn-secondary btn-icon disabled" disabled style="opacity:0.4; cursor:not-allowed;" title="Marking No-Show is premature. Available after <?= $graceFormatted ?> (15-min grace period)."><i class="fas fa-user-times"></i></button>
+                <?php endif; ?>
+
+                <!-- Cancel: ACTIVE -->
+                <form method="POST" class="appt-1386d5" onsubmit="return confirmAction(this, 'Cancel this appointment?');">
+                  <input type="hidden" name="csrf_token" value="<?= generateCsrfToken() ?>">
+                  <input type="hidden" name="appt_id" value="<?= $a['id'] ?>">
+                  <input type="hidden" name="action" value="cancel">
+                  <button class="btn btn-sm btn-danger btn-icon" title="Cancel appointment"><i class="fas fa-times"></i></button>
+                </form>
+
+              <?php elseif ($a['status'] === 'no_show'): ?>
+                <!-- Safety / Reversal Options -->
+                <!-- Revert to Confirmed -->
+                <form method="POST" class="appt-1386d5" onsubmit="return confirmAction(this, 'Revert this appointment back to Confirmed?');">
+                  <input type="hidden" name="csrf_token" value="<?= generateCsrfToken() ?>">
+                  <input type="hidden" name="appt_id" value="<?= $a['id'] ?>">
+                  <input type="hidden" name="action" value="revert_confirmed">
+                  <button class="btn btn-sm btn-info text-white btn-icon" title="Revert to Confirmed (delayed charting)"><i class="fas fa-undo"></i></button>
+                </form>
+
+                <!-- Mark Complete (delayed charting) -->
+                <form method="POST" class="appt-1386d5" onsubmit="return confirmAction(this, 'Mark this appointment as Complete for delayed charting?');">
+                  <input type="hidden" name="csrf_token" value="<?= generateCsrfToken() ?>">
+                  <input type="hidden" name="appt_id" value="<?= $a['id'] ?>">
+                  <input type="hidden" name="action" value="complete">
+                  <button class="btn btn-sm btn-primary btn-icon" title="Mark Complete (delayed charting)"><i class="fas fa-check-double"></i></button>
+                </form>
               <?php endif; ?>
             </div>
           </td>
@@ -474,16 +577,48 @@ document.addEventListener('DOMContentLoaded', function() {
 
   const csrfToken = <?= json_encode(generateCsrfToken()) ?>;
 
-  function buildModalActions(apptId, status) {
+  function buildModalActions(apptId, status, dateStr, timeStr) {
     let html = '';
-    
-    if (status === 'pending') {
-      html += `<form method="POST" class="m-0" onsubmit="return confirmAction(this, 'Confirm this appointment?');"><input type="hidden" name="csrf_token" value="${csrfToken}"><input type="hidden" name="appt_id" value="${apptId}"><input type="hidden" name="action" value="confirm"><button class="btn btn-sm btn-success"><i class="fas fa-check me-1"></i> Confirm</button></form>`;
+    const now = new Date();
+    let isTimeReached = false;
+    let isPastGrace = false;
+    let timeFormatted = timeStr || '';
+    let graceFormatted = '';
+
+    if (dateStr && timeStr) {
+      const fullTimeStr = timeStr.length === 5 ? timeStr + ':00' : timeStr;
+      const scheduledDateTime = new Date(`${dateStr}T${fullTimeStr}`);
+      if (!isNaN(scheduledDateTime.getTime())) {
+        isTimeReached = (now >= scheduledDateTime);
+        const graceEnd = new Date(scheduledDateTime.getTime() + 15 * 60 * 1000);
+        isPastGrace = (now >= graceEnd);
+        graceFormatted = graceEnd.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+        timeFormatted = scheduledDateTime.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+      }
     }
-    if (status === 'pending' || status === 'confirmed') {
-      html += `<form method="POST" class="m-0" onsubmit="return confirmAction(this, 'Mark this appointment as Complete?');"><input type="hidden" name="csrf_token" value="${csrfToken}"><input type="hidden" name="appt_id" value="${apptId}"><input type="hidden" name="action" value="complete"><button class="btn btn-sm btn-primary"><i class="fas fa-check-double me-1"></i> Complete</button></form>`;
-      html += `<form method="POST" class="m-0" onsubmit="return confirmAction(this, 'Mark patient as No Show?');"><input type="hidden" name="csrf_token" value="${csrfToken}"><input type="hidden" name="appt_id" value="${apptId}"><input type="hidden" name="action" value="no_show"><button class="btn btn-sm btn-secondary"><i class="fas fa-user-times me-1"></i> No Show</button></form>`;
-      html += `<form method="POST" class="m-0" onsubmit="return confirmAction(this, 'Cancel this appointment?');"><input type="hidden" name="csrf_token" value="${csrfToken}"><input type="hidden" name="appt_id" value="${apptId}"><input type="hidden" name="action" value="cancel"><button class="btn btn-sm btn-danger"><i class="fas fa-times me-1"></i> Cancel</button></form>`;
+
+    if (status === 'pending') {
+      html += `<form method="POST" class="m-0 d-inline" onsubmit="return confirmAction(this, 'Confirm this appointment?');"><input type="hidden" name="csrf_token" value="${csrfToken}"><input type="hidden" name="appt_id" value="${apptId}"><input type="hidden" name="action" value="confirm"><button class="btn btn-sm btn-success"><i class="fas fa-check me-1"></i> Confirm</button></form>`;
+      html += `<button type="button" class="btn btn-sm btn-primary disabled" disabled style="opacity:0.4; cursor:not-allowed;" title="A consultation cannot be finished before it has actually taken place. Please confirm the appointment first."><i class="fas fa-check-double me-1"></i> Complete</button>`;
+      html += `<button type="button" class="btn btn-sm btn-secondary disabled" disabled style="opacity:0.4; cursor:not-allowed;" title="Marking a patient as a no-show prior to appointment time is premature. Booking must be confirmed and 15-min grace period elapsed."><i class="fas fa-user-times me-1"></i> No Show</button>`;
+      html += `<form method="POST" class="m-0 d-inline" onsubmit="return confirmAction(this, 'Cancel this appointment?');"><input type="hidden" name="csrf_token" value="${csrfToken}"><input type="hidden" name="appt_id" value="${apptId}"><input type="hidden" name="action" value="cancel"><button class="btn btn-sm btn-danger"><i class="fas fa-times me-1"></i> Cancel</button></form>`;
+    } else if (status === 'confirmed') {
+      if (isTimeReached) {
+        html += `<form method="POST" class="m-0 d-inline" onsubmit="return confirmAction(this, 'Mark this appointment as Complete?');"><input type="hidden" name="csrf_token" value="${csrfToken}"><input type="hidden" name="appt_id" value="${apptId}"><input type="hidden" name="action" value="complete"><button class="btn btn-sm btn-primary"><i class="fas fa-check-double me-1"></i> Complete</button></form>`;
+      } else {
+        html += `<button type="button" class="btn btn-sm btn-primary disabled" disabled style="opacity:0.4; cursor:not-allowed;" title="A consultation cannot be finished before scheduled appointment time (${timeFormatted})."><i class="fas fa-check-double me-1"></i> Complete</button>`;
+      }
+
+      if (isPastGrace) {
+        html += `<form method="POST" class="m-0 d-inline" onsubmit="return confirmAction(this, 'Mark patient as No Show?');"><input type="hidden" name="csrf_token" value="${csrfToken}"><input type="hidden" name="appt_id" value="${apptId}"><input type="hidden" name="action" value="no_show"><button class="btn btn-sm btn-secondary"><i class="fas fa-user-times me-1"></i> No Show</button></form>`;
+      } else {
+        html += `<button type="button" class="btn btn-sm btn-secondary disabled" disabled style="opacity:0.4; cursor:not-allowed;" title="Marking No-Show is premature. Available after ${graceFormatted} (15-min grace period)."><i class="fas fa-user-times me-1"></i> No Show</button>`;
+      }
+
+      html += `<form method="POST" class="m-0 d-inline" onsubmit="return confirmAction(this, 'Cancel this appointment?');"><input type="hidden" name="csrf_token" value="${csrfToken}"><input type="hidden" name="appt_id" value="${apptId}"><input type="hidden" name="action" value="cancel"><button class="btn btn-sm btn-danger"><i class="fas fa-times me-1"></i> Cancel</button></form>`;
+    } else if (status === 'no_show') {
+      html += `<form method="POST" class="m-0 d-inline" onsubmit="return confirmAction(this, 'Revert this appointment back to Confirmed?');"><input type="hidden" name="csrf_token" value="${csrfToken}"><input type="hidden" name="appt_id" value="${apptId}"><input type="hidden" name="action" value="revert_confirmed"><button class="btn btn-sm btn-info text-white"><i class="fas fa-undo me-1"></i> Revert to Confirmed</button></form>`;
+      html += `<form method="POST" class="m-0 d-inline" onsubmit="return confirmAction(this, 'Mark this appointment as Complete for delayed charting?');"><input type="hidden" name="csrf_token" value="${csrfToken}"><input type="hidden" name="appt_id" value="${apptId}"><input type="hidden" name="action" value="complete"><button class="btn btn-sm btn-primary"><i class="fas fa-check-double me-1"></i> Complete (Delayed)</button></form>`;
     }
     
     return html;
@@ -560,7 +695,7 @@ document.addEventListener('DOMContentLoaded', function() {
         document.getElementById('modalNotes').textContent = props.notes || 'No notes provided.';
         
         // Inject Actions
-        document.getElementById('modalActions').innerHTML = buildModalActions(apptId, props.status);
+        document.getElementById('modalActions').innerHTML = buildModalActions(apptId, props.status, props.appointment_date, props.appointment_time);
         
         // Show Modal
         const myModal = new bootstrap.Modal(document.getElementById('apptDetailsModal'));
