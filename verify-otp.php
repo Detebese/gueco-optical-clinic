@@ -8,31 +8,47 @@ define('BASE_URL', '');
 require_once __DIR__ . '/config/functions.php';
 startSession();
 
-// Must have a pending patient login
-if (empty($_SESSION['patient_id'])) {
+// Must have a pending patient login or pending registration
+$isPendingReg   = !empty($_SESSION['pending_registration']);
+$isPendingLogin = !empty($_SESSION['patient_id']) || !empty($_SESSION['patient_id_pending']);
+
+if (!$isPendingReg && !$isPendingLogin) {
     header('Location: index.php');
     exit;
 }
 
-// If already verified, jump straight to dashboard
-if (isPatient2FAVerified()) {
+// If already verified and not a pending registration, jump straight to dashboard
+if (!$isPendingReg && isPatient2FAVerified()) {
     header('Location: patient/dashboard.php');
     exit;
 }
 
-$patientId   = (int)$_SESSION['patient_id'];
+$patientId   = (int)($_SESSION['patient_id'] ?? $_SESSION['patient_id_pending'] ?? 0);
 $patientName = !empty($_SESSION['patient_name']) ? $_SESSION['patient_name'] : 'Valued Patient';
-$email       = $_SESSION['patient_email'] ?? '';
+$email       = $isPendingReg ? ($_SESSION['pending_registration']['email'] ?? '') : ($_SESSION['patient_email'] ?? '');
 $avatar      = $_SESSION['patient_avatar'] ?? '';
 
 // Ensure an OTP is generated if missing or expired
 if (empty($_SESSION['patient_otp_code']) || (isset($_SESSION['patient_otp_expires']) && $_SESSION['patient_otp_expires'] < time())) {
-    issuePatientLoginOTP([
-        'id'        => $patientId,
-        'full_name' => $patientName,
-        'email'     => $email,
-        'avatar'    => $avatar
-    ]);
+    if ($isPendingReg) {
+        $otp = sprintf("%06d", mt_rand(100000, 999999));
+        $_SESSION['patient_otp_code']                 = $otp;
+        $_SESSION['patient_otp_hash']                 = password_hash($otp, PASSWORD_DEFAULT);
+        $_SESSION['patient_otp_expires']              = time() + (10 * 60);
+        $_SESSION['patient_otp_attempts']             = 0;
+        $_SESSION['patient_otp_last_resend']          = time();
+        $_SESSION['pending_registration']['otp_code'] = $otp;
+
+        $sent = sendLoginEmailOTP($email, $otp, 'Valued Patient');
+        $_SESSION['patient_otp_sent'] = $sent;
+    } else {
+        issuePatientLoginOTP([
+            'id'        => $patientId,
+            'full_name' => $patientName,
+            'email'     => $email,
+            'avatar'    => $avatar
+        ]);
+    }
 }
 
 $error   = '';
@@ -41,6 +57,7 @@ $success = '';
 // Handle Cancel Action
 if (isset($_GET['cancel'])) {
     unset(
+        $_SESSION['pending_registration'],
         $_SESSION['patient_id'],
         $_SESSION['patient_name'],
         $_SESSION['patient_email'],
@@ -50,12 +67,14 @@ if (isset($_GET['cancel'])) {
         $_SESSION['patient_otp_hash'],
         $_SESSION['patient_otp_expires'],
         $_SESSION['patient_otp_attempts'],
+        $_SESSION['patient_otp_last_resend'],
+        $_SESSION['patient_otp_sent'],
         $_SESSION['patient_id_pending'],
         $_SESSION['patient_name_pending'],
         $_SESSION['patient_email_pending'],
         $_SESSION['patient_avatar_pending']
     );
-    $_SESSION['flash_msg'] = 'Sign-in cancelled. Please log in when ready.';
+    $_SESSION['flash_msg'] = 'Verification cancelled. You can register or log in whenever you are ready.';
     $_SESSION['flash_type'] = 'info';
     header('Location: index.php');
     exit;
@@ -72,13 +91,26 @@ if (isset($_POST['action']) && $_POST['action'] === 'resend_otp') {
             $error = "Please wait {$remainingSec} seconds before requesting a new code.";
         } else {
             $_SESSION['patient_otp_last_resend'] = time();
-            issuePatientLoginOTP([
-                'id'        => $patientId,
-                'full_name' => $patientName,
-                'email'     => $email,
-                'avatar'    => $avatar
-            ]);
-            $success = 'A fresh 6-digit verification code has been generated and sent!';
+            if ($isPendingReg) {
+                $otp = sprintf("%06d", mt_rand(100000, 999999));
+                $_SESSION['patient_otp_code']                 = $otp;
+                $_SESSION['patient_otp_hash']                 = password_hash($otp, PASSWORD_DEFAULT);
+                $_SESSION['patient_otp_expires']              = time() + (10 * 60);
+                $_SESSION['patient_otp_attempts']             = 0;
+                $_SESSION['pending_registration']['otp_code'] = $otp;
+
+                $sent = sendLoginEmailOTP($email, $otp, 'Valued Patient');
+                $_SESSION['patient_otp_sent'] = $sent;
+                $success = 'A fresh 6-digit verification code has been sent to your email!';
+            } else {
+                issuePatientLoginOTP([
+                    'id'        => $patientId,
+                    'full_name' => $patientName,
+                    'email'     => $email,
+                    'avatar'    => $avatar
+                ]);
+                $success = 'A fresh 6-digit verification code has been generated and sent!';
+            }
         }
     }
 }
@@ -116,34 +148,98 @@ if (isset($_POST['action']) && $_POST['action'] === 'verify_otp') {
             if ($enteredOtp === $expected) {
                 // Verification successful!
                 session_regenerate_id(true);
-                $_SESSION['patient_2fa_verified'] = true;
-                
-                // Cleanup temporary OTP session tokens
-                unset(
-                    $_SESSION['patient_otp_code'],
-                    $_SESSION['patient_otp_hash'],
-                    $_SESSION['patient_otp_expires'],
-                    $_SESSION['patient_otp_attempts'],
-                    $_SESSION['patient_otp_last_resend']
-                );
-                
-                // Check if profile has all essential fields (name, phone, address, sex)
-                if (!isPatientProfileComplete($patientId)) {
+                $db = getDB();
+                ensurePatientSchema($db);
+
+                if ($isPendingReg) {
+                    $reg = $_SESSION['pending_registration'];
+
+                    // Race condition check: make sure email doesn't already exist
+                    $check = $db->prepare("SELECT id FROM patients WHERE email = ? LIMIT 1");
+                    $check->execute([$reg['email']]);
+                    $existing = $check->fetch();
+
+                    if ($existing) {
+                        $patientId = (int)$existing['id'];
+                        $db->prepare("UPDATE patients SET email_verified = 1, status = 'active' WHERE id = ?")->execute([$patientId]);
+                    } else {
+                        $stmt = $db->prepare(
+                            "INSERT INTO patients (email, password, auth_provider, status, email_verified, login_count, created_at)
+                             VALUES (?, ?, 'email', 'active', 1, 1, NOW())"
+                        );
+                        $stmt->execute([
+                            $reg['email'],
+                            $reg['password_hash']
+                        ]);
+                        $patientId = (int)$db->lastInsertId();
+                    }
+
+                    // Set up fully authenticated patient session
+                    $_SESSION['patient_id']           = $patientId;
+                    $_SESSION['patient_name']         = '';
+                    $_SESSION['patient_email']        = $reg['email'];
+                    $_SESSION['patient_avatar']       = '';
+                    $_SESSION['patient_2fa_verified'] = true;
+
+                    logActivity('Patient Registered and Verified', 'Auth', $patientId, 'patient');
+
+                    // Cleanup temporary OTP session tokens
+                    unset(
+                        $_SESSION['pending_registration'],
+                        $_SESSION['patient_otp_code'],
+                        $_SESSION['patient_otp_hash'],
+                        $_SESSION['patient_otp_expires'],
+                        $_SESSION['patient_otp_attempts'],
+                        $_SESSION['patient_otp_last_resend'],
+                        $_SESSION['patient_otp_sent']
+                    );
+
                     $_SESSION['flash_msg']   = 'Verification complete! Please fill in your essential details to set up your profile.';
                     $_SESSION['flash_type']  = 'info';
                     $_SESSION['flash_title'] = 'Profile Setup';
                     header('Location: complete-profile.php');
                     exit;
-                }
+                } else {
+                    $db->prepare("UPDATE patients SET email_verified = 1 WHERE id = ?")->execute([$patientId]);
 
-                $patientLoginCount = (int)($db->query("SELECT login_count FROM patients WHERE id = " . (int)$patientId)->fetchColumn() ?: 1);
-                $isFirst = ($patientLoginCount <= 1);
-                $_SESSION['flash_msg']   = 'Security verification passed! ' . ($isFirst ? 'Welcome, ' : 'Welcome back, ') . htmlspecialchars($patientName) . '.';
-                $_SESSION['flash_type']  = 'success';
-                $_SESSION['flash_title'] = $isFirst ? 'Welcome!' : 'Welcome Back!';
-                
-                header('Location: patient/dashboard.php');
-                exit;
+                    $_SESSION['patient_id']           = $patientId;
+                    $_SESSION['patient_name']         = $patientName;
+                    $_SESSION['patient_email']        = $email;
+                    $_SESSION['patient_avatar']       = $avatar;
+                    $_SESSION['patient_2fa_verified'] = true;
+
+                    // Cleanup temporary OTP session tokens
+                    unset(
+                        $_SESSION['patient_otp_code'],
+                        $_SESSION['patient_otp_hash'],
+                        $_SESSION['patient_otp_expires'],
+                        $_SESSION['patient_otp_attempts'],
+                        $_SESSION['patient_otp_last_resend'],
+                        $_SESSION['patient_otp_sent'],
+                        $_SESSION['patient_id_pending'],
+                        $_SESSION['patient_name_pending'],
+                        $_SESSION['patient_email_pending'],
+                        $_SESSION['patient_avatar_pending']
+                    );
+
+                    // Check if profile has all essential fields (name, phone, address, sex)
+                    if (!isPatientProfileComplete($patientId)) {
+                        $_SESSION['flash_msg']   = 'Verification complete! Please fill in your essential details to set up your profile.';
+                        $_SESSION['flash_type']  = 'info';
+                        $_SESSION['flash_title'] = 'Profile Setup';
+                        header('Location: complete-profile.php');
+                        exit;
+                    }
+
+                    $patientLoginCount = (int)($db->query("SELECT login_count FROM patients WHERE id = " . (int)$patientId)->fetchColumn() ?: 1);
+                    $isFirst = ($patientLoginCount <= 1);
+                    $_SESSION['flash_msg']   = 'Security verification passed! ' . ($isFirst ? 'Welcome, ' : 'Welcome back, ') . htmlspecialchars($patientName) . '.';
+                    $_SESSION['flash_type']  = 'success';
+                    $_SESSION['flash_title'] = $isFirst ? 'Welcome!' : 'Welcome Back!';
+                    
+                    header('Location: patient/dashboard.php');
+                    exit;
+                }
             } else {
                 $_SESSION['patient_otp_attempts'] = $attempts + 1;
                 $left = 5 - ($attempts + 1);
@@ -531,7 +627,7 @@ $currentTheme = ($userTheme === 'light') ? 'light' : 'dark';
       <i class="fas fa-shield-halved"></i>
     </div>
 
-    <h1 class="otp-title">Two-Factor Authentication</h1>
+    <h1 class="otp-title"><?= !empty($isPendingReg) ? 'Email Verification' : 'Two-Factor Authentication' ?></h1>
     <p class="otp-subtitle">
       Hi <b><?= htmlspecialchars($patientName) ?></b>, we've sent a 6-digit verification code to your email account:
       <br>
@@ -571,7 +667,7 @@ $currentTheme = ($userTheme === 'light') ? 'light' : 'dark';
       </div>
 
       <button type="submit" class="btn-verify" id="btnVerify">
-        <i class="fas fa-arrow-right-to-bracket"></i> Verify &amp; Continue to Dashboard
+        <i class="fas fa-arrow-right-to-bracket"></i> <?= !empty($isPendingReg) ? 'Verify &amp; Activate Account' : 'Verify &amp; Continue to Dashboard' ?>
       </button>
     </form>
 
@@ -584,8 +680,8 @@ $currentTheme = ($userTheme === 'light') ? 'light' : 'dark';
         </button>
       </form>
 
-      <a href="verify-otp.php?cancel=1" class="btn-cancel" onclick="return confirm('Cancel sign-in and return to the main page?');">
-        <i class="fas fa-arrow-left"></i> Cancel and sign in with another account
+      <a href="verify-otp.php?cancel=1" class="btn-cancel" onclick="return confirm('Cancel verification and return to the main page?');">
+        <i class="fas fa-arrow-left"></i> <?= !empty($isPendingReg) ? 'Cancel registration and return to home page' : 'Cancel and sign in with another account' ?>
       </a>
     </div>
   </div>

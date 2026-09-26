@@ -129,6 +129,12 @@ function ensurePatientSchema(?PDO $db = null): void {
             if (!in_array('last_login_at', $cols)) {
                 $db->exec("ALTER TABLE patients ADD COLUMN last_login_at DATETIME NULL");
             }
+            if (!in_array('email_verified', $cols)) {
+                $db->exec("ALTER TABLE patients ADD COLUMN email_verified TINYINT(1) NOT NULL DEFAULT 1");
+            }
+            if (!in_array('auth_provider', $cols)) {
+                $db->exec("ALTER TABLE patients ADD COLUMN auth_provider VARCHAR(20) DEFAULT 'email'");
+            }
         }
         $checked = true;
     } catch (Exception $e) {}

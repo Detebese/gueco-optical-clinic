@@ -206,6 +206,8 @@ CREATE TABLE `patients` (
   `gender` enum('male','female','other') DEFAULT NULL,
   `avatar` varchar(500) DEFAULT NULL,
   `status` enum('active','inactive') DEFAULT 'active',
+  `auth_provider` varchar(20) DEFAULT 'email',
+  `email_verified` tinyint(1) NOT NULL DEFAULT 1,
   `created_at` timestamp NOT NULL DEFAULT current_timestamp(),
   `updated_at` timestamp NOT NULL DEFAULT current_timestamp() ON UPDATE current_timestamp(),
   `reset_otp_hash` varchar(255) DEFAULT NULL,

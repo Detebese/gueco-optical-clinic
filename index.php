@@ -87,33 +87,46 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action']) && $_POST['
                         $tab   = 'register';
                     } else {
                         ensurePatientSchema($db);
-                        $stmt = $db->prepare(
-                            "INSERT INTO patients (email, password, login_count, created_at)
-                             VALUES (?, ?, 1, NOW())"
+
+                        // Generate 6-digit OTP
+                        $otp = sprintf("%06d", mt_rand(100000, 999999));
+
+                        // Store pending registration securely in session - DO NOT insert into DB yet!
+                        $_SESSION['pending_registration'] = [
+                            'email'            => strtolower(trim($email)),
+                            'password_hash'    => password_hash($password, PASSWORD_DEFAULT),
+                            'otp_code'         => $otp,
+                            'otp_hash'         => password_hash($otp, PASSWORD_DEFAULT),
+                            'otp_expires'      => time() + (10 * 60), // 10 minutes
+                            'otp_attempts'     => 0,
+                            'otp_last_resend'  => time(),
+                        ];
+
+                        // Set standard OTP variables for verify-otp.php
+                        $_SESSION['patient_otp_code']        = $otp;
+                        $_SESSION['patient_otp_hash']        = password_hash($otp, PASSWORD_DEFAULT);
+                        $_SESSION['patient_otp_expires']     = time() + (10 * 60);
+                        $_SESSION['patient_otp_attempts']    = 0;
+                        $_SESSION['patient_otp_last_resend'] = time();
+                        $_SESSION['patient_email']           = strtolower(trim($email));
+                        $_SESSION['patient_name']            = 'Valued Patient';
+
+                        // Ensure patient is not logged in / verified yet
+                        unset(
+                            $_SESSION['patient_id'],
+                            $_SESSION['patient_avatar'],
+                            $_SESSION['patient_2fa_verified'],
+                            $_SESSION['patient_id_pending'],
+                            $_SESSION['patient_name_pending'],
+                            $_SESSION['patient_email_pending'],
+                            $_SESSION['patient_avatar_pending']
                         );
-                        $stmt->execute([
-                            $email,
-                            password_hash($password, PASSWORD_DEFAULT),
-                        ]);
-                        $patientId = (int)$db->lastInsertId();
 
-                        // Set up session for OTP verification
-                        session_regenerate_id(true);
-                        $_SESSION['patient_id']           = $patientId;
-                        $_SESSION['patient_name']         = '';
-                        $_SESSION['patient_email']        = $email;
-                        $_SESSION['patient_avatar']       = '';
-                        $_SESSION['patient_2fa_verified'] = false;
+                        // Send verification code via email
+                        $sent = sendLoginEmailOTP($email, $otp, 'Valued Patient');
+                        $_SESSION['patient_otp_sent'] = $sent;
 
-                        // Issue 6-digit OTP and send via email
-                        issuePatientLoginOTP([
-                            'id'        => $patientId,
-                            'full_name' => '',
-                            'email'     => $email,
-                            'avatar'    => ''
-                        ]);
-
-                        $_SESSION['flash_msg']   = 'Account created! Enter the 6-digit verification code sent to ' . htmlspecialchars($email) . '.';
+                        $_SESSION['flash_msg']   = 'A 6-digit verification code has been sent to ' . htmlspecialchars($email) . '. Please enter it below to activate your account.';
                         $_SESSION['flash_type']  = 'info';
                         $_SESSION['flash_title'] = 'Verify Your Email';
 
@@ -156,6 +169,21 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action']) && $_POST['
                 $patient = $stmt->fetch();
 
                 if ($patient && password_verify($password, $patient['password'])) {
+                    // Defense-in-depth: if account is not yet email verified, require OTP verification
+                    if (isset($patient['email_verified']) && (int)$patient['email_verified'] === 0) {
+                        issuePatientLoginOTP([
+                            'id'        => (int)$patient['id'],
+                            'full_name' => $patient['full_name'] ?? '',
+                            'email'     => $patient['email'],
+                            'avatar'    => $patient['avatar'] ?? ''
+                        ]);
+                        $_SESSION['flash_msg']   = 'Please verify your email address to access your account.';
+                        $_SESSION['flash_type']  = 'warning';
+                        $_SESSION['flash_title'] = 'Email Verification Required';
+                        header('Location: verify-otp.php');
+                        exit;
+                    }
+
                     clearRateLimit($rlKey);
                     session_regenerate_id(true);
 

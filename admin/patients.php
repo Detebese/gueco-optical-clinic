@@ -6,8 +6,9 @@ $pageTitle  = 'Patient Accounts';
 $breadcrumb = ['Admin', 'Patients'];
 $db = getDB();
 
-// Automatic removal of specified test patient accounts
+// Automatic removal of specified test patient accounts and empty unverified records
 try {
+    ensurePatientSchema($db);
     $cleanupEmails = [
         'sorianodaeshawne@gmail.com',
         'sorianoshawne@gmail.com',
@@ -28,11 +29,14 @@ try {
         }
         $db->prepare("DELETE FROM patients WHERE email IN ($placeholders)")->execute($cleanupEmails);
     }
+
+    // Clean up empty unverified test records that have no names, no phone, and no appointments
+    $db->exec("DELETE FROM patients WHERE (full_name IS NULL OR full_name = '') AND (first_name IS NULL OR first_name = '') AND (phone IS NULL OR phone = '') AND email_verified = 0 AND id NOT IN (SELECT DISTINCT patient_id FROM appointments)");
 } catch (Exception $e) {}
 
 $search = sanitize($_GET['search'] ?? '');
 $page   = max(1,(int)($_GET['page']??1)); $perPage = 15;
-$where = ['1=1']; $params = [];
+$where = ["(p.email_verified = 1 OR p.email_verified IS NULL)"]; $params = [];
 if ($search) { 
     $where[] = "(p.full_name LIKE ? OR p.first_name LIKE ? OR p.last_name LIKE ? OR p.middle_name LIKE ? OR p.email LIKE ? OR p.phone LIKE ?)"; 
     $params = ["%$search%","%$search%","%$search%","%$search%","%$search%","%$search%"]; 
